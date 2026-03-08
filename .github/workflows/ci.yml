@@ -38,3 +38,6 @@ jobs:
 
       - name: Simulation smoke test
         run: cargo run -- simulate list test/fixtures/simulation.sysml
+
+      - name: Export smoke test
+        run: cargo run -- export list test/fixtures/fmi-vehicle.sysml

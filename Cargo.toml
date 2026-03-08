@@ -1,8 +1,8 @@
 [package]
-name = "sysml-lint"
-version = "0.1.0"
+name = "sysml2-cli"
+version = "0.2.0"
 edition = "2021"
-description = "SysML v2 model validator and linter"
+description = "SysML v2 model validator, simulator, and FMI export tool"
 license = "GPL-3.0-or-later"
 repository = "https://github.com/jackhale98/sysml-lint"
 
@@ -16,5 +16,5 @@ serde_json = "1"
 cc = "1"
 
 [[bin]]
-name = "sysml-lint"
+name = "sysml2-cli"
 path = "src/main.rs"

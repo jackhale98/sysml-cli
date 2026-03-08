@@ -171,12 +171,79 @@ fn usage_kind_from_node(kind: &str) -> Option<&'static str> {
     }
 }
 
+/// Extract direction modifier from preceding siblings.
+fn get_direction(node: &Node) -> Option<Direction> {
+    let mut sibling = node.prev_sibling();
+    while let Some(sib) = sibling {
+        match sib.kind() {
+            "in" => return Some(Direction::In),
+            "out" => return Some(Direction::Out),
+            "inout" => return Some(Direction::InOut),
+            // Stop at other structural nodes (don't cross declaration boundaries)
+            k if def_kind_from_node(k).is_some()
+                || usage_kind_from_node(k).is_some()
+                || k == "definition_body"
+                || k == "state_body"
+                || k == "{" => break,
+            _ => {}
+        }
+        sibling = sib.prev_sibling();
+    }
+    None
+}
+
+/// Check if a usage node's type reference has conjugation (`~` prefix).
+fn is_conjugated_type(node: &Node, source: &[u8]) -> bool {
+    let mut cursor = node.walk();
+    for child in node.children(&mut cursor) {
+        if child.kind() == "typed_by" {
+            // Check for ~ child node
+            let mut tc = child.walk();
+            for tc_child in child.children(&mut tc) {
+                if tc_child.kind() == "~" {
+                    return true;
+                }
+            }
+            // Fallback: check text starts with ~
+            let text = node_text(&child, source);
+            if text.starts_with('~') {
+                return true;
+            }
+        }
+    }
+    // Also check for "conjugate" modifier in preceding siblings
+    let mut sibling = node.prev_sibling();
+    while let Some(sib) = sibling {
+        match sib.kind() {
+            "conjugate" => return true,
+            k if def_kind_from_node(k).is_some()
+                || usage_kind_from_node(k).is_some()
+                || k == "definition_body"
+                || k == "{" => break,
+            _ => {}
+        }
+        sibling = sib.prev_sibling();
+    }
+    false
+}
+
 /// Recursively walk the parse tree and extract model elements.
 fn walk_node(
     node: Node,
     source: &[u8],
     model: &mut Model,
     enclosing_verification: Option<&str>,
+) {
+    walk_node_scoped(node, source, model, enclosing_verification, None);
+}
+
+/// Walk with parent definition scope tracking.
+fn walk_node_scoped(
+    node: Node,
+    source: &[u8],
+    model: &mut Model,
+    enclosing_verification: Option<&str>,
+    parent_def_name: Option<&str>,
 ) {
     let kind = node.kind();
 
@@ -225,14 +292,17 @@ fn walk_node(
                     has_return,
                 });
 
-                // For verification definitions, track name for verify extraction
-                if def_kind == DefKind::Verification {
-                    let mut cursor = node.walk();
-                    for child in node.children(&mut cursor) {
-                        walk_node(child, source, model, Some(&name));
-                    }
-                    return; // Already recursed
+                // Recurse into definition body with scope tracking
+                let ev = if def_kind == DefKind::Verification {
+                    Some(name.as_str())
+                } else {
+                    enclosing_verification
+                };
+                let mut cursor = node.walk();
+                for child in node.children(&mut cursor) {
+                    walk_node_scoped(child, source, model, ev, Some(&name));
                 }
+                return; // Already recursed with scope
             }
         }
 
@@ -247,11 +317,16 @@ fn walk_node(
                         span: Span::from_node(&node),
                     });
                 }
+                let direction = get_direction(&node);
+                let conjugated = is_conjugated_type(&node, source);
                 model.usages.push(Usage {
                     kind: usage_kind.to_string(),
                     name,
                     type_ref,
                     span: Span::from_node(&node),
+                    direction,
+                    is_conjugated: conjugated,
+                    parent_def: parent_def_name.map(|s| s.to_string()),
                 });
             }
 
@@ -322,7 +397,7 @@ fn walk_node(
     // Recurse into children
     let mut cursor = node.walk();
     for child in node.children(&mut cursor) {
-        walk_node(child, source, model, enclosing_verification);
+        walk_node_scoped(child, source, model, enclosing_verification, parent_def_name);
     }
 }
 

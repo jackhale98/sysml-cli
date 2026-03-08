@@ -141,12 +141,48 @@ pub struct Definition {
     pub has_return: bool,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum Direction {
+    In,
+    Out,
+    InOut,
+}
+
+impl Direction {
+    pub fn label(&self) -> &'static str {
+        match self {
+            Self::In => "in",
+            Self::Out => "out",
+            Self::InOut => "inout",
+        }
+    }
+
+    /// Apply conjugation: flips In↔Out, InOut stays.
+    pub fn conjugated(self) -> Self {
+        match self {
+            Self::In => Self::Out,
+            Self::Out => Self::In,
+            Self::InOut => self,
+        }
+    }
+}
+
 #[derive(Debug, Clone, Serialize)]
 pub struct Usage {
     pub kind: String,
     pub name: String,
     pub type_ref: Option<String>,
     pub span: Span,
+    /// Direction modifier (in/out/inout), if present.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub direction: Option<Direction>,
+    /// Whether the type reference is conjugated (`~`).
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    pub is_conjugated: bool,
+    /// Name of the enclosing definition, if any.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub parent_def: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -249,6 +285,19 @@ impl Model {
     /// All defined names in this model.
     pub fn defined_names(&self) -> std::collections::HashSet<&str> {
         self.definitions.iter().map(|d| d.name.as_str()).collect()
+    }
+
+    /// Find a definition by name.
+    pub fn find_def(&self, name: &str) -> Option<&Definition> {
+        self.definitions.iter().find(|d| d.name == name)
+    }
+
+    /// Get all usages with a specific parent_def.
+    pub fn usages_in_def(&self, def_name: &str) -> Vec<&Usage> {
+        self.usages
+            .iter()
+            .filter(|u| u.parent_def.as_deref() == Some(def_name))
+            .collect()
     }
 
     /// All names that are referenced (used) in this model.

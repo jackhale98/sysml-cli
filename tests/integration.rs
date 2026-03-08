@@ -1,10 +1,10 @@
 /// Integration tests for sysml-lint.
 
-use sysml_lint::checks;
-use sysml_lint::diagnostic::Severity;
-use sysml_lint::parser as sysml_parser;
+use sysml2_cli::checks;
+use sysml2_cli::diagnostic::Severity;
+use sysml2_cli::parser as sysml_parser;
 
-fn lint(source: &str) -> Vec<sysml_lint::diagnostic::Diagnostic> {
+fn lint(source: &str) -> Vec<sysml2_cli::diagnostic::Diagnostic> {
     let model = sysml_parser::parse_file("test.sysml", source);
     let checks = checks::all_checks();
     let mut diagnostics = Vec::new();
@@ -14,7 +14,7 @@ fn lint(source: &str) -> Vec<sysml_lint::diagnostic::Diagnostic> {
     diagnostics
 }
 
-fn lint_with(source: &str, check_name: &str) -> Vec<sysml_lint::diagnostic::Diagnostic> {
+fn lint_with(source: &str, check_name: &str) -> Vec<sysml2_cli::diagnostic::Diagnostic> {
     let model = sysml_parser::parse_file("test.sysml", source);
     let checks = checks::all_checks();
     let check = checks.iter().find(|c| c.name() == check_name).unwrap();
@@ -139,7 +139,7 @@ fn diagnostic_sorting() {
 #[test]
 fn json_output_valid() {
     let diags = lint("part def Unused;");
-    let json = sysml_lint::output::format_json(&diags);
+    let json = sysml2_cli::output::format_json(&diags);
     let parsed: serde_json::Value = serde_json::from_str(&json).expect("Should be valid JSON");
     assert!(parsed.is_array());
 }
@@ -147,7 +147,7 @@ fn json_output_valid() {
 #[test]
 fn text_output_format() {
     let diags = lint("part def Unused;");
-    let text = sysml_lint::output::format_text(&diags);
+    let text = sysml2_cli::output::format_text(&diags);
     // Should contain file:line:col format
     assert!(text.contains("test.sysml:"));
 }

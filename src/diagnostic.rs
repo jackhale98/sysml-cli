@@ -62,7 +62,7 @@ impl Diagnostic {
     }
 }
 
-/// Diagnostic codes used by sysml-lint.
+/// Diagnostic codes used by sysml2-cli.
 pub mod codes {
     // Errors
     pub const SYNTAX_ERROR: &str = "E001";

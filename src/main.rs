@@ -1,4 +1,4 @@
-/// sysml-lint: SysML v2 model validator, linter, and simulator.
+/// sysml2-cli: SysML v2 model validator, simulator, and FMI export tool.
 ///
 /// Uses tree-sitter to parse SysML v2 files and runs structural
 /// validation checks and behavioral simulations.
@@ -9,15 +9,15 @@ use std::process::ExitCode;
 
 use clap::{Parser, Subcommand};
 
-use sysml_lint::checks::{self, Check};
-use sysml_lint::diagnostic::{Diagnostic, Severity};
-use sysml_lint::output;
-use sysml_lint::parser as sysml_parser;
+use sysml2_cli::checks::{self, Check};
+use sysml2_cli::diagnostic::{Diagnostic, Severity};
+use sysml2_cli::output;
+use sysml2_cli::parser as sysml_parser;
 
 #[derive(Parser)]
 #[command(
-    name = "sysml-lint",
-    about = "SysML v2 model validator, linter, and simulator",
+    name = "sysml2-cli",
+    about = "SysML v2 model validator, simulator, and FMI export tool",
     version
 )]
 struct Cli {
@@ -59,6 +59,11 @@ enum Command {
     Simulate {
         #[command(subcommand)]
         kind: SimulateCommand,
+    },
+    /// Export FMI/SSP artifacts from SysML models.
+    Export {
+        #[command(subcommand)]
+        kind: ExportCommand,
     },
 }
 
@@ -117,6 +122,46 @@ enum SimulateCommand {
     },
 }
 
+#[derive(Subcommand)]
+enum ExportCommand {
+    /// Extract FMI interface items from a part definition.
+    Interfaces {
+        /// SysML v2 file.
+        #[arg(required = true)]
+        file: PathBuf,
+        /// Part definition name.
+        #[arg(short, long)]
+        part: String,
+    },
+    /// Generate Modelica partial model stub.
+    Modelica {
+        /// SysML v2 file.
+        #[arg(required = true)]
+        file: PathBuf,
+        /// Part definition name.
+        #[arg(short, long)]
+        part: String,
+        /// Output file path (default: stdout).
+        #[arg(short, long)]
+        output: Option<PathBuf>,
+    },
+    /// Generate SSP SystemStructureDescription XML.
+    Ssp {
+        /// SysML v2 file.
+        #[arg(required = true)]
+        file: PathBuf,
+        /// Output file path (default: stdout).
+        #[arg(short, long)]
+        output: Option<PathBuf>,
+    },
+    /// List exportable parts and their interfaces.
+    List {
+        /// SysML v2 file.
+        #[arg(required = true)]
+        file: PathBuf,
+    },
+}
+
 fn main() -> ExitCode {
     let cli = Cli::parse();
 
@@ -127,6 +172,7 @@ fn main() -> ExitCode {
             severity,
         } => run_lint(&cli, files, disable, severity),
         Command::Simulate { kind } => run_simulate(&cli, kind),
+        Command::Export { kind } => run_export(&cli, kind),
     }
 }
 
@@ -153,10 +199,10 @@ fn run_lint(cli: &Cli, files: &[PathBuf], disable: &[String], severity: &str) ->
                 all_files.push(inc.clone());
             }
         }
-        Some(sysml_lint::resolver::Project::from_files(&all_files))
+        Some(sysml2_cli::resolver::Project::from_files(&all_files))
     } else if files.len() > 1 {
         // Multi-file lint: auto-resolve imports between the given files
-        Some(sysml_lint::resolver::Project::from_files(files))
+        Some(sysml2_cli::resolver::Project::from_files(files))
     } else {
         None
     };
@@ -247,8 +293,8 @@ fn run_simulate(cli: &Cli, kind: &SimulateCommand) -> ExitCode {
     }
 }
 
-fn parse_bindings(bindings: &[String]) -> sysml_lint::sim::expr::Env {
-    use sysml_lint::sim::expr::{Env, Value};
+fn parse_bindings(bindings: &[String]) -> sysml2_cli::sim::expr::Env {
+    use sysml2_cli::sim::expr::{Env, Value};
     let mut env = Env::new();
     for b in bindings {
         if let Some((name, val_str)) = b.split_once('=') {
@@ -301,8 +347,8 @@ fn run_sim_eval(
     bindings: &[String],
     name: Option<&str>,
 ) -> ExitCode {
-    use sysml_lint::sim::constraint_eval::*;
-    use sysml_lint::sim::eval;
+    use sysml2_cli::sim::constraint_eval::*;
+    use sysml2_cli::sim::eval;
 
     let (path_str, source) = match read_source(file) {
         Ok(v) => v,
@@ -399,8 +445,8 @@ fn run_sim_state_machine(
     max_steps: usize,
     bindings: &[String],
 ) -> ExitCode {
-    use sysml_lint::sim::state_parser::extract_state_machines;
-    use sysml_lint::sim::state_sim::*;
+    use sysml2_cli::sim::state_parser::extract_state_machines;
+    use sysml2_cli::sim::state_sim::*;
 
     let (path_str, source) = match read_source(file) {
         Ok(v) => v,
@@ -455,8 +501,8 @@ fn run_sim_action_flow(
     max_steps: usize,
     bindings: &[String],
 ) -> ExitCode {
-    use sysml_lint::sim::action_exec::*;
-    use sysml_lint::sim::action_parser::extract_actions;
+    use sysml2_cli::sim::action_exec::*;
+    use sysml2_cli::sim::action_parser::extract_actions;
 
     let (path_str, source) = match read_source(file) {
         Ok(v) => v,
@@ -505,9 +551,9 @@ fn run_sim_action_flow(
 }
 
 fn run_sim_list(_cli: &Cli, file: &PathBuf) -> ExitCode {
-    use sysml_lint::sim::action_parser::extract_actions;
-    use sysml_lint::sim::constraint_eval::*;
-    use sysml_lint::sim::state_parser::extract_state_machines;
+    use sysml2_cli::sim::action_parser::extract_actions;
+    use sysml2_cli::sim::constraint_eval::*;
+    use sysml2_cli::sim::state_parser::extract_state_machines;
 
     let (path_str, source) = match read_source(file) {
         Ok(v) => v,
@@ -573,6 +619,173 @@ fn run_sim_list(_cli: &Cli, file: &PathBuf) -> ExitCode {
             println!("  {} ({} steps)", a.name, a.steps.len());
         }
         println!();
+    }
+
+    ExitCode::SUCCESS
+}
+
+// === Export commands ===
+
+fn run_export(cli: &Cli, kind: &ExportCommand) -> ExitCode {
+    match kind {
+        ExportCommand::Interfaces { file, part } => run_export_interfaces(cli, file, part),
+        ExportCommand::Modelica { file, part, output } => {
+            run_export_modelica(cli, file, part, output.as_ref())
+        }
+        ExportCommand::Ssp { file, output } => run_export_ssp(cli, file, output.as_ref()),
+        ExportCommand::List { file } => run_export_list(cli, file),
+    }
+}
+
+fn run_export_interfaces(cli: &Cli, file: &PathBuf, part: &str) -> ExitCode {
+    use sysml2_cli::export::fmi;
+
+    let (path_str, source) = match read_source(file) {
+        Ok(v) => v,
+        Err(code) => return code,
+    };
+
+    let model = sysml_parser::parse_file(&path_str, &source);
+
+    match fmi::extract_interface(&model, part) {
+        Ok(interface) => {
+            if cli.format == "json" {
+                println!("{}", serde_json::to_string_pretty(&interface).unwrap());
+            } else {
+                println!("FMI Interface: {}", interface.part_name);
+                println!("{}", "-".repeat(60));
+                if interface.items.is_empty() {
+                    println!("  No interface items found.");
+                } else {
+                    println!(
+                        "  {:<15} {:<10} {:<12} {:<10} {:<12} {}",
+                        "Name", "Direction", "SysML Type", "FMI Type", "Causality", "Port"
+                    );
+                    println!("  {}", "-".repeat(70));
+                    for item in &interface.items {
+                        println!(
+                            "  {:<15} {:<10} {:<12} {:<10} {:<12} {}",
+                            item.name,
+                            item.direction,
+                            item.sysml_type,
+                            item.fmi_type,
+                            item.causality,
+                            item.source_port,
+                        );
+                    }
+                }
+                if !interface.attributes.is_empty() {
+                    println!("\n  Attributes:");
+                    for attr in &interface.attributes {
+                        println!("    {} : {}", attr.name, attr.sysml_type);
+                    }
+                }
+            }
+            ExitCode::SUCCESS
+        }
+        Err(e) => {
+            eprintln!("error: {}", e);
+            ExitCode::from(1)
+        }
+    }
+}
+
+fn run_export_modelica(
+    _cli: &Cli,
+    file: &PathBuf,
+    part: &str,
+    output: Option<&PathBuf>,
+) -> ExitCode {
+    use sysml2_cli::export::{fmi, modelica};
+
+    let (path_str, source) = match read_source(file) {
+        Ok(v) => v,
+        Err(code) => return code,
+    };
+
+    let model = sysml_parser::parse_file(&path_str, &source);
+
+    match fmi::extract_interface(&model, part) {
+        Ok(interface) => {
+            let mo = modelica::generate_modelica(&interface);
+            if let Some(out_path) = output {
+                match std::fs::write(out_path, &mo) {
+                    Ok(_) => {
+                        eprintln!("Modelica stub written to {}", out_path.display());
+                        ExitCode::SUCCESS
+                    }
+                    Err(e) => {
+                        eprintln!("error writing {}: {}", out_path.display(), e);
+                        ExitCode::from(1)
+                    }
+                }
+            } else {
+                println!("{}", mo);
+                ExitCode::SUCCESS
+            }
+        }
+        Err(e) => {
+            eprintln!("error: {}", e);
+            ExitCode::from(1)
+        }
+    }
+}
+
+fn run_export_ssp(_cli: &Cli, file: &PathBuf, output: Option<&PathBuf>) -> ExitCode {
+    use sysml2_cli::export::ssp;
+
+    let (path_str, source) = match read_source(file) {
+        Ok(v) => v,
+        Err(code) => return code,
+    };
+
+    let model = sysml_parser::parse_file(&path_str, &source);
+    let structure = ssp::extract_ssp_structure(&model);
+    let xml = ssp::generate_ssd_xml(&structure);
+
+    if let Some(out_path) = output {
+        match std::fs::write(out_path, &xml) {
+            Ok(_) => {
+                eprintln!("SSP XML written to {}", out_path.display());
+                ExitCode::SUCCESS
+            }
+            Err(e) => {
+                eprintln!("error writing {}: {}", out_path.display(), e);
+                ExitCode::from(1)
+            }
+        }
+    } else {
+        println!("{}", xml);
+        ExitCode::SUCCESS
+    }
+}
+
+fn run_export_list(cli: &Cli, file: &PathBuf) -> ExitCode {
+    use sysml2_cli::export::fmi;
+
+    let (path_str, source) = match read_source(file) {
+        Ok(v) => v,
+        Err(code) => return code,
+    };
+
+    let model = sysml_parser::parse_file(&path_str, &source);
+    let parts = fmi::list_exportable(&model);
+
+    if parts.is_empty() {
+        println!("No exportable parts found in `{}`.", path_str);
+        return ExitCode::SUCCESS;
+    }
+
+    if cli.format == "json" {
+        println!("{}", serde_json::to_string_pretty(&parts).unwrap());
+    } else {
+        println!("Exportable Parts:");
+        for p in &parts {
+            println!(
+                "  {} ({} ports, {} attributes, {} connections)",
+                p.name, p.ports, p.attributes, p.connections
+            );
+        }
     }
 
     ExitCode::SUCCESS
