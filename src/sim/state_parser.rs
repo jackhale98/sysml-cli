@@ -27,41 +27,153 @@ fn collect_state_defs(
     _file: &str,
     results: &mut Vec<StateMachineModel>,
 ) {
-    if node.kind() == "state_definition" {
-        if let Some(name_node) = node.child_by_field_name("name") {
-            let name = node_text(&name_node, source).to_string();
-            let mut states = Vec::new();
-            let mut transitions = Vec::new();
-            let mut entry_state = None;
-
-            // Find state_body or definition_body
-            let mut cursor = node.walk();
-            for child in node.children(&mut cursor) {
-                if child.kind() == "state_body" || child.kind() == "definition_body" {
-                    extract_state_body(
-                        &child,
-                        source,
-                        &mut states,
-                        &mut transitions,
-                        &mut entry_state,
-                    );
-                }
+    match node.kind() {
+        // Standard: state def X { ... }
+        "state_definition" => {
+            if let Some(sm) = extract_state_machine_from_node(&node, source) {
+                results.push(sm);
             }
-
-            results.push(StateMachineModel {
-                name,
-                states,
-                transitions,
-                entry_state,
-                span: Span::from_node(&node),
-            });
         }
+        // Exhibit: exhibit state X { ... } inside part def bodies
+        "exhibit_statement" => {
+            if let Some(sm) = extract_state_machine_from_exhibit(&node, source) {
+                results.push(sm);
+            }
+        }
+        // Nested state region: state X { states...; transitions...; }
+        // A state_usage with its own state_body containing states/transitions
+        // is a sub-machine (e.g. operatingStates inside vehicleStates)
+        "state_usage" => {
+            if let Some(sm) = extract_state_machine_from_state_usage(&node, source) {
+                results.push(sm);
+            }
+        }
+        _ => {}
     }
 
     let mut cursor = node.walk();
     for child in node.children(&mut cursor) {
         collect_state_defs(child, source, _file, results);
     }
+}
+
+/// Extract a state machine from a `state_definition` node.
+fn extract_state_machine_from_node(node: &Node, source: &[u8]) -> Option<StateMachineModel> {
+    let name_node = node.child_by_field_name("name")?;
+    let name = node_text(&name_node, source).to_string();
+    let mut states = Vec::new();
+    let mut transitions = Vec::new();
+    let mut entry_state = None;
+
+    let mut cursor = node.walk();
+    for child in node.children(&mut cursor) {
+        if child.kind() == "state_body" || child.kind() == "definition_body" {
+            extract_state_body(&child, source, &mut states, &mut transitions, &mut entry_state);
+        }
+    }
+
+    Some(StateMachineModel {
+        name,
+        states,
+        transitions,
+        entry_state,
+        span: Span::from_node(node),
+    })
+}
+
+/// Extract a state machine from a `state_usage` node that has its own state_body.
+///
+/// Handles nested state regions like:
+///   state operatingStates {
+///       entry action initial;
+///       state off;
+///       state on;
+///       transition initial then off;
+///       transition off_to_on first off accept StartSignal then on;
+///   }
+///
+/// Only produces a StateMachineModel if the state_usage contains at least
+/// one child state or transition (i.e., it's a real state region, not a
+/// leaf state like `state off;`).
+fn extract_state_machine_from_state_usage(
+    node: &Node,
+    source: &[u8],
+) -> Option<StateMachineModel> {
+    let name_node = node.child_by_field_name("name")?;
+    let name = node_text(&name_node, source).to_string();
+
+    let mut states = Vec::new();
+    let mut transitions = Vec::new();
+    let mut entry_state = None;
+
+    let mut cursor = node.walk();
+    for child in node.children(&mut cursor) {
+        if child.kind() == "state_body" || child.kind() == "definition_body" {
+            extract_state_body(&child, source, &mut states, &mut transitions, &mut entry_state);
+        }
+    }
+
+    // Only return if this state_usage is actually a state region
+    // (has child states or transitions), not a leaf state
+    if states.is_empty() && transitions.is_empty() {
+        return None;
+    }
+
+    Some(StateMachineModel {
+        name,
+        states,
+        transitions,
+        entry_state,
+        span: Span::from_node(node),
+    })
+}
+
+/// Extract a state machine from an `exhibit_statement` node.
+///
+/// An exhibit_statement looks like:
+///   exhibit state controllerStates parallel {
+///       state operatingStates { ... }
+///   }
+///
+/// The exhibit itself gets a name, and its state_body may contain
+/// nested state_usage nodes that are themselves state regions (with
+/// their own states and transitions).  We extract both:
+///   1. The top-level exhibit as a state machine (if it has states directly)
+///   2. Each nested state_usage that has a state_body (as a sub-machine)
+fn extract_state_machine_from_exhibit(node: &Node, source: &[u8]) -> Option<StateMachineModel> {
+    // Get the exhibit name from the first qualified_name/identifier child
+    let mut name = None;
+    let mut cursor = node.walk();
+    for child in node.children(&mut cursor) {
+        if child.kind() == "qualified_name" || child.kind() == "identifier" {
+            let text = node_text(&child, source).to_string();
+            if text != "exhibit" && text != "state" {
+                name = Some(text);
+                break;
+            }
+        }
+    }
+    let name = name?;
+
+    let mut states = Vec::new();
+    let mut transitions = Vec::new();
+    let mut entry_state = None;
+
+    // Find state_body in the exhibit
+    let mut cursor = node.walk();
+    for child in node.children(&mut cursor) {
+        if child.kind() == "state_body" {
+            extract_state_body(&child, source, &mut states, &mut transitions, &mut entry_state);
+        }
+    }
+
+    Some(StateMachineModel {
+        name,
+        states,
+        transitions,
+        entry_state,
+        span: Span::from_node(node),
+    })
 }
 
 fn extract_state_body(
@@ -98,6 +210,12 @@ fn extract_state_body(
             "transition_statement" => {
                 if let Some(t) = extract_transition(&child, source) {
                     transitions.push(t);
+                } else if entry_state.is_none() {
+                    // Handle initial pseudo-transition: `transition initial then off;`
+                    // (has `then` target but no `first` source)
+                    if let Some(target) = extract_initial_transition_target(&child, source) {
+                        *entry_state = Some(target);
+                    }
                 }
             }
             "succession_usage" | "succession_statement" => {
@@ -291,6 +409,27 @@ fn extract_transition(node: &Node, source: &[u8]) -> Option<Transition> {
     })
 }
 
+/// Extract the target from an initial pseudo-transition.
+///
+/// Handles the pattern: `transition initial then off;`
+/// where there is no `first` keyword — only a `then` target.
+/// Returns the target state name if found.
+fn extract_initial_transition_target(node: &Node, source: &[u8]) -> Option<String> {
+    let mut saw_then = false;
+    let mut cursor = node.walk();
+    for child in node.children(&mut cursor) {
+        match child.kind() {
+            "then" => saw_then = true,
+            "identifier" | "qualified_name" | "feature_chain" if saw_then => {
+                let text = node_text(&child, source).to_string();
+                return Some(text);
+            }
+            _ => {}
+        }
+    }
+    None
+}
+
 fn extract_trigger(node: &Node, source: &[u8]) -> Option<Trigger> {
     let mut cursor = node.walk();
     for child in node.children(&mut cursor) {
@@ -405,5 +544,148 @@ mod tests {
         let source = "part def Vehicle;";
         let machines = extract_state_machines("test.sysml", source);
         assert!(machines.is_empty());
+    }
+
+    #[test]
+    fn extract_annex_a_operating_states() {
+        let source = r#"
+            part def Vehicle {
+                exhibit state vehicleStates parallel {
+                    state operatingStates {
+                        entry action initial;
+                        state off;
+                        state starting;
+                        state on;
+
+                        transition initial then off;
+
+                        transition off_To_starting
+                            first off
+                            accept ignitionCmd:IgnitionCmd via ignitionCmdPort
+                            then starting;
+
+                        transition starting_To_on
+                            first starting
+                            accept VehicleOnSignal
+                            then on;
+
+                        transition on_To_off
+                            first on
+                            accept VehicleOffSignal
+                            then off;
+                    }
+                }
+            }
+        "#;
+        let machines = extract_state_machines("test.sysml", source);
+        let ops = machines.iter().find(|m| m.name == "operatingStates").unwrap();
+        assert_eq!(ops.entry_state, Some("off".to_string()));
+        assert_eq!(ops.states.len(), 3);
+        assert_eq!(ops.transitions.len(), 3);
+
+        // The typed accept `ignitionCmd:IgnitionCmd` should extract
+        // the usage name as trigger
+        let t0 = &ops.transitions[0];
+        assert_eq!(t0.source, "off");
+        assert_eq!(t0.target, "starting");
+        assert!(t0.trigger.is_some(), "off->starting should have a trigger");
+
+        let t1 = &ops.transitions[1];
+        assert_eq!(t1.source, "starting");
+        assert_eq!(t1.target, "on");
+        assert!(matches!(&t1.trigger, Some(Trigger::Signal(s)) if s == "VehicleOnSignal"));
+    }
+
+    #[test]
+    fn extract_exhibit_state_and_nested_regions() {
+        let source = r#"
+            part def VehicleController {
+                exhibit state controllerStates parallel {
+                    state operatingStates {
+                        entry action initial;
+                        state off;
+                        state on;
+                        transition initial then off;
+                        transition off_to_on
+                            first off
+                            accept StartSignal
+                            then on;
+                        transition on_to_off
+                            first on
+                            accept OffSignal
+                            then off;
+                    }
+                }
+            }
+        "#;
+        let machines = extract_state_machines("test.sysml", source);
+        assert_eq!(machines.len(), 2);
+
+        // Top-level exhibit: controllerStates
+        let top = &machines[0];
+        assert_eq!(top.name, "controllerStates");
+        assert_eq!(top.states.len(), 1);
+        assert_eq!(top.states[0].name, "operatingStates");
+
+        // Nested region: operatingStates
+        let nested = &machines[1];
+        assert_eq!(nested.name, "operatingStates");
+        assert_eq!(nested.states.len(), 2);
+        assert_eq!(nested.states[0].name, "off");
+        assert_eq!(nested.states[1].name, "on");
+        assert_eq!(nested.transitions.len(), 2);
+        assert_eq!(nested.transitions[0].source, "off");
+        assert_eq!(nested.transitions[0].target, "on");
+        assert!(matches!(&nested.transitions[0].trigger, Some(Trigger::Signal(s)) if s == "StartSignal"));
+    }
+
+    #[test]
+    fn extract_exhibit_state_parallel_with_multiple_regions() {
+        // Mirrors annex-a vehicleStates with operatingStates + healthStates
+        let source = r#"
+            part def Vehicle {
+                exhibit state vehicleStates parallel {
+                    state operatingStates {
+                        entry action initial;
+                        state off;
+                        state starting;
+                        state on;
+                        transition initial then off;
+                        transition off_To_starting
+                            first off
+                            accept IgnitionCmd
+                            then starting;
+                        transition starting_To_on
+                            first starting
+                            accept VehicleOnSignal
+                            then on;
+                        transition on_To_off
+                            first on
+                            accept VehicleOffSignal
+                            then off;
+                    }
+                    state healthStates {
+                        entry action initial;
+                        state normal;
+                        state degraded;
+                        transition initial then normal;
+                        transition normal_To_degraded
+                            first normal
+                            accept OverTempSignal
+                            then degraded;
+                    }
+                }
+            }
+        "#;
+        let machines = extract_state_machines("test.sysml", source);
+        // Should find: vehicleStates (exhibit), operatingStates, healthStates
+        assert_eq!(machines.len(), 3);
+        assert_eq!(machines[0].name, "vehicleStates");
+        assert_eq!(machines[1].name, "operatingStates");
+        assert_eq!(machines[1].states.len(), 3);
+        assert_eq!(machines[1].transitions.len(), 3);
+        assert_eq!(machines[2].name, "healthStates");
+        assert_eq!(machines[2].states.len(), 2);
+        assert_eq!(machines[2].transitions.len(), 1);
     }
 }

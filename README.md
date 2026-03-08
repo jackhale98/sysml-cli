@@ -133,12 +133,20 @@ sysml2-cli -f json simulate eval model.sysml -b speed=100
 
 ### Simulate State Machines
 
+Supports `state def`, `exhibit state` (inside `part def` bodies), and nested
+state regions (e.g. parallel orthogonal states like `operatingStates` and
+`healthStates` inside an exhibit). Initial pseudo-transitions
+(`transition initial then off;`) are recognized automatically.
+
 ```sh
 # Simulate with events
 sysml2-cli simulate state-machine model.sysml -n TrafficLight -e next,next,next
 
 # With guard variable bindings
 sysml2-cli simulate state-machine model.sysml -n Controller -b temperature=150
+
+# Simulate a nested state region from an exhibit state
+sysml2-cli simulate state-machine vehicle.sysml -n operatingStates -e ignitionCmd,VehicleOnSignal
 ```
 
 ### Execute Action Flows
