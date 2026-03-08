@@ -3,6 +3,8 @@
 /// Each check module implements the `Check` trait, which takes a `Model`
 /// and returns a list of `Diagnostic` entries.
 
+pub mod calculations;
+pub mod constraints;
 pub mod duplicates;
 pub mod ports;
 pub mod references;
@@ -31,5 +33,7 @@ pub fn all_checks() -> Vec<Box<dyn Check>> {
         Box::new(requirements::UnsatisfiedReqCheck),
         Box::new(requirements::UnverifiedReqCheck),
         Box::new(ports::PortConnectionCheck),
+        Box::new(constraints::ConstraintCheck),
+        Box::new(calculations::CalcReturnCheck),
     ]
 }

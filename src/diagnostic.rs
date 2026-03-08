@@ -75,4 +75,6 @@ pub mod codes {
     pub const UNRESOLVED_TYPE: &str = "W004";
     pub const UNRESOLVED_TARGET: &str = "W005";
     pub const PORT_TYPE_MISMATCH: &str = "W006";
+    pub const EMPTY_CONSTRAINT: &str = "W007";
+    pub const CALC_NO_RETURN: &str = "W008";
 }

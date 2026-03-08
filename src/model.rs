@@ -131,6 +131,14 @@ pub struct Definition {
     pub name: String,
     pub super_type: Option<String>,
     pub span: Span,
+    /// Whether the definition has a body block (`{ ... }`) vs just `;`.
+    pub has_body: bool,
+    /// Number of `in` parameters (relevant for constraint/calc defs).
+    pub param_count: usize,
+    /// Whether a constraint def contains a constraint expression.
+    pub has_constraint_expr: bool,
+    /// Whether a calc def contains a return statement.
+    pub has_return: bool,
 }
 
 #[derive(Debug, Clone, Serialize)]

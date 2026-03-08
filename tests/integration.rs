@@ -151,3 +151,73 @@ fn text_output_format() {
     // Should contain file:line:col format
     assert!(text.contains("test.sysml:"));
 }
+
+// --- Constraint checks ---
+
+#[test]
+fn empty_constraint_flagged() {
+    let source = r#"
+        constraint def BadConstraint {
+            in massActual : Real;
+        }
+    "#;
+    let diags = lint_with(source, "constraints");
+    assert_eq!(diags.len(), 1);
+    assert!(diags[0].message.contains("BadConstraint"));
+    assert!(diags[0].message.contains("no constraint expression"));
+}
+
+#[test]
+fn constraint_with_expression_ok() {
+    let source = r#"
+        constraint def MassConstraint {
+            in massActual : Real;
+            in massLimit : Real;
+            massActual <= massLimit;
+        }
+    "#;
+    let diags = lint_with(source, "constraints");
+    assert!(diags.is_empty(), "Constraint with expression should not be flagged");
+}
+
+#[test]
+fn constraint_semicolon_only_ok() {
+    // Forward-declared constraint with no body should not be flagged
+    let source = "constraint def Forward;";
+    let diags = lint_with(source, "constraints");
+    assert!(diags.is_empty(), "Semicolon-only constraint should not be flagged");
+}
+
+// --- Calculation checks ---
+
+#[test]
+fn calc_no_return_flagged() {
+    let source = r#"
+        calc def BadCalc {
+            in x : Real;
+        }
+    "#;
+    let diags = lint_with(source, "calculations");
+    assert_eq!(diags.len(), 1);
+    assert!(diags[0].message.contains("BadCalc"));
+    assert!(diags[0].message.contains("no return statement"));
+}
+
+#[test]
+fn calc_with_return_ok() {
+    let source = r#"
+        calc def GoodCalc {
+            in x : Real;
+            return result : Real;
+        }
+    "#;
+    let diags = lint_with(source, "calculations");
+    assert!(diags.is_empty(), "Calc with return should not be flagged");
+}
+
+#[test]
+fn calc_semicolon_only_ok() {
+    let source = "calc def Forward;";
+    let diags = lint_with(source, "calculations");
+    assert!(diags.is_empty(), "Semicolon-only calc should not be flagged");
+}

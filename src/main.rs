@@ -30,7 +30,7 @@ struct Cli {
     format: String,
 
     /// Disable specific checks (comma-separated).
-    /// Available: syntax, duplicates, unused, unresolved, unsatisfied, unverified, port-types
+    /// Available: syntax, duplicates, unused, unresolved, unsatisfied, unverified, port-types, constraints, calculations
     #[arg(short, long, value_delimiter = ',')]
     disable: Vec<String>,
 

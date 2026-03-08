@@ -31,7 +31,7 @@ impl Check for MyCheck {
 ```rust
 pub mod codes {
     // ...existing codes...
-    pub const MY_CHECK_CODE: &str = "W007";
+    pub const MY_CHECK_CODE: &str = "W009";
 }
 ```
 

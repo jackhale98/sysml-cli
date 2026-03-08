@@ -95,7 +95,7 @@ fn def_kind_from_node(kind: &str) -> Option<DefKind> {
         "action_definition" => Some(DefKind::Action),
         "state_definition" => Some(DefKind::State),
         "constraint_definition" => Some(DefKind::Constraint),
-        "calculation_definition" => Some(DefKind::Calc),
+        "calc_definition" => Some(DefKind::Calc),
         "requirement_definition" => Some(DefKind::Requirement),
         "use_case_definition" => Some(DefKind::UseCase),
         "verification_definition" => Some(DefKind::Verification),
@@ -205,11 +205,24 @@ fn walk_node(
             let def_kind = def_kind_from_node(k).unwrap();
             if let Some(name) = field_text(&node, "name", source) {
                 let super_type = get_supertype(&node, source);
+
+                // Extract body structure for constraint/calc defs
+                let (has_body, param_count, has_constraint_expr, has_return) =
+                    if def_kind == DefKind::Constraint || def_kind == DefKind::Calc {
+                        inspect_def_body(&node, def_kind)
+                    } else {
+                        (true, 0, false, false)
+                    };
+
                 model.definitions.push(Definition {
                     kind: def_kind,
                     name: name.clone(),
                     super_type,
                     span: Span::from_node(&node),
+                    has_body,
+                    param_count,
+                    has_constraint_expr,
+                    has_return,
                 });
 
                 // For verification definitions, track name for verify extraction
@@ -365,6 +378,72 @@ fn extract_allocation(node: &Node, source: &[u8], model: &mut Model) {
             target: refs[1].clone(),
             span: Span::from_node(node),
         });
+    }
+}
+
+/// Inspect a constraint or calc definition body for structural elements.
+/// Returns (has_body, param_count, has_constraint_expr, has_return).
+fn inspect_def_body(node: &Node, kind: DefKind) -> (bool, usize, bool, bool) {
+    let mut has_body = false;
+    let mut param_count = 0;
+    let mut has_constraint_expr = false;
+    let mut has_return = false;
+
+    let mut cursor = node.walk();
+    for child in node.children(&mut cursor) {
+        if child.kind() == "definition_body" {
+            has_body = true;
+            inspect_body_children(&child, kind, &mut param_count, &mut has_constraint_expr, &mut has_return);
+        }
+    }
+
+    (has_body, param_count, has_constraint_expr, has_return)
+}
+
+/// Walk children of a definition_body to count params, expressions, returns.
+fn inspect_body_children(
+    body: &Node,
+    kind: DefKind,
+    param_count: &mut usize,
+    has_constraint_expr: &mut bool,
+    has_return: &mut bool,
+) {
+    let mut cursor = body.walk();
+    for child in body.children(&mut cursor) {
+        match child.kind() {
+            // `in` parameters appear as feature_usage with "in" modifier
+            "feature_usage" => {
+                let mut fc = child.walk();
+                for fc_child in child.children(&mut fc) {
+                    if fc_child.kind() == "in" {
+                        *param_count += 1;
+                        break;
+                    }
+                }
+            }
+            // Constraint expressions
+            "expression_statement" => {
+                if kind == DefKind::Constraint {
+                    *has_constraint_expr = true;
+                }
+            }
+            "result_expression" => {
+                if kind == DefKind::Constraint {
+                    *has_constraint_expr = true;
+                }
+            }
+            // Constraint usages inside a body also count as expressions
+            "constraint_usage" => {
+                if kind == DefKind::Constraint || kind == DefKind::Calc {
+                    *has_constraint_expr = true;
+                }
+            }
+            // Return statements in calc defs
+            "return_statement" => {
+                *has_return = true;
+            }
+            _ => {}
+        }
     }
 }
 

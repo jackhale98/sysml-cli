@@ -81,7 +81,7 @@ Options:
 
 ## Checks
 
-sysml-lint ships with 7 validation checks. Each can be individually disabled with `--disable <name>`.
+sysml-lint ships with 9 validation checks. Each can be individually disabled with `--disable <name>`.
 
 | Check | Name | Severity | Description |
 |-------|------|----------|-------------|
@@ -92,6 +92,8 @@ sysml-lint ships with 7 validation checks. Each can be individually disabled wit
 | Unsatisfied | `unsatisfied` | Warning | Requirement definitions with no corresponding `satisfy` statement |
 | Unverified | `unverified` | Warning | Requirement definitions with no corresponding `verify` statement |
 | Port Types | `port-types` | Warning | Connected ports with incompatible types |
+| Constraints | `constraints` | Warning | Constraint definitions with a body but no constraint expression |
+| Calculations | `calculations` | Warning | Calculation definitions with a body but no return statement |
 
 ### Check Details
 
@@ -123,6 +125,14 @@ Checks that every `requirement def` in the file has at least one `verify` statem
 
 When two ports are connected, checks that their declared types are compatible. Types are compatible if they are identical, or if one is the conjugate of the other (prefixed with `~`). For example, `FuelPort` and `~FuelPort` are compatible, but `FuelPort` and `ElectricalPort` are not.
 
+#### Constraints (`constraints`)
+
+Checks that `constraint def` declarations with a body block actually contain a constraint expression. A constraint definition like `constraint def C { in x : Real; }` that declares parameters but has no expression (`x > 0;`) is likely incomplete. Forward-declared constraints (`constraint def C;`) are not flagged.
+
+#### Calculations (`calculations`)
+
+Checks that `calc def` declarations with a body block contain a `return` statement. A calculation definition like `calc def F { in x : Real; }` with parameters but no `return` is likely incomplete. Forward-declared calcs (`calc def F;`) are not flagged.
+
 ## Diagnostic Codes
 
 ### Errors
@@ -142,6 +152,8 @@ When two ports are connected, checks that their declared types are compatible. T
 | W004 | unresolved | `type '<name>' is not defined in this file` |
 | W005 | unresolved | `reference '<name>' does not resolve to any definition or usage` |
 | W006 | port-types | `connected ports have different types: '<a>' is '<typeA>' but '<b>' is '<typeB>'` |
+| W007 | constraints | `constraint def '<name>' has a body but no constraint expression` |
+| W008 | calculations | `calc def '<name>' has a body but no return statement` |
 
 ## Output Formats
 
@@ -299,8 +311,10 @@ src/
     references.rs  W001/W004/W005: unused defs, unresolved types
     requirements.rs W002/W003: unsatisfied/unverified requirements
     ports.rs       W006: port type mismatches
+    constraints.rs W007: empty constraint bodies
+    calculations.rs W008: calc missing return
 tests/
-  integration.rs   Integration tests (11 tests)
+  integration.rs   Integration tests (17 tests)
 test/
   fixtures/        SysML v2 example files for testing
 ```
