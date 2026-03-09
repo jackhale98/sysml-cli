@@ -1,9 +1,11 @@
 /// Model query functions for filtering and inspecting SysML v2 elements.
 ///
 /// These functions provide the logic behind CLI commands like `list`, `show`,
-/// `trace`, and `interfaces`.
+/// `trace`, `interfaces`, `stats`, `deps`, `diff`, `allocation`, and `coverage`.
 
 use crate::model::*;
+use serde::Serialize;
+use std::collections::{HashMap, HashSet};
 
 // ========================================================================
 // Element enumeration — a unified view over definitions and usages
@@ -364,6 +366,719 @@ pub fn unconnected_ports(model: &Model) -> Vec<PortInfo> {
         .collect()
 }
 
+// ========================================================================
+// Model statistics
+// ========================================================================
+
+/// Aggregate metrics about a model.
+#[derive(Debug, Clone, Serialize)]
+pub struct ModelStats {
+    pub total_definitions: usize,
+    pub total_usages: usize,
+    pub def_counts: Vec<(String, usize)>,
+    pub usage_counts: Vec<(String, usize)>,
+    pub connection_count: usize,
+    pub flow_count: usize,
+    pub satisfaction_count: usize,
+    pub verification_count: usize,
+    pub allocation_count: usize,
+    pub import_count: usize,
+    pub package_count: usize,
+    pub abstract_def_count: usize,
+    pub doc_coverage: DocCoverage,
+    pub max_nesting_depth: usize,
+}
+
+/// Documentation coverage statistics.
+#[derive(Debug, Clone, Serialize)]
+pub struct DocCoverage {
+    pub documented: usize,
+    pub total: usize,
+    pub percentage: f64,
+}
+
+/// Compute aggregate statistics for a model.
+pub fn model_stats(model: &Model) -> ModelStats {
+    let total_definitions = model.definitions.len();
+    let total_usages = model.usages.len();
+
+    // Count definitions by kind
+    let mut def_map: HashMap<&str, usize> = HashMap::new();
+    for d in &model.definitions {
+        *def_map.entry(d.kind.label()).or_insert(0) += 1;
+    }
+    let mut def_counts: Vec<(String, usize)> = def_map
+        .into_iter()
+        .map(|(k, v)| (k.to_string(), v))
+        .collect();
+    def_counts.sort_by(|a, b| b.1.cmp(&a.1).then(a.0.cmp(&b.0)));
+
+    // Count usages by kind
+    let mut usage_map: HashMap<&str, usize> = HashMap::new();
+    for u in &model.usages {
+        *usage_map.entry(&u.kind).or_insert(0) += 1;
+    }
+    let mut usage_counts: Vec<(String, usize)> = usage_map
+        .into_iter()
+        .map(|(k, v)| (k.to_string(), v))
+        .collect();
+    usage_counts.sort_by(|a, b| b.1.cmp(&a.1).then(a.0.cmp(&b.0)));
+
+    let abstract_def_count = model.definitions.iter().filter(|d| d.is_abstract).count();
+    let package_count = model
+        .definitions
+        .iter()
+        .filter(|d| d.kind == DefKind::Package)
+        .count();
+
+    // Documentation coverage (exclude packages)
+    let non_pkg_defs: Vec<&Definition> = model
+        .definitions
+        .iter()
+        .filter(|d| d.kind != DefKind::Package)
+        .collect();
+    let documented = non_pkg_defs.iter().filter(|d| d.doc.is_some()).count();
+    let doc_total = non_pkg_defs.len();
+    let doc_pct = if doc_total > 0 {
+        100.0 * documented as f64 / doc_total as f64
+    } else {
+        100.0
+    };
+
+    // Max nesting depth via parent_def chains
+    let def_names: HashMap<&str, &Definition> = model
+        .definitions
+        .iter()
+        .map(|d| (d.name.as_str(), d))
+        .collect();
+    let mut max_depth = 0usize;
+    for d in &model.definitions {
+        let mut depth = 0;
+        let mut current = d;
+        while let Some(ref parent) = current.parent_def {
+            depth += 1;
+            if let Some(p) = def_names.get(parent.as_str()) {
+                current = p;
+            } else {
+                break;
+            }
+        }
+        max_depth = max_depth.max(depth);
+    }
+
+    ModelStats {
+        total_definitions,
+        total_usages,
+        def_counts,
+        usage_counts,
+        connection_count: model.connections.len(),
+        flow_count: model.flows.len(),
+        satisfaction_count: model.satisfactions.len(),
+        verification_count: model.verifications.len(),
+        allocation_count: model.allocations.len(),
+        import_count: model.imports.len(),
+        package_count,
+        abstract_def_count,
+        doc_coverage: DocCoverage {
+            documented,
+            total: doc_total,
+            percentage: doc_pct,
+        },
+        max_nesting_depth: max_depth,
+    }
+}
+
+// ========================================================================
+// Dependency / impact analysis
+// ========================================================================
+
+/// Dependency analysis result for a target element.
+#[derive(Debug, Clone, Serialize)]
+pub struct DepAnalysis {
+    pub target: String,
+    pub referenced_by: Vec<DepRef>,
+    pub depends_on: Vec<DepRef>,
+}
+
+/// A single dependency reference.
+#[derive(Debug, Clone, Serialize)]
+pub struct DepRef {
+    pub name: String,
+    pub kind: String,
+    pub relationship: String,
+}
+
+/// Compute forward and reverse dependencies for a named element.
+pub fn dependency_analysis(model: &Model, target_name: &str) -> DepAnalysis {
+    let mut referenced_by = Vec::new();
+    let mut depends_on = Vec::new();
+
+    // Reverse: who references target?
+    for u in &model.usages {
+        if let Some(ref t) = u.type_ref {
+            if simple_name(t) == target_name {
+                referenced_by.push(DepRef {
+                    name: u.name.clone(),
+                    kind: u.kind.clone(),
+                    relationship: "type_ref".to_string(),
+                });
+            }
+        }
+    }
+    for d in &model.definitions {
+        if let Some(ref s) = d.super_type {
+            if simple_name(s) == target_name {
+                referenced_by.push(DepRef {
+                    name: d.name.clone(),
+                    kind: d.kind.label().to_string(),
+                    relationship: "specializes".to_string(),
+                });
+            }
+        }
+    }
+    for c in &model.connections {
+        if simple_name(&c.source) == target_name || simple_name(&c.target) == target_name {
+            let other = if simple_name(&c.source) == target_name {
+                &c.target
+            } else {
+                &c.source
+            };
+            referenced_by.push(DepRef {
+                name: c.name.clone().unwrap_or_else(|| other.clone()),
+                kind: "connection".to_string(),
+                relationship: "connection".to_string(),
+            });
+        }
+    }
+    for f in &model.flows {
+        if simple_name(&f.source) == target_name || simple_name(&f.target) == target_name {
+            let other = if simple_name(&f.source) == target_name {
+                &f.target
+            } else {
+                &f.source
+            };
+            referenced_by.push(DepRef {
+                name: other.clone(),
+                kind: "flow".to_string(),
+                relationship: "flow".to_string(),
+            });
+        }
+    }
+    for s in &model.satisfactions {
+        if simple_name(&s.requirement) == target_name {
+            referenced_by.push(DepRef {
+                name: s.by.clone().unwrap_or_else(|| "(implicit)".to_string()),
+                kind: "satisfaction".to_string(),
+                relationship: "satisfies".to_string(),
+            });
+        }
+    }
+    for v in &model.verifications {
+        if simple_name(&v.requirement) == target_name {
+            referenced_by.push(DepRef {
+                name: v.by.clone(),
+                kind: "verification".to_string(),
+                relationship: "verifies".to_string(),
+            });
+        }
+    }
+    for a in &model.allocations {
+        if simple_name(&a.source) == target_name || simple_name(&a.target) == target_name {
+            let other = if simple_name(&a.source) == target_name {
+                &a.target
+            } else {
+                &a.source
+            };
+            referenced_by.push(DepRef {
+                name: other.clone(),
+                kind: "allocation".to_string(),
+                relationship: "allocation".to_string(),
+            });
+        }
+    }
+
+    // Forward: what does target depend on?
+    if let Some(def) = model.find_def(target_name) {
+        if let Some(ref s) = def.super_type {
+            depends_on.push(DepRef {
+                name: s.clone(),
+                kind: "super_type".to_string(),
+                relationship: "specializes".to_string(),
+            });
+        }
+    }
+    for u in &model.usages {
+        if u.parent_def.as_deref() == Some(target_name) {
+            if let Some(ref t) = u.type_ref {
+                depends_on.push(DepRef {
+                    name: t.clone(),
+                    kind: u.kind.clone(),
+                    relationship: "type_ref".to_string(),
+                });
+            }
+        }
+    }
+
+    DepAnalysis {
+        target: target_name.to_string(),
+        referenced_by,
+        depends_on,
+    }
+}
+
+// ========================================================================
+// Semantic model diff
+// ========================================================================
+
+/// Semantic diff between two models.
+#[derive(Debug, Clone, Serialize)]
+pub struct ModelDiff {
+    pub added_defs: Vec<String>,
+    pub removed_defs: Vec<String>,
+    pub changed_defs: Vec<DefChange>,
+    pub added_usages: Vec<UsageKey>,
+    pub removed_usages: Vec<UsageKey>,
+    pub changed_usages: Vec<UsageChange>,
+    pub added_connections: Vec<String>,
+    pub removed_connections: Vec<String>,
+}
+
+/// A definition that changed between versions.
+#[derive(Debug, Clone, Serialize)]
+pub struct DefChange {
+    pub name: String,
+    pub changes: Vec<String>,
+}
+
+/// Key for identifying a usage (name + parent).
+#[derive(Debug, Clone, Serialize, PartialEq, Eq, Hash)]
+pub struct UsageKey {
+    pub name: String,
+    pub parent: Option<String>,
+}
+
+/// A usage that changed between versions.
+#[derive(Debug, Clone, Serialize)]
+pub struct UsageChange {
+    pub key: UsageKey,
+    pub changes: Vec<String>,
+}
+
+/// Compute semantic diff between two models.
+pub fn model_diff(old: &Model, new: &Model) -> ModelDiff {
+    // Definitions
+    let old_defs: HashMap<&str, &Definition> =
+        old.definitions.iter().map(|d| (d.name.as_str(), d)).collect();
+    let new_defs: HashMap<&str, &Definition> =
+        new.definitions.iter().map(|d| (d.name.as_str(), d)).collect();
+
+    let mut added_defs = Vec::new();
+    let mut removed_defs = Vec::new();
+    let mut changed_defs = Vec::new();
+
+    for name in new_defs.keys() {
+        if !old_defs.contains_key(name) {
+            added_defs.push(name.to_string());
+        }
+    }
+    for name in old_defs.keys() {
+        if !new_defs.contains_key(name) {
+            removed_defs.push(name.to_string());
+        }
+    }
+    for (name, new_d) in &new_defs {
+        if let Some(old_d) = old_defs.get(name) {
+            let mut changes = Vec::new();
+            if old_d.kind != new_d.kind {
+                changes.push(format!(
+                    "kind: {} -> {}",
+                    old_d.kind.label(),
+                    new_d.kind.label()
+                ));
+            }
+            if old_d.super_type != new_d.super_type {
+                changes.push(format!(
+                    "super_type: {} -> {}",
+                    old_d.super_type.as_deref().unwrap_or("none"),
+                    new_d.super_type.as_deref().unwrap_or("none")
+                ));
+            }
+            if old_d.is_abstract != new_d.is_abstract {
+                changes.push(format!(
+                    "abstract: {} -> {}",
+                    old_d.is_abstract, new_d.is_abstract
+                ));
+            }
+            if old_d.visibility != new_d.visibility {
+                changes.push(format!(
+                    "visibility: {} -> {}",
+                    old_d
+                        .visibility
+                        .as_ref()
+                        .map(|v| v.label())
+                        .unwrap_or("default"),
+                    new_d
+                        .visibility
+                        .as_ref()
+                        .map(|v| v.label())
+                        .unwrap_or("default")
+                ));
+            }
+            if old_d.doc != new_d.doc {
+                changes.push("doc changed".to_string());
+            }
+            if !changes.is_empty() {
+                changed_defs.push(DefChange {
+                    name: name.to_string(),
+                    changes,
+                });
+            }
+        }
+    }
+
+    added_defs.sort();
+    removed_defs.sort();
+
+    // Usages (keyed by name + parent)
+    fn usage_key(u: &Usage) -> UsageKey {
+        UsageKey {
+            name: u.name.clone(),
+            parent: u.parent_def.clone(),
+        }
+    }
+    let old_usages: HashMap<UsageKey, &Usage> =
+        old.usages.iter().map(|u| (usage_key(u), u)).collect();
+    let new_usages: HashMap<UsageKey, &Usage> =
+        new.usages.iter().map(|u| (usage_key(u), u)).collect();
+
+    let mut added_usages = Vec::new();
+    let mut removed_usages = Vec::new();
+    let mut changed_usages = Vec::new();
+
+    for key in new_usages.keys() {
+        if !old_usages.contains_key(key) {
+            added_usages.push(key.clone());
+        }
+    }
+    for key in old_usages.keys() {
+        if !new_usages.contains_key(key) {
+            removed_usages.push(key.clone());
+        }
+    }
+    for (key, new_u) in &new_usages {
+        if let Some(old_u) = old_usages.get(key) {
+            let mut changes = Vec::new();
+            if old_u.type_ref != new_u.type_ref {
+                changes.push(format!(
+                    "type: {} -> {}",
+                    old_u.type_ref.as_deref().unwrap_or("none"),
+                    new_u.type_ref.as_deref().unwrap_or("none")
+                ));
+            }
+            if old_u.direction != new_u.direction {
+                changes.push(format!(
+                    "direction: {} -> {}",
+                    old_u
+                        .direction
+                        .as_ref()
+                        .map(|d| d.label())
+                        .unwrap_or("none"),
+                    new_u
+                        .direction
+                        .as_ref()
+                        .map(|d| d.label())
+                        .unwrap_or("none")
+                ));
+            }
+            if !changes.is_empty() {
+                changed_usages.push(UsageChange {
+                    key: key.clone(),
+                    changes,
+                });
+            }
+        }
+    }
+
+    // Connections
+    fn conn_key(c: &Connection) -> String {
+        format!("{} -> {}", c.source, c.target)
+    }
+    let old_conns: HashSet<String> = old.connections.iter().map(conn_key).collect();
+    let new_conns: HashSet<String> = new.connections.iter().map(conn_key).collect();
+    let mut added_connections: Vec<String> = new_conns.difference(&old_conns).cloned().collect();
+    let mut removed_connections: Vec<String> = old_conns.difference(&new_conns).cloned().collect();
+    added_connections.sort();
+    removed_connections.sort();
+
+    ModelDiff {
+        added_defs,
+        removed_defs,
+        changed_defs,
+        added_usages,
+        removed_usages,
+        changed_usages,
+        added_connections,
+        removed_connections,
+    }
+}
+
+// ========================================================================
+// Allocation traceability
+// ========================================================================
+
+/// Allocation traceability report.
+#[derive(Debug, Clone, Serialize)]
+pub struct AllocationReport {
+    pub rows: Vec<AllocationRow>,
+    pub unallocated_sources: Vec<String>,
+    pub unallocated_targets: Vec<String>,
+    pub total_allocations: usize,
+}
+
+/// A single allocation mapping.
+#[derive(Debug, Clone, Serialize)]
+pub struct AllocationRow {
+    pub source: String,
+    pub target: String,
+}
+
+/// Generate an allocation traceability report.
+pub fn allocation_report(model: &Model) -> AllocationReport {
+    let rows: Vec<AllocationRow> = model
+        .allocations
+        .iter()
+        .map(|a| AllocationRow {
+            source: a.source.clone(),
+            target: a.target.clone(),
+        })
+        .collect();
+
+    let allocated_names: HashSet<&str> = model
+        .allocations
+        .iter()
+        .flat_map(|a| vec![simple_name(&a.source), simple_name(&a.target)])
+        .collect();
+
+    // Find action defs not in any allocation (logical elements)
+    let unallocated_sources: Vec<String> = model
+        .definitions
+        .iter()
+        .filter(|d| matches!(d.kind, DefKind::Action | DefKind::UseCase))
+        .filter(|d| !allocated_names.contains(d.name.as_str()))
+        .map(|d| d.name.clone())
+        .collect();
+
+    // Find part defs not in any allocation (physical elements)
+    let unallocated_targets: Vec<String> = model
+        .definitions
+        .iter()
+        .filter(|d| d.kind == DefKind::Part)
+        .filter(|d| !allocated_names.contains(d.name.as_str()))
+        .map(|d| d.name.clone())
+        .collect();
+
+    let total = rows.len();
+    AllocationReport {
+        rows,
+        unallocated_sources,
+        unallocated_targets,
+        total_allocations: total,
+    }
+}
+
+// ========================================================================
+// Model coverage / completeness
+// ========================================================================
+
+/// Model completeness report.
+#[derive(Debug, Clone, Serialize)]
+pub struct CoverageReport {
+    pub undocumented_defs: Vec<CoverageItem>,
+    pub untyped_usages: Vec<CoverageItem>,
+    pub empty_body_defs: Vec<CoverageItem>,
+    pub no_member_defs: Vec<CoverageItem>,
+    pub unsatisfied_reqs: Vec<CoverageItem>,
+    pub unverified_reqs: Vec<CoverageItem>,
+    pub summary: CoverageSummary,
+}
+
+/// An item flagged in the coverage report.
+#[derive(Debug, Clone, Serialize)]
+pub struct CoverageItem {
+    pub name: String,
+    pub kind: String,
+    pub line: usize,
+}
+
+/// Coverage summary percentages.
+#[derive(Debug, Clone, Serialize)]
+pub struct CoverageSummary {
+    pub total_defs: usize,
+    pub documented_pct: f64,
+    pub typed_usages_pct: f64,
+    pub populated_defs_pct: f64,
+    pub req_satisfaction_pct: f64,
+    pub req_verification_pct: f64,
+    pub overall_score: f64,
+}
+
+/// Compute model completeness/coverage report.
+pub fn coverage_report(model: &Model) -> CoverageReport {
+    // Undocumented definitions (exclude packages, enums)
+    let undocumented_defs: Vec<CoverageItem> = model
+        .definitions
+        .iter()
+        .filter(|d| !matches!(d.kind, DefKind::Package | DefKind::Enum))
+        .filter(|d| d.doc.is_none())
+        .map(|d| CoverageItem {
+            name: d.name.clone(),
+            kind: d.kind.label().to_string(),
+            line: d.span.start_row,
+        })
+        .collect();
+
+    // Untyped usages
+    let untyped_usages: Vec<CoverageItem> = model
+        .usages
+        .iter()
+        .filter(|u| u.type_ref.is_none())
+        .map(|u| CoverageItem {
+            name: u.name.clone(),
+            kind: u.kind.clone(),
+            line: u.span.start_row,
+        })
+        .collect();
+
+    // Empty-body definitions (no body block)
+    let empty_body_defs: Vec<CoverageItem> = model
+        .definitions
+        .iter()
+        .filter(|d| !d.has_body && !matches!(d.kind, DefKind::Package | DefKind::Enum))
+        .map(|d| CoverageItem {
+            name: d.name.clone(),
+            kind: d.kind.label().to_string(),
+            line: d.span.start_row,
+        })
+        .collect();
+
+    // Definitions with body but no members
+    let no_member_defs: Vec<CoverageItem> = model
+        .definitions
+        .iter()
+        .filter(|d| {
+            d.has_body
+                && !matches!(d.kind, DefKind::Package | DefKind::Enum)
+                && model.usages_in_def(&d.name).is_empty()
+        })
+        .map(|d| CoverageItem {
+            name: d.name.clone(),
+            kind: d.kind.label().to_string(),
+            line: d.span.start_row,
+        })
+        .collect();
+
+    // Unsatisfied requirements
+    let satisfied_names: HashSet<&str> = model
+        .satisfactions
+        .iter()
+        .map(|s| simple_name(&s.requirement))
+        .collect();
+    let unsatisfied_reqs: Vec<CoverageItem> = model
+        .definitions
+        .iter()
+        .filter(|d| d.kind == DefKind::Requirement)
+        .filter(|d| !satisfied_names.contains(d.name.as_str()))
+        .map(|d| CoverageItem {
+            name: d.name.clone(),
+            kind: "requirement def".to_string(),
+            line: d.span.start_row,
+        })
+        .collect();
+
+    // Unverified requirements
+    let verified_names: HashSet<&str> = model
+        .verifications
+        .iter()
+        .map(|v| simple_name(&v.requirement))
+        .collect();
+    let unverified_reqs: Vec<CoverageItem> = model
+        .definitions
+        .iter()
+        .filter(|d| d.kind == DefKind::Requirement)
+        .filter(|d| !verified_names.contains(d.name.as_str()))
+        .map(|d| CoverageItem {
+            name: d.name.clone(),
+            kind: "requirement def".to_string(),
+            line: d.span.start_row,
+        })
+        .collect();
+
+    // Summary percentages
+    let non_pkg_defs: Vec<&Definition> = model
+        .definitions
+        .iter()
+        .filter(|d| !matches!(d.kind, DefKind::Package | DefKind::Enum))
+        .collect();
+    let total_defs = non_pkg_defs.len();
+    let documented_pct = if total_defs > 0 {
+        100.0 * (total_defs - undocumented_defs.len()) as f64 / total_defs as f64
+    } else {
+        100.0
+    };
+
+    let total_usages = model.usages.len();
+    let typed_usages_pct = if total_usages > 0 {
+        100.0 * (total_usages - untyped_usages.len()) as f64 / total_usages as f64
+    } else {
+        100.0
+    };
+
+    let defs_with_body = non_pkg_defs.iter().filter(|d| d.has_body).count();
+    let populated_defs_pct = if defs_with_body > 0 {
+        100.0 * (defs_with_body - no_member_defs.len()) as f64 / defs_with_body as f64
+    } else {
+        100.0
+    };
+
+    let req_count = model
+        .definitions
+        .iter()
+        .filter(|d| d.kind == DefKind::Requirement)
+        .count();
+    let req_satisfaction_pct = if req_count > 0 {
+        100.0 * (req_count - unsatisfied_reqs.len()) as f64 / req_count as f64
+    } else {
+        100.0
+    };
+    let req_verification_pct = if req_count > 0 {
+        100.0 * (req_count - unverified_reqs.len()) as f64 / req_count as f64
+    } else {
+        100.0
+    };
+
+    // Weighted overall score
+    let overall_score =
+        documented_pct * 0.25 + typed_usages_pct * 0.25 + req_satisfaction_pct * 0.25 + req_verification_pct * 0.25;
+
+    CoverageReport {
+        undocumented_defs,
+        untyped_usages,
+        empty_body_defs,
+        no_member_defs,
+        unsatisfied_reqs,
+        unverified_reqs,
+        summary: CoverageSummary {
+            total_defs,
+            documented_pct,
+            typed_usages_pct,
+            populated_defs_pct,
+            req_satisfaction_pct,
+            req_verification_pct,
+            overall_score,
+        },
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -603,5 +1318,280 @@ mod tests {
         assert_eq!(parse_kind_filter("port"), Some(KindFilter::UsageKind("port".to_string())));
         assert_eq!(parse_kind_filter("all"), Some(KindFilter::All));
         assert_eq!(parse_kind_filter("nonsense"), None);
+    }
+
+    // ================================================================
+    // stats tests
+    // ================================================================
+
+    #[test]
+    fn stats_counts_definitions_and_usages() {
+        let model = parse_file(
+            "test.sysml",
+            r#"
+            part def Vehicle {
+                part engine : Engine;
+                part wheels : Wheel;
+            }
+            part def Engine;
+            port def DataPort;
+        "#,
+        );
+        let stats = model_stats(&model);
+        assert_eq!(stats.total_definitions, 3);
+        assert_eq!(stats.total_usages, 2);
+        assert!(stats.def_counts.iter().any(|(k, c)| k == "part def" && *c == 2));
+        assert!(stats.def_counts.iter().any(|(k, c)| k == "port def" && *c == 1));
+    }
+
+    #[test]
+    fn stats_doc_coverage() {
+        let model = parse_file(
+            "test.sysml",
+            r#"
+            part def Vehicle {
+                doc /* A vehicle */
+            }
+            part def Engine;
+        "#,
+        );
+        let stats = model_stats(&model);
+        assert_eq!(stats.doc_coverage.documented, 1);
+        assert_eq!(stats.doc_coverage.total, 2);
+        assert!((stats.doc_coverage.percentage - 50.0).abs() < 0.1);
+    }
+
+    #[test]
+    fn stats_nesting_depth() {
+        let model = parse_file(
+            "test.sysml",
+            r#"
+            package P {
+                part def Vehicle {
+                    part engine : Engine;
+                }
+            }
+        "#,
+        );
+        let stats = model_stats(&model);
+        assert!(stats.max_nesting_depth >= 1, "depth={}", stats.max_nesting_depth);
+    }
+
+    // ================================================================
+    // deps tests
+    // ================================================================
+
+    #[test]
+    fn deps_finds_type_references() {
+        let model = parse_file(
+            "test.sysml",
+            r#"
+            part def Engine;
+            part def Vehicle {
+                part engine : Engine;
+            }
+        "#,
+        );
+        let deps = dependency_analysis(&model, "Engine");
+        assert!(
+            deps.referenced_by.iter().any(|r| r.name == "engine" && r.relationship == "type_ref"),
+            "expected engine type_ref, got {:?}",
+            deps.referenced_by
+        );
+    }
+
+    #[test]
+    fn deps_finds_specialization() {
+        let model = parse_file(
+            "test.sysml",
+            r#"
+            part def Base;
+            part def Derived :> Base;
+        "#,
+        );
+        let deps = dependency_analysis(&model, "Base");
+        assert!(
+            deps.referenced_by.iter().any(|r| r.name == "Derived" && r.relationship == "specializes"),
+            "got {:?}",
+            deps.referenced_by
+        );
+    }
+
+    #[test]
+    fn deps_forward_dependencies() {
+        let model = parse_file(
+            "test.sysml",
+            r#"
+            part def Engine;
+            part def Wheel;
+            part def Vehicle {
+                part engine : Engine;
+                part wheels : Wheel;
+            }
+        "#,
+        );
+        let deps = dependency_analysis(&model, "Vehicle");
+        assert!(
+            deps.depends_on.iter().any(|r| r.name == "Engine"),
+            "got {:?}",
+            deps.depends_on
+        );
+        assert!(
+            deps.depends_on.iter().any(|r| r.name == "Wheel"),
+            "got {:?}",
+            deps.depends_on
+        );
+    }
+
+    // ================================================================
+    // diff tests
+    // ================================================================
+
+    #[test]
+    fn diff_detects_added_and_removed_defs() {
+        let old = parse_file("old.sysml", "part def Vehicle;\npart def Engine;\n");
+        let new = parse_file("new.sysml", "part def Vehicle;\npart def Motor;\n");
+        let diff = model_diff(&old, &new);
+        assert!(diff.added_defs.contains(&"Motor".to_string()));
+        assert!(diff.removed_defs.contains(&"Engine".to_string()));
+        assert!(diff.changed_defs.is_empty());
+    }
+
+    #[test]
+    fn diff_detects_changed_supertype() {
+        let old = parse_file("old.sysml", "part def Vehicle :> Base;\n");
+        let new = parse_file("new.sysml", "part def Vehicle :> NewBase;\n");
+        let diff = model_diff(&old, &new);
+        assert_eq!(diff.changed_defs.len(), 1);
+        assert_eq!(diff.changed_defs[0].name, "Vehicle");
+        assert!(diff.changed_defs[0].changes.iter().any(|c| c.contains("super_type")));
+    }
+
+    #[test]
+    fn diff_detects_added_usage() {
+        let old = parse_file("old.sysml", "part def Vehicle {\n    part engine : Engine;\n}\n");
+        let new = parse_file("new.sysml", "part def Vehicle {\n    part engine : Engine;\n    part wheels : Wheel;\n}\n");
+        let diff = model_diff(&old, &new);
+        assert!(
+            diff.added_usages.iter().any(|u| u.name == "wheels"),
+            "got {:?}",
+            diff.added_usages
+        );
+    }
+
+    // ================================================================
+    // allocation tests
+    // ================================================================
+
+    #[test]
+    fn allocation_report_empty() {
+        let model = parse_file("test.sysml", "part def Vehicle;\n");
+        let report = allocation_report(&model);
+        assert!(report.rows.is_empty());
+        assert_eq!(report.total_allocations, 0);
+    }
+
+    #[test]
+    fn allocation_report_with_allocations() {
+        let model = parse_file(
+            "test.sysml",
+            r#"
+            action def ProcessOrder;
+            part def OrderSystem;
+            allocate ProcessOrder to OrderSystem;
+        "#,
+        );
+        let report = allocation_report(&model);
+        assert_eq!(report.total_allocations, 1);
+        assert_eq!(report.rows[0].source, "ProcessOrder");
+        assert_eq!(report.rows[0].target, "OrderSystem");
+    }
+
+    #[test]
+    fn allocation_finds_unallocated() {
+        let model = parse_file(
+            "test.sysml",
+            r#"
+            action def ProcessOrder;
+            action def ShipOrder;
+            part def OrderSystem;
+            part def Warehouse;
+            allocate ProcessOrder to OrderSystem;
+        "#,
+        );
+        let report = allocation_report(&model);
+        assert!(
+            report.unallocated_sources.contains(&"ShipOrder".to_string()),
+            "got {:?}",
+            report.unallocated_sources
+        );
+        assert!(
+            report.unallocated_targets.contains(&"Warehouse".to_string()),
+            "got {:?}",
+            report.unallocated_targets
+        );
+    }
+
+    // ================================================================
+    // coverage tests
+    // ================================================================
+
+    #[test]
+    fn coverage_finds_undocumented() {
+        let model = parse_file(
+            "test.sysml",
+            r#"
+            part def Vehicle {
+                doc /* A vehicle */
+            }
+            part def Engine;
+        "#,
+        );
+        let report = coverage_report(&model);
+        assert!(
+            report.undocumented_defs.iter().any(|i| i.name == "Engine"),
+            "got {:?}",
+            report.undocumented_defs
+        );
+        assert!(
+            !report.undocumented_defs.iter().any(|i| i.name == "Vehicle"),
+            "Vehicle should be documented"
+        );
+    }
+
+    #[test]
+    fn coverage_finds_untyped_usages() {
+        let model = parse_file(
+            "test.sysml",
+            r#"
+            part def Vehicle {
+                part engine : Engine;
+                part trailer;
+            }
+        "#,
+        );
+        let report = coverage_report(&model);
+        assert!(
+            report.untyped_usages.iter().any(|i| i.name == "trailer"),
+            "got {:?}",
+            report.untyped_usages
+        );
+    }
+
+    #[test]
+    fn coverage_overall_score() {
+        let model = parse_file(
+            "test.sysml",
+            r#"
+            part def Vehicle {
+                doc /* A vehicle */
+                part engine : Engine;
+            }
+        "#,
+        );
+        let report = coverage_report(&model);
+        // Should be between 0 and 100
+        assert!(report.summary.overall_score >= 0.0);
+        assert!(report.summary.overall_score <= 100.0);
     }
 }

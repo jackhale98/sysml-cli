@@ -373,6 +373,114 @@ fn export_list() {
 }
 
 // ========================================================================
+// stats
+// ========================================================================
+
+#[test]
+fn stats_basic() {
+    cmd()
+        .args(["stats", &fixture("simple-vehicle.sysml")])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("Definitions:"))
+        .stdout(predicate::str::contains("Usages:"));
+}
+
+#[test]
+fn stats_json() {
+    cmd()
+        .args(["stats", "-f", "json", &fixture("simple-vehicle.sysml")])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("\"total_definitions\""));
+}
+
+// ========================================================================
+// deps
+// ========================================================================
+
+#[test]
+fn deps_basic() {
+    cmd()
+        .args(["deps", &fixture("simple-vehicle.sysml"), "Engine"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("Referenced by"));
+}
+
+#[test]
+fn deps_missing_target() {
+    cmd()
+        .args(["deps", &fixture("simple-vehicle.sysml"), "NonExistent"])
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains("not found"));
+}
+
+// ========================================================================
+// diff
+// ========================================================================
+
+#[test]
+fn diff_identical_files() {
+    cmd()
+        .args(["diff", &fixture("simple-vehicle.sysml"), &fixture("simple-vehicle.sysml")])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("No semantic differences"));
+}
+
+#[test]
+fn diff_different_files() {
+    let dir = tempfile::tempdir().unwrap();
+    let file_a = dir.path().join("a.sysml");
+    let file_b = dir.path().join("b.sysml");
+    fs::write(&file_a, "part def Vehicle;\npart def Engine;\n").unwrap();
+    fs::write(&file_b, "part def Vehicle;\npart def Motor;\n").unwrap();
+
+    cmd()
+        .args(["diff", file_a.to_str().unwrap(), file_b.to_str().unwrap()])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("+ Motor"))
+        .stdout(predicate::str::contains("- Engine"));
+}
+
+// ========================================================================
+// allocation
+// ========================================================================
+
+#[test]
+fn allocation_basic() {
+    cmd()
+        .args(["allocation", &fixture("simple-vehicle.sysml")])
+        .assert()
+        .success();
+}
+
+// ========================================================================
+// coverage
+// ========================================================================
+
+#[test]
+fn coverage_basic() {
+    cmd()
+        .args(["coverage", &fixture("simple-vehicle.sysml")])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("Overall score:"));
+}
+
+#[test]
+fn coverage_json() {
+    cmd()
+        .args(["coverage", "-f", "json", &fixture("simple-vehicle.sysml")])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("\"overall_score\""));
+}
+
+// ========================================================================
 // general
 // ========================================================================
 

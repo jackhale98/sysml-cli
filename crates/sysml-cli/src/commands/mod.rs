@@ -9,3 +9,8 @@ pub mod export;
 pub mod new;
 pub mod edit;
 pub mod fmt;
+pub mod stats;
+pub mod deps;
+pub mod diff;
+pub mod allocation;
+pub mod coverage;

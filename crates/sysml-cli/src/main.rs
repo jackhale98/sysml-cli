@@ -344,6 +344,90 @@ enum Command {
         #[arg(required = true)]
         shell: String,
     },
+    /// Show model statistics and metrics.
+    ///
+    /// Displays aggregate metrics: element counts by kind, documentation
+    /// coverage, nesting depth, relationship counts, and more.
+    Stats {
+        /// SysML v2 files to analyze.
+        #[arg(required = true)]
+        files: Vec<PathBuf>,
+    },
+    /// Analyze dependencies and impact of a model element.
+    ///
+    /// Shows what references a given element (reverse/impact analysis) and
+    /// what the element depends on (forward analysis).
+    ///
+    /// EXAMPLES:
+    ///   sysml-cli deps model.sysml Engine
+    ///   sysml-cli deps model.sysml Vehicle --reverse
+    ///   sysml-cli deps model.sysml Engine --forward
+    Deps {
+        /// SysML v2 files to analyze.
+        #[arg(required = true)]
+        files: Vec<PathBuf>,
+        /// Name of the element to analyze.
+        #[arg(required = true)]
+        target: String,
+        /// Show only reverse dependencies (what references this element).
+        #[arg(long)]
+        reverse: bool,
+        /// Show only forward dependencies (what this element depends on).
+        #[arg(long)]
+        forward: bool,
+    },
+    /// Semantic diff between two SysML v2 files.
+    ///
+    /// Compares model structure (not text) — reports added, removed, and
+    /// changed definitions, usages, and relationships.
+    ///
+    /// EXAMPLES:
+    ///   sysml-cli diff old.sysml new.sysml
+    ///   sysml-cli diff -f json v1.sysml v2.sysml
+    Diff {
+        /// Original (old) SysML file.
+        #[arg(required = true)]
+        file_a: PathBuf,
+        /// Modified (new) SysML file.
+        #[arg(required = true)]
+        file_b: PathBuf,
+    },
+    /// Show allocation traceability matrix.
+    ///
+    /// Lists logical-to-physical allocation mappings and identifies
+    /// unallocated elements. In SysML v2, allocations map actions/use-cases
+    /// to parts (logical to physical architecture).
+    Allocation {
+        /// SysML v2 files to analyze.
+        #[arg(required = true)]
+        files: Vec<PathBuf>,
+        /// Exit with error if unallocated elements exist (CI gate).
+        #[arg(long)]
+        check: bool,
+        /// Show only unallocated elements.
+        #[arg(long)]
+        unallocated: bool,
+    },
+    /// Model completeness and quality report.
+    ///
+    /// Checks documentation coverage, type completeness, requirement
+    /// satisfaction/verification, and computes an overall quality score.
+    /// Use --check in CI to enforce a minimum score.
+    ///
+    /// EXAMPLES:
+    ///   sysml-cli coverage model.sysml
+    ///   sysml-cli coverage --check --min-score 80 model.sysml
+    Coverage {
+        /// SysML v2 files to analyze.
+        #[arg(required = true)]
+        files: Vec<PathBuf>,
+        /// Exit with error if score is below minimum (CI gate).
+        #[arg(long)]
+        check: bool,
+        /// Minimum acceptable score (0-100, used with --check).
+        #[arg(long, default_value = "0")]
+        min_score: f64,
+    },
 }
 
 #[derive(Subcommand)]
@@ -661,6 +745,11 @@ fn main() -> ExitCode {
             generate_completions(shell);
             ExitCode::SUCCESS
         }
+        Command::Stats { files } => commands::stats::run(&cli, files),
+        Command::Deps { files, target, reverse, forward } => commands::deps::run(&cli, files, target, *reverse, *forward),
+        Command::Diff { file_a, file_b } => commands::diff::run(&cli, file_a, file_b),
+        Command::Allocation { files, check, unallocated } => commands::allocation::run(&cli, files, *check, *unallocated),
+        Command::Coverage { files, check, min_score } => commands::coverage::run(&cli, files, *check, *min_score),
     }
 }
 

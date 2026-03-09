@@ -18,6 +18,11 @@ Built on [tree-sitter](https://tree-sitter.github.io/) for reliable parsing of S
   - [interfaces](#interfaces)
   - [new](#new)
   - [edit](#edit)
+  - [stats](#stats)
+  - [deps](#deps)
+  - [diff](#diff)
+  - [allocation](#allocation)
+  - [coverage](#coverage)
   - [fmt](#fmt)
   - [export](#export)
   - [completions](#completions)
@@ -80,6 +85,15 @@ sysml-cli new part-def Vehicle --doc "A vehicle" -m "part engine:Engine"
 
 # Add a part usage to an existing file
 sysml-cli edit add model.sysml part engine -t Engine
+
+# Model statistics
+sysml-cli stats model.sysml
+
+# Dependency analysis
+sysml-cli deps model.sysml Vehicle
+
+# Model quality coverage report
+sysml-cli coverage model.sysml
 
 # Format a file
 sysml-cli fmt model.sysml
@@ -345,6 +359,87 @@ sysml-cli edit rename model.sysml Engine Motor --dry-run
 sysml-cli edit rename model.sysml Engine Motor
 ```
 
+### stats
+
+Show aggregate model statistics: element counts by kind, relationship counts, documentation coverage, and nesting depth.
+
+```sh
+sysml-cli stats model.sysml
+sysml-cli stats -f json model.sysml              # JSON output
+sysml-cli stats src/*.sysml                       # Multiple files
+```
+
+Output includes definitions/usages by kind, connection/flow/satisfaction/verification/allocation counts, package count, abstract definitions, import count, max nesting depth, and documentation coverage percentage.
+
+### deps
+
+Analyze dependencies for a specific element — what it depends on and what references it.
+
+```sh
+sysml-cli deps model.sysml Vehicle
+sysml-cli deps model.sysml Engine --reverse       # Only show "referenced by"
+sysml-cli deps model.sysml Engine --forward       # Only show "depends on"
+sysml-cli deps -f json model.sysml Vehicle
+```
+
+| Option | Description |
+|--------|-------------|
+| `--reverse` | Show only reverse dependencies (what references this element) |
+| `--forward` | Show only forward dependencies (what this element depends on) |
+
+### diff
+
+Compare two SysML files and report semantic differences (added/removed/changed definitions, usages, connections).
+
+```sh
+sysml-cli diff old.sysml new.sysml
+sysml-cli diff -f json v1.sysml v2.sysml
+```
+
+Unlike text-based diff, this compares at the model level — detecting renamed types, changed members, and structural modifications regardless of formatting changes.
+
+### allocation
+
+Display the logical-to-physical allocation matrix. In SysML v2, allocations map actions and use-cases to parts.
+
+```sh
+sysml-cli allocation model.sysml
+sysml-cli allocation --unallocated model.sysml    # Only show gaps
+sysml-cli allocation --check model.sysml          # CI: exit 1 if gaps exist
+sysml-cli allocation -f json model.sysml
+```
+
+| Option | Description |
+|--------|-------------|
+| `--check` | Exit with error if unallocated elements exist |
+| `--unallocated` | Show only unallocated elements |
+
+### coverage
+
+Generate a model quality report: documentation coverage, typed usages, populated definitions, requirement satisfaction/verification, and an overall score.
+
+```sh
+sysml-cli coverage model.sysml
+sysml-cli coverage --check --min-score 80 model.sysml    # CI gate
+sysml-cli coverage -f json model.sysml
+```
+
+| Option | Description |
+|--------|-------------|
+| `--check` | Exit with error if score is below minimum |
+| `--min-score <PCT>` | Minimum overall score percentage (default: 0, used with `--check`) |
+
+**Reported metrics:**
+
+| Metric | Description |
+|--------|-------------|
+| Documentation | Percentage of definitions with doc comments |
+| Typed usages | Percentage of usages with explicit type references |
+| Populated defs | Percentage of definitions with at least one member |
+| Req satisfaction | Percentage of requirements with a satisfy statement |
+| Req verification | Percentage of requirements with a verify statement |
+| Overall score | Weighted average of all metrics |
+
 ### fmt
 
 Format SysML v2 files. CST-aware indentation that handles nested definitions, comments, and state machines correctly.
@@ -472,6 +567,12 @@ jobs:
 
       - name: Check requirement coverage
         run: sysml-cli trace --check --min-coverage 80 models/**/*.sysml
+
+      - name: Check model quality
+        run: sysml-cli coverage --check --min-score 70 models/**/*.sysml
+
+      - name: Check allocations
+        run: sysml-cli allocation --check models/**/*.sysml
 ```
 
 ## Editor Integration
@@ -539,7 +640,7 @@ crates/
         format.rs             CST-aware source formatting
       diagram/                Diagram generation (7 types, 4 formats)
       export/                 FMI 3.0, Modelica, SSP export
-      query/                  Model querying (list, show, trace)
+      query.rs                Model querying (list, show, trace, stats, deps, diff, allocation, coverage)
   sysml-cli/                  CLI frontend
     src/
       main.rs                 Clap command definitions and dispatch
