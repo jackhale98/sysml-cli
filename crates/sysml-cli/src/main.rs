@@ -25,14 +25,19 @@ a textual notation where 'definitions' declare reusable types (part def, port de
 action def, etc.) and 'usages' create instances of those types within a context.
 
 GETTING STARTED:
-  Validate a model:     sysml-cli lint model.sysml
-  List model elements:  sysml-cli list --kind parts model.sysml
-  Run a simulation:     sysml-cli simulate eval model.sysml
-  Export to FMI:        sysml-cli export interfaces model.sysml --part MyPart
+  Validate a model:       sysml-cli lint model.sysml
+  List model elements:    sysml-cli list --kind parts model.sysml
+  Show element details:   sysml-cli show model.sysml Vehicle
+  Generate a diagram:     sysml-cli diagram -t bdd -o mermaid model.sysml
+  Simulate a state machine: sysml-cli simulate state-machine model.sysml
+  Create a new definition: sysml-cli new part-def Vehicle --doc 'A vehicle'
+  Edit an existing file:  sysml-cli edit add model.sysml part engine -t Engine
+  Format a file:          sysml-cli fmt model.sysml
+  Export to FMI:          sysml-cli export interfaces model.sysml --part MyPart
 
 LEARN MORE:
-  SysML v2 spec:        https://www.omgsysml.org/
-  This tool:            https://github.com/jackhale98/sysml-cli",
+  SysML v2 spec:          https://www.omgsysml.org/
+  This tool:              https://github.com/jackhale98/sysml-cli",
     version
 )]
 struct Cli {
@@ -166,31 +171,44 @@ enum Command {
     /// Generate a diagram from a SysML v2 model.
     ///
     /// Produces diagrams in Mermaid, PlantUML, DOT, or D2 format.
-    /// Diagram types correspond to SysML v2 views:
+    ///
+    /// DIAGRAM TYPES:
     ///   bdd  — Block Definition Diagram (definitions and relationships)
-    ///   ibd  — Internal Block Diagram (internal structure of a definition)
+    ///   ibd  — Internal Block Diagram (internal structure of a part)
     ///   stm  — State Machine Diagram (states and transitions)
-    ///   act  — Activity Diagram (action flow)
-    ///   req  — Requirements Diagram (requirements and trace relationships)
-    ///   pkg  — Package Diagram (packages and containment)
+    ///   act  — Activity Diagram (action flow with decisions/forks)
+    ///   req  — Requirements Diagram (requirements and trace status)
+    ///   pkg  — Package Diagram (packages and containment hierarchy)
     ///   par  — Parametric Diagram (constraints and parameters)
+    ///
+    /// OUTPUT FORMATS:
+    ///   mermaid  — Mermaid.js (render in GitHub, Obsidian, etc.)
+    ///   plantuml — PlantUML (puml alias)
+    ///   dot      — Graphviz DOT
+    ///   d2       — Terrastruct D2
+    ///
+    /// EXAMPLES:
+    ///   sysml-cli diagram -t bdd model.sysml
+    ///   sysml-cli diagram -t ibd -s Vehicle model.sysml
+    ///   sysml-cli diagram -t stm -o plantuml model.sysml
+    ///   sysml-cli diagram -t bdd -d LR --depth 2 model.sysml
     Diagram {
         /// SysML v2 file to generate diagram from.
         #[arg(required = true)]
         file: PathBuf,
 
-        /// Diagram type: bdd, ibd, stm, act, req, pkg, par.
+        /// Diagram type (see DIAGRAM TYPES above).
         #[arg(short = 't', long = "type", required = true)]
         diagram_type: String,
 
-        /// Output format: mermaid, plantuml (puml), dot, d2.
+        /// Output format (see OUTPUT FORMATS above).
         #[arg(short = 'o', long = "output-format", default_value = "mermaid")]
         output_format: String,
 
-        /// Scope: name of a definition to focus the diagram on.
-        /// For bdd: show only this def and its children.
-        /// For ibd: show internal structure of this def.
-        /// For stm/act: show this specific state machine or action.
+        /// Focus diagram on a specific definition.
+        /// bdd: show only this def and its children/relationships.
+        /// ibd: show internal structure (ports, parts, connections).
+        /// stm/act: show this specific state machine or action.
         #[arg(short, long)]
         scope: Option<String>,
 
@@ -203,11 +221,22 @@ enum Command {
         depth: Option<usize>,
     },
     /// Run simulations on SysML v2 models.
+    ///
+    /// Evaluate constraints, simulate state machines with event sequences,
+    /// or execute action flows step-by-step. Use `simulate list` to discover
+    /// what can be simulated in a file.
+    ///
+    /// SUBCOMMANDS: eval, state-machine (sm), action-flow (af), list
     Simulate {
         #[command(subcommand)]
         kind: SimulateCommand,
     },
     /// Export FMI/SSP artifacts from SysML models.
+    ///
+    /// Generate co-simulation interfaces (FMI 3.0), Modelica stubs, or
+    /// SSP system structure descriptions from SysML v2 part definitions.
+    ///
+    /// SUBCOMMANDS: interfaces, modelica, ssp, list
     Export {
         #[command(subcommand)]
         kind: ExportCommand,
@@ -215,10 +244,24 @@ enum Command {
     /// Generate a new SysML v2 definition.
     ///
     /// Creates boilerplate text for a definition (part def, port def, etc.)
-    /// and writes it to stdout or a file. Use --inside to nest it within
-    /// an existing definition.
+    /// and writes it to stdout or a file.
+    ///
+    /// KINDS:
+    ///   part-def, port-def, action-def, state-def, constraint-def, calc-def,
+    ///   requirement (req), enum-def, attribute-def (attr), item-def, view-def,
+    ///   viewpoint-def, package (pkg), use-case, connection-def, interface-def,
+    ///   flow-def, allocation-def
+    ///
+    /// EXAMPLES:
+    ///   sysml-cli new part-def Vehicle
+    ///   sysml-cli new part-def Vehicle --extends Base --doc "A vehicle"
+    ///   sysml-cli new part-def Vehicle -m "part engine:Engine" -m "part wheels:Wheel"
+    ///   sysml-cli new port-def FuelPort -m "in item fuel:FuelType"
+    ///   sysml-cli new view-def PartsView --expose "Vehicle::*" --filter part
+    ///   sysml-cli new part-def Engine --output model.sysml --append
+    ///   sysml-cli new part-def Engine --output model.sysml --inside Vehicle
     New {
-        /// Element kind: part-def, port-def, action-def, state-def, etc.
+        /// Element kind (see KINDS above).
         #[arg(required = true)]
         kind: String,
 
@@ -226,43 +269,66 @@ enum Command {
         #[arg(required = true)]
         name: String,
 
-        /// Output file (default: stdout). When used with --inside, the file is modified in place.
+        /// Output file (default: stdout). With --append or --inside, modifies in place.
         #[arg(short, long)]
         output: Option<PathBuf>,
 
-        /// Specialization: the definition extends this supertype.
+        /// Specialization: the definition extends (specializes) this supertype.
+        /// Generates `:>` syntax, e.g., `part def Car :> Vehicle`.
         #[arg(long)]
         extends: Option<String>,
 
-        /// Mark as abstract.
+        /// Mark as abstract (cannot be instantiated directly).
         #[arg(long)]
         r#abstract: bool,
 
-        /// Short name alias (e.g., V for Vehicle).
+        /// Short name alias. In SysML v2, appears as `<alias>` before the name.
+        /// Example: --short-name V produces `part def <V> Vehicle`.
         #[arg(long)]
         short_name: Option<String>,
 
-        /// Documentation comment text.
+        /// Documentation comment text. Generates `doc /* text */` inside the body.
         #[arg(long)]
         doc: Option<String>,
 
-        /// Add starter members (repeatable, format: "part engine:Engine").
+        /// Add a member (repeatable). Format: "[direction] kind name[:type]".
+        /// Examples: "part engine:Engine", "in port fuel:FuelPort", "attribute mass".
         #[arg(long = "member", short = 'm')]
         members: Vec<String>,
 
-        /// Append to an existing file instead of creating new content.
+        /// (view-def only) Expose clause: qualified name pattern to include.
+        /// Examples: "Vehicle::*" (direct children), "Package::**" (recursive).
+        #[arg(long = "expose")]
+        exposes: Vec<String>,
+
+        /// (view-def only) Filter by element kind. Only elements of this type are shown.
+        /// Examples: "part", "port", "requirement".
+        #[arg(long)]
+        filter: Option<String>,
+
+        /// Append to an existing file instead of overwriting.
         #[arg(long)]
         append: bool,
 
-        /// Insert inside an existing definition (requires --output).
+        /// Insert inside an existing definition body (requires --output).
+        /// Example: --inside Vehicle adds the new element before Vehicle's closing `}`.
         #[arg(long)]
         inside: Option<String>,
 
-        /// Show what would be generated without writing.
+        /// Preview: show what would be generated without writing.
         #[arg(long)]
         dry_run: bool,
     },
     /// Edit SysML v2 files: add, remove, or rename elements.
+    ///
+    /// Surgically modifies SysML v2 files using byte-accurate CST positions.
+    /// All subcommands support --dry-run to preview changes as a unified diff.
+    ///
+    /// EXAMPLES:
+    ///   sysml-cli edit add model.sysml part engine -t Engine
+    ///   sysml-cli edit add model.sysml part-def Wheel
+    ///   sysml-cli edit remove model.sysml Engine
+    ///   sysml-cli edit rename model.sysml Engine Motor --dry-run
     Edit {
         #[command(subcommand)]
         kind: EditCommand,
@@ -292,13 +358,26 @@ enum Command {
 
 #[derive(Subcommand)]
 enum EditCommand {
-    /// Add an element to a file.
+    /// Add an element (definition or usage) to a SysML file.
+    ///
+    /// For usage-level kinds (part, port, attribute, etc.), the element is
+    /// inserted inside an existing definition. If --inside is not given and
+    /// the file has definitions with bodies, you'll be prompted to choose one.
+    ///
+    /// For definition-level kinds (part-def, port-def, etc.), the element is
+    /// added at the top level of the file.
+    ///
+    /// EXAMPLES:
+    ///   sysml-cli edit add model.sysml part engine -t Engine
+    ///   sysml-cli edit add model.sysml port fuelIn -t FuelPort --inside Vehicle
+    ///   sysml-cli edit add model.sysml part-def Wheel --dry-run
     Add {
         /// Target SysML file.
         #[arg(required = true)]
         file: PathBuf,
 
-        /// Element kind (part-def, port, attribute, etc.).
+        /// Element kind. For usages: part, port, attribute, item, ref, action, state.
+        /// For definitions: part-def, port-def, action-def, etc.
         #[arg(required = true)]
         kind: String,
 
@@ -306,19 +385,24 @@ enum EditCommand {
         #[arg(required = true)]
         name: String,
 
-        /// Type reference.
+        /// Type reference (generates `: Type` for usages, `:> Type` for defs).
         #[arg(short = 't', long)]
         type_ref: Option<String>,
 
-        /// Insert inside this definition.
+        /// Insert inside this definition (auto-detected if omitted for usages).
         #[arg(long)]
         inside: Option<String>,
 
-        /// Show changes without writing (print diff).
+        /// Preview changes as a unified diff without writing.
         #[arg(long)]
         dry_run: bool,
     },
-    /// Remove an element from a file.
+    /// Remove an element (definition or usage) from a file by name.
+    ///
+    /// Removes the entire line(s) of the element. Searches definitions first,
+    /// then usages.
+    ///
+    /// EXAMPLE: sysml-cli edit remove model.sysml Engine --dry-run
     Remove {
         /// Target SysML file.
         #[arg(required = true)]
@@ -332,21 +416,26 @@ enum EditCommand {
         #[arg(long)]
         dry_run: bool,
     },
-    /// Rename an element and all references to it.
+    /// Rename an element and update all references to it.
+    ///
+    /// Finds all whole-word occurrences of the old name and replaces them.
+    /// This includes the definition itself and all type references to it.
+    ///
+    /// EXAMPLE: sysml-cli edit rename model.sysml Engine Motor --dry-run
     Rename {
         /// Target SysML file.
         #[arg(required = true)]
         file: PathBuf,
 
-        /// Current name.
+        /// Current name of the element.
         #[arg(required = true)]
         old_name: String,
 
-        /// New name.
+        /// New name for the element.
         #[arg(required = true)]
         new_name: String,
 
-        /// Show changes without writing.
+        /// Preview changes as a unified diff without writing.
         #[arg(long)]
         dry_run: bool,
     },
@@ -355,51 +444,91 @@ enum EditCommand {
 #[derive(Subcommand)]
 enum SimulateCommand {
     /// Evaluate constraints and calculations with variable bindings.
+    ///
+    /// Evaluates SysML v2 constraint expressions (returns satisfied/violated)
+    /// and calculation expressions (returns computed values).
+    ///
+    /// EXAMPLES:
+    ///   sysml-cli simulate eval model.sysml -b speed=100,mass=1500
+    ///   sysml-cli simulate eval model.sysml -n SpeedLimit -b speed=120
     Eval {
         /// SysML v2 file containing constraints/calculations.
         #[arg(required = true)]
         file: PathBuf,
-        /// Variable bindings in the form name=value (e.g., speed=100).
+
+        /// Variable bindings: name=value (comma-separated or repeatable).
+        /// Example: -b speed=100,mass=1500
         #[arg(short = 'b', long = "bind", value_delimiter = ',')]
         bindings: Vec<String>,
-        /// Name of a specific constraint or calculation to evaluate.
+
+        /// Evaluate only this named constraint or calculation.
+        /// Without this flag, all constraints and calculations are evaluated.
         #[arg(short = 'n', long)]
         name: Option<String>,
     },
-    /// Simulate a state machine.
+    /// Simulate a state machine step-by-step.
+    ///
+    /// Traces state transitions given a sequence of events. If --events is
+    /// omitted and the state machine has signal triggers, you will be prompted
+    /// to select events interactively.
+    ///
+    /// EXAMPLES:
+    ///   sysml-cli simulate state-machine lights.sysml -e next,next,next
+    ///   sysml-cli simulate state-machine model.sysml -n TrafficLight
+    ///   sysml-cli simulate state-machine model.sysml  (interactive)
+    #[command(visible_alias = "sm")]
     StateMachine {
         /// SysML v2 file containing state machine definitions.
         #[arg(required = true)]
         file: PathBuf,
-        /// Name of the state machine to simulate.
+
+        /// Name of the state machine to simulate (prompted if omitted).
         #[arg(short = 'n', long)]
         name: Option<String>,
-        /// Events to inject (comma-separated).
+
+        /// Events to inject in order (comma-separated).
+        /// These match signal triggers on transitions (e.g., `accept switchOn`).
         #[arg(short = 'e', long, value_delimiter = ',')]
         events: Vec<String>,
-        /// Maximum simulation steps.
+
+        /// Maximum simulation steps before stopping.
         #[arg(short = 'm', long, default_value = "100")]
         max_steps: usize,
-        /// Variable bindings for guards (name=value).
+
+        /// Variable bindings for guard expressions: name=value.
         #[arg(short = 'b', long = "bind", value_delimiter = ',')]
         bindings: Vec<String>,
     },
-    /// Execute an action flow.
+    /// Execute an action flow step-by-step.
+    ///
+    /// Walks through the action's perform steps, decisions, forks,
+    /// and loops, producing an execution trace.
+    ///
+    /// EXAMPLES:
+    ///   sysml-cli simulate action-flow model.sysml -n ProvidePower
+    ///   sysml-cli simulate action-flow model.sysml -b fuelLevel=80
+    #[command(visible_alias = "af")]
     ActionFlow {
         /// SysML v2 file containing action definitions.
         #[arg(required = true)]
         file: PathBuf,
-        /// Name of the action to execute.
+
+        /// Name of the action to execute (prompted if omitted).
         #[arg(short = 'n', long)]
         name: Option<String>,
-        /// Maximum execution steps.
+
+        /// Maximum execution steps before stopping.
         #[arg(short = 'm', long, default_value = "1000")]
         max_steps: usize,
-        /// Variable bindings (name=value).
+
+        /// Variable bindings: name=value.
         #[arg(short = 'b', long = "bind", value_delimiter = ',')]
         bindings: Vec<String>,
     },
     /// List all simulatable constructs in a file.
+    ///
+    /// Shows state machines, action definitions, constraints, and calculations
+    /// found in the file. Use --format json for machine-readable output.
     List {
         /// SysML v2 file to inspect.
         #[arg(required = true)]
@@ -505,13 +634,15 @@ fn main() -> ExitCode {
             short_name,
             doc,
             members,
+            exposes,
+            filter,
             append,
             inside,
             dry_run,
         } => run_new(
             kind, name, output.as_ref(), extends.as_deref(), *r#abstract,
-            short_name.as_deref(), doc.as_deref(), members, *append,
-            inside.as_deref(), *dry_run,
+            short_name.as_deref(), doc.as_deref(), members, exposes,
+            filter.as_deref(), *append, inside.as_deref(), *dry_run,
         ),
         Command::Edit { kind } => run_edit(kind),
         Command::Fmt {
@@ -1947,6 +2078,8 @@ fn run_new(
     short_name: Option<&str>,
     doc: Option<&str>,
     members: &[String],
+    exposes: &[String],
+    filter: Option<&str>,
     append: bool,
     inside: Option<&str>,
     dry_run: bool,
@@ -1960,7 +2093,8 @@ fn run_new(
             eprintln!("error: unknown element kind `{}`", kind);
             eprintln!("  available: part-def, port-def, action-def, state-def, constraint-def,");
             eprintln!("            calc-def, requirement, enum-def, attribute-def, item-def,");
-            eprintln!("            view-def, viewpoint-def, package, use-case, connection-def");
+            eprintln!("            view-def, viewpoint-def, package, use-case, connection-def,");
+            eprintln!("            flow-def, interface-def, allocation-def");
             return ExitCode::from(1);
         }
     };
@@ -1980,6 +2114,8 @@ fn run_new(
         short_name: short_name.map(|s| s.to_string()),
         doc: doc.map(|s| s.to_string()),
         members: parsed_members,
+        exposes: exposes.to_vec(),
+        filter: filter.map(|s| s.to_string()),
         indent,
     };
 
@@ -2096,6 +2232,8 @@ fn run_edit(kind: &EditCommand) -> ExitCode {
                         short_name: None,
                         doc: None,
                         members: Vec::new(),
+                        exposes: Vec::new(),
+                        filter: None,
                         indent: if inside.is_some() { 4 } else { 0 },
                     };
                     template::generate_template(&opts)
@@ -2112,7 +2250,30 @@ fn run_edit(kind: &EditCommand) -> ExitCode {
                 format!("{} {}{};", kind, name, t)
             };
 
-            let text_edit = if let Some(parent) = inside {
+            // Determine where to insert
+            let target_parent: Option<String> = if let Some(parent) = inside {
+                Some(parent.clone())
+            } else if !is_def_kind {
+                // For usage-level elements, prompt for which definition to insert into
+                let defs_with_body: Vec<&str> = model.definitions.iter()
+                    .filter(|d| d.body_end_byte.is_some())
+                    .map(|d| d.name.as_str())
+                    .collect();
+                if defs_with_body.len() == 1 {
+                    Some(defs_with_body[0].to_string())
+                } else if defs_with_body.len() > 1 {
+                    match select_item("definition", &defs_with_body) {
+                        Some(idx) => Some(defs_with_body[idx].to_string()),
+                        None => return ExitCode::from(1),
+                    }
+                } else {
+                    None // No definitions with bodies — insert top-level
+                }
+            } else {
+                None
+            };
+
+            let text_edit = if let Some(ref parent) = target_parent {
                 match edit::insert_member(&source, &model, parent, text.trim()) {
                     Ok(e) => e,
                     Err(e) => {

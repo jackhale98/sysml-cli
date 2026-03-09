@@ -12,6 +12,10 @@ pub struct TemplateOptions {
     pub short_name: Option<String>,
     pub doc: Option<String>,
     pub members: Vec<MemberSpec>,
+    /// View-specific: expose clauses (e.g., "Vehicle::*").
+    pub exposes: Vec<String>,
+    /// View-specific: filter kind (e.g., "part", "port").
+    pub filter: Option<String>,
     /// Base indent level (number of spaces).
     pub indent: usize,
 }
@@ -81,13 +85,24 @@ pub fn generate_template(opts: &TemplateOptions) -> String {
     }
 
     // Body
-    let has_body = opts.doc.is_some() || !opts.members.is_empty();
+    let has_body = opts.doc.is_some() || !opts.members.is_empty()
+        || !opts.exposes.is_empty() || opts.filter.is_some();
     if has_body {
         out.push_str(" {\n");
 
         // Doc comment
         if let Some(ref doc) = opts.doc {
             out.push_str(&format!("{}doc /* {} */\n", inner_indent, doc));
+        }
+
+        // View-specific: expose clauses
+        for expose in &opts.exposes {
+            out.push_str(&format!("{}expose {};\n", inner_indent, expose));
+        }
+
+        // View-specific: filter
+        if let Some(ref f) = opts.filter {
+            out.push_str(&format!("{}filter @type istype {};\n", inner_indent, f));
         }
 
         // Members
@@ -173,6 +188,8 @@ mod tests {
             short_name: None,
             doc: None,
             members: Vec::new(),
+            exposes: Vec::new(),
+            filter: None,
             indent: 0,
         };
         let result = generate_template(&opts);
@@ -189,6 +206,8 @@ mod tests {
             short_name: None,
             doc: Some("A vehicle definition".to_string()),
             members: Vec::new(),
+            exposes: Vec::new(),
+            filter: None,
             indent: 0,
         };
         let result = generate_template(&opts);
@@ -214,6 +233,8 @@ mod tests {
                     multiplicity: None,
                 },
             ],
+            exposes: Vec::new(),
+            filter: None,
             indent: 0,
         };
         let result = generate_template(&opts);
@@ -239,6 +260,8 @@ mod tests {
                     multiplicity: None,
                 },
             ],
+            exposes: Vec::new(),
+            filter: None,
             indent: 0,
         };
         let result = generate_template(&opts);
@@ -256,6 +279,8 @@ mod tests {
             short_name: None,
             doc: None,
             members: Vec::new(),
+            exposes: Vec::new(),
+            filter: None,
             indent: 4,
         };
         let result = generate_template(&opts);
@@ -285,5 +310,25 @@ mod tests {
         assert_eq!(m2.direction.as_deref(), Some("in"));
         assert_eq!(m2.usage_kind, "port");
         assert_eq!(m2.name, "fuelIn");
+    }
+
+    #[test]
+    fn generate_view_def_with_expose_and_filter() {
+        let opts = TemplateOptions {
+            kind: DefKind::View,
+            name: "PartsView".to_string(),
+            super_type: None,
+            is_abstract: false,
+            short_name: None,
+            doc: None,
+            members: Vec::new(),
+            exposes: vec!["Vehicle::*".to_string()],
+            filter: Some("PartDef".to_string()),
+            indent: 0,
+        };
+        let result = generate_template(&opts);
+        assert!(result.contains("view def PartsView {"));
+        assert!(result.contains("expose Vehicle::*;"));
+        assert!(result.contains("filter @type istype PartDef;"));
     }
 }
