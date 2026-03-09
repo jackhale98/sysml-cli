@@ -394,3 +394,21 @@ fn version_flag() {
         .success()
         .stdout(predicate::str::contains("sysml-cli"));
 }
+
+#[test]
+fn completions_bash() {
+    cmd()
+        .args(["completions", "bash"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("_sysml-cli"));
+}
+
+#[test]
+fn completions_zsh() {
+    cmd()
+        .args(["completions", "zsh"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("sysml-cli"));
+}

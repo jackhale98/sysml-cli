@@ -350,6 +350,17 @@ enum Command {
         #[arg(long, default_value = "4")]
         indent_width: usize,
     },
+    /// Generate shell completions.
+    ///
+    /// EXAMPLES:
+    ///   sysml-cli completions bash > ~/.local/share/bash-completion/completions/sysml-cli
+    ///   sysml-cli completions zsh > ~/.zfunc/_sysml-cli
+    ///   sysml-cli completions fish > ~/.config/fish/completions/sysml-cli.fish
+    Completions {
+        /// Shell: bash, zsh, fish, elvish, powershell.
+        #[arg(required = true)]
+        shell: String,
+    },
 }
 
 #[derive(Subcommand)]
@@ -647,7 +658,31 @@ fn main() -> ExitCode {
             diff,
             indent_width,
         } => commands::fmt::run(files, *check, *diff, *indent_width),
+        Command::Completions { shell } => {
+            generate_completions(shell);
+            ExitCode::SUCCESS
+        }
     }
+}
+
+fn generate_completions(shell: &str) {
+    use clap::CommandFactory;
+    use clap_complete::{generate, Shell};
+
+    let shell = match shell.to_lowercase().as_str() {
+        "bash" => Shell::Bash,
+        "zsh" => Shell::Zsh,
+        "fish" => Shell::Fish,
+        "elvish" => Shell::Elvish,
+        "powershell" | "ps" => Shell::PowerShell,
+        other => {
+            eprintln!("error: unknown shell `{}`. Use: bash, zsh, fish, elvish, powershell", other);
+            return;
+        }
+    };
+
+    let mut cmd = Cli::command();
+    generate(shell, &mut cmd, "sysml-cli", &mut std::io::stdout());
 }
 
 pub(crate) fn read_source(file: &PathBuf) -> Result<(String, String), ExitCode> {
