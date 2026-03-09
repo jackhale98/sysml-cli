@@ -850,7 +850,31 @@ fn add_action_step(
             }
             vec![dec_id]
         }
-        ActionStep::Done { .. } => {
+        ActionStep::Accept { signal, .. } => {
+            let id = format!("accept_{}", *counter);
+            *counter += 1;
+            let label = match signal {
+                Some(s) => format!("accept {}", s),
+                None => "accept".to_string(),
+            };
+            graph.add_node(DiagramNode {
+                id: id.clone(),
+                label,
+                kind: NodeKind::Action,
+                stereotype: Some("accept".to_string()),
+                attributes: Vec::new(),
+            });
+            for prev in prev_ids {
+                graph.add_edge(DiagramEdge {
+                    source: prev.clone(),
+                    target: id.clone(),
+                    label: None,
+                    kind: EdgeKind::Flow,
+                });
+            }
+            vec![id]
+        }
+        ActionStep::Terminate { .. } | ActionStep::Done { .. } => {
             let id = "__final__".to_string();
             if !graph.has_node(&id) {
                 graph.add_node(DiagramNode {

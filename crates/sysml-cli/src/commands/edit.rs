@@ -11,6 +11,7 @@ pub(crate) fn run(kind: &EditCommand) -> ExitCode {
     match kind {
         EditCommand::Add {
             file, kind, name, type_ref, inside, dry_run,
+            doc, extends, r#abstract, short_name, members,
         } => {
             let (path_str, source) = match read_source(file) {
                 Ok(v) => v,
@@ -24,14 +25,20 @@ pub(crate) fn run(kind: &EditCommand) -> ExitCode {
                 || kind.contains("pkg");
             let text = if is_def_kind {
                 if let Some(def_kind) = template::parse_template_kind(kind) {
+                    // Use --extends if provided; fall back to --type-ref for back-compat
+                    let super_type = extends.as_ref().or(type_ref.as_ref()).cloned();
+                    let parsed_members: Vec<template::MemberSpec> = members
+                        .iter()
+                        .filter_map(|s| template::parse_member_spec(s))
+                        .collect();
                     let opts = template::TemplateOptions {
                         kind: def_kind,
                         name: name.clone(),
-                        super_type: type_ref.clone(),
-                        is_abstract: false,
-                        short_name: None,
-                        doc: None,
-                        members: Vec::new(),
+                        super_type,
+                        is_abstract: *r#abstract,
+                        short_name: short_name.clone(),
+                        doc: doc.clone(),
+                        members: parsed_members,
                         exposes: Vec::new(),
                         filter: None,
                         indent: if inside.is_some() { 4 } else { 0 },

@@ -237,10 +237,11 @@ enum Command {
         #[command(subcommand)]
         kind: ExportCommand,
     },
-    /// Generate a new SysML v2 definition.
+    /// Generate a new SysML v2 definition to stdout.
     ///
-    /// Creates boilerplate text for a definition (part def, port def, etc.)
-    /// and writes it to stdout or a file.
+    /// Prints boilerplate text for a definition (part def, port def, etc.)
+    /// to standard output. Pipe or redirect to a file as needed.
+    /// To insert into an existing file, use `edit add` instead.
     ///
     /// KINDS:
     ///   part-def, port-def, action-def, state-def, constraint-def, calc-def,
@@ -254,8 +255,7 @@ enum Command {
     ///   sysml-cli new part-def Vehicle -m "part engine:Engine" -m "part wheels:Wheel"
     ///   sysml-cli new port-def FuelPort -m "in item fuel:FuelType"
     ///   sysml-cli new view-def PartsView --expose "Vehicle::*" --filter part
-    ///   sysml-cli new part-def Engine --output model.sysml --append
-    ///   sysml-cli new part-def Engine --output model.sysml --inside Vehicle
+    ///   sysml-cli new part-def Vehicle >> model.sysml
     New {
         /// Element kind (see KINDS above).
         #[arg(required = true)]
@@ -264,10 +264,6 @@ enum Command {
         /// Element name.
         #[arg(required = true)]
         name: String,
-
-        /// Output file (default: stdout). With --append or --inside, modifies in place.
-        #[arg(short, long)]
-        output: Option<PathBuf>,
 
         /// Specialization: the definition extends (specializes) this supertype.
         /// Generates `:>` syntax, e.g., `part def Car :> Vehicle`.
@@ -301,19 +297,6 @@ enum Command {
         /// Examples: "part", "port", "requirement".
         #[arg(long)]
         filter: Option<String>,
-
-        /// Append to an existing file instead of overwriting.
-        #[arg(long)]
-        append: bool,
-
-        /// Insert inside an existing definition body (requires --output).
-        /// Example: --inside Vehicle adds the new element before Vehicle's closing `}`.
-        #[arg(long)]
-        inside: Option<String>,
-
-        /// Preview: show what would be generated without writing.
-        #[arg(long)]
-        dry_run: bool,
     },
     /// Edit SysML v2 files: add, remove, or rename elements.
     ///
@@ -403,6 +386,26 @@ pub(crate) enum EditCommand {
         /// Preview changes as a unified diff without writing.
         #[arg(long)]
         dry_run: bool,
+
+        /// Documentation comment text.
+        #[arg(long)]
+        doc: Option<String>,
+
+        /// Specialization supertype (generates `:>` for defs; usages already have -t).
+        #[arg(long)]
+        extends: Option<String>,
+
+        /// Mark definition as abstract.
+        #[arg(long)]
+        r#abstract: bool,
+
+        /// Short name alias.
+        #[arg(long)]
+        short_name: Option<String>,
+
+        /// Add members (repeatable). Format: "[direction] kind name[:type]".
+        #[arg(long = "member", short = 'm')]
+        members: Vec<String>,
     },
     /// Remove an element (definition or usage) from a file by name.
     ///
@@ -635,7 +638,6 @@ fn main() -> ExitCode {
         Command::New {
             kind,
             name,
-            output,
             extends,
             r#abstract,
             short_name,
@@ -643,13 +645,10 @@ fn main() -> ExitCode {
             members,
             exposes,
             filter,
-            append,
-            inside,
-            dry_run,
         } => commands::new::run(
-            kind, name, output.as_ref(), extends.as_deref(), *r#abstract,
+            kind, name, extends.as_deref(), *r#abstract,
             short_name.as_deref(), doc.as_deref(), members, exposes,
-            filter.as_deref(), *append, inside.as_deref(), *dry_run,
+            filter.as_deref(),
         ),
         Command::Edit { kind } => commands::edit::run(kind),
         Command::Fmt {

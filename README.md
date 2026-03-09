@@ -1,19 +1,27 @@
-# sysml2-cli
+# sysml-cli
 
-A fast, standalone SysML v2 model validator, simulator, and FMI export tool for CI pipelines and editor integration.
+A fast, standalone SysML v2 command-line tool for validation, simulation, diagram generation, and model management.
 
-Built on [tree-sitter](https://tree-sitter.github.io/) for reliable parsing of SysML v2 textual notation. Includes structural linting, a behavioral simulation engine, and FMI 3.0 export capabilities.
-
-> **Note**: This project was previously named `sysml-lint`. The binary is now `sysml2-cli`.
+Built on [tree-sitter](https://tree-sitter.github.io/) for reliable parsing of SysML v2 textual notation. Zero runtime dependencies — just a single binary.
 
 ## Table of Contents
 
 - [Installation](#installation)
-- [Usage](#usage)
-- [Linting](#linting)
-- [Simulation](#simulation)
-- [Export](#export)
-- [Checks](#checks)
+- [Quick Start](#quick-start)
+- [Commands](#commands)
+  - [lint](#lint)
+  - [list](#list)
+  - [show](#show)
+  - [diagram](#diagram)
+  - [simulate](#simulate)
+  - [trace](#trace)
+  - [interfaces](#interfaces)
+  - [new](#new)
+  - [edit](#edit)
+  - [fmt](#fmt)
+  - [export](#export)
+  - [completions](#completions)
+- [Validation Checks](#validation-checks)
 - [Diagnostic Codes](#diagnostic-codes)
 - [Output Formats](#output-formats)
 - [CI Integration](#ci-integration)
@@ -27,239 +35,369 @@ Built on [tree-sitter](https://tree-sitter.github.io/) for reliable parsing of S
 ### From source
 
 ```sh
-git clone https://github.com/jackhale98/sysml-lint.git
-cd sysml-lint
-cargo install --path .
+git clone --recurse-submodules https://github.com/jackhale98/sysml-cli.git
+cd sysml-cli
+cargo install --path crates/sysml-cli
 ```
 
-Or manually:
+Or build manually:
 
 ```sh
 cargo build --release
-cp target/release/sysml2-cli ~/.local/bin/
+cp target/release/sysml-cli ~/.local/bin/
 ```
 
-The build compiles the [tree-sitter-sysml](https://github.com/jackhale98/tree-sitter-sysml) grammar from source. The grammar must be available at `./tree-sitter-sysml/src/` (vendored) or `../tree-sitter-sysml/src/` (sibling directory).
+The build compiles the [tree-sitter-sysml](https://github.com/jackhale98/tree-sitter-sysml) grammar from source (included as a submodule).
 
-## Usage
-
-sysml2-cli has three subcommands: `lint`, `simulate`, and `export`.
+### Shell completions
 
 ```sh
-# Lint SysML files
-sysml2-cli lint model.sysml
+sysml-cli completions bash > ~/.local/share/bash-completion/completions/sysml-cli
+sysml-cli completions zsh > ~/.zfunc/_sysml-cli
+sysml-cli completions fish > ~/.config/fish/completions/sysml-cli.fish
+```
 
-# Simulate constructs
-sysml2-cli simulate list model.sysml
+## Quick Start
 
-# Export FMI interfaces
-sysml2-cli export interfaces model.sysml --part Engine
+```sh
+# Validate a SysML v2 model
+sysml-cli lint model.sysml
+
+# List all definitions and usages
+sysml-cli list model.sysml
+
+# Show details of a specific element
+sysml-cli show model.sysml Vehicle
+
+# Generate a block definition diagram (Mermaid)
+sysml-cli diagram -t bdd model.sysml
+
+# Simulate a state machine interactively
+sysml-cli simulate state-machine model.sysml
+
+# Generate a new part definition
+sysml-cli new part-def Vehicle --doc "A vehicle" -m "part engine:Engine"
+
+# Add a part usage to an existing file
+sysml-cli edit add model.sysml part engine -t Engine
+
+# Format a file
+sysml-cli fmt model.sysml
 ```
 
 ### Global Options
 
-```
--f, --format <FORMAT>      Output format: text, json [default: text]
--q, --quiet                Suppress summary line on stderr
--I, --include <PATH>       Additional files/directories for import resolution
--h, --help                 Print help
--V, --version              Print version
-```
+| Flag | Description |
+|------|-------------|
+| `-f, --format <FORMAT>` | Output format: `text`, `json` (default: `text`) |
+| `-q, --quiet` | Suppress summary line on stderr |
+| `-I, --include <PATH>` | Additional files/directories for import resolution |
 
-## Linting
+## Commands
 
-```sh
-# Lint a single file
-sysml2-cli lint model.sysml
+### lint
 
-# Lint multiple files (imports auto-resolve between them)
-sysml2-cli lint src/*.sysml
-
-# Include additional files for import resolution
-sysml2-cli lint model.sysml -I lib/
-
-# JSON output for tooling
-sysml2-cli lint --format json model.sysml
-
-# Only show warnings and errors
-sysml2-cli lint --severity warning model.sysml
-
-# Disable specific checks
-sysml2-cli lint --disable unused,unresolved model.sysml
-```
-
-### Lint Options
-
-```
-sysml2-cli lint [OPTIONS] <FILES>...
-
-Arguments:
-  <FILES>...  SysML v2 files to validate
-
-Options:
-  -d, --disable <DISABLE>    Disable specific checks (comma-separated)
-  -s, --severity <SEVERITY>  Minimum severity: note, warning, error [default: note]
-```
-
-### Exit Codes
-
-| Code | Meaning |
-|------|---------|
-| 0 | No errors found (may have warnings or notes) |
-| 1 | One or more errors found, or a file could not be read |
-
-## Simulation
-
-sysml2-cli includes a built-in simulation engine that can evaluate constraints, run calculations, simulate state machines, and execute action flows.
-
-### List Simulatable Constructs
+Validate SysML v2 files against structural rules.
 
 ```sh
-sysml2-cli simulate list model.sysml
+sysml-cli lint model.sysml
+sysml-cli lint src/*.sysml                       # Multiple files
+sysml-cli lint model.sysml -I lib/               # Include imports
+sysml-cli lint -f json model.sysml               # JSON output
+sysml-cli lint --severity warning model.sysml    # Only warnings+
+sysml-cli lint --disable unused,unresolved model.sysml
 ```
 
-### Evaluate Constraints and Calculations
+| Option | Description |
+|--------|-------------|
+| `-d, --disable <CHECKS>` | Disable checks (comma-separated). See [Validation Checks](#validation-checks). |
+| `-s, --severity <LEVEL>` | Minimum severity: `note`, `warning`, `error` (default: `note`) |
+
+Exit codes: `0` = no errors, `1` = errors found.
+
+### list
+
+List model elements with optional filters. Alias: `ls`.
 
 ```sh
-# Evaluate a constraint
-sysml2-cli simulate eval model.sysml -b speed=100 -n SpeedLimit
-
-# Evaluate a calculation
-sysml2-cli simulate eval model.sysml -b mass=1500,velocity=30 -n KineticEnergy
-
-# JSON output
-sysml2-cli -f json simulate eval model.sysml -b speed=100
+sysml-cli list model.sysml
+sysml-cli list --kind parts model.sysml          # Only part definitions
+sysml-cli list --kind port model.sysml           # Only port usages
+sysml-cli list --name Vehicle model.sysml        # Name search
+sysml-cli list --parent Vehicle model.sysml      # Children of Vehicle
+sysml-cli list --unused model.sysml              # Unreferenced defs
+sysml-cli list -f json model.sysml               # JSON output
 ```
 
-### Simulate State Machines
+| Option | Description |
+|--------|-------------|
+| `-k, --kind <KIND>` | Filter: `parts`, `ports`, `actions`, `states`, `requirements`, `constraints`, `all`, `definitions`, `usages` |
+| `-n, --name <PATTERN>` | Substring name filter |
+| `-p, --parent <NAME>` | Filter by parent definition |
+| `--unused` | Show only unreferenced definitions |
+| `--abstract` | Show only abstract definitions |
+| `--visibility <VIS>` | Filter by `public`, `private`, `protected` |
+| `--view <NAME>` | Apply a SysML v2 view definition as a filter preset |
 
-Supports `state def`, `exhibit state` (inside `part def` bodies), and nested
-state regions (e.g. parallel orthogonal states like `operatingStates` and
-`healthStates` inside an exhibit). Initial pseudo-transitions
-(`transition initial then off;`) are recognized automatically.
+### show
+
+Show detailed information about a specific element.
 
 ```sh
-# Simulate with events
-sysml2-cli simulate state-machine model.sysml -n TrafficLight -e next,next,next
-
-# With guard variable bindings
-sysml2-cli simulate state-machine model.sysml -n Controller -b temperature=150
-
-# Simulate a nested state region from an exhibit state
-sysml2-cli simulate state-machine vehicle.sysml -n operatingStates -e ignitionCmd,VehicleOnSignal
+sysml-cli show model.sysml Vehicle
+sysml-cli show -f json model.sysml Engine
 ```
 
-### Execute Action Flows
+Displays: kind, visibility, parent, documentation, type, children, relationships.
+
+### diagram
+
+Generate diagrams in Mermaid, PlantUML, DOT, or D2 format.
 
 ```sh
-# Execute an action flow
-sysml2-cli simulate action-flow model.sysml -n ProcessOrder
-
-# With variable bindings for conditionals
-sysml2-cli simulate action-flow model.sysml -n Workflow -b priority=high
+sysml-cli diagram -t bdd model.sysml                    # Block definition
+sysml-cli diagram -t ibd -s Vehicle model.sysml          # Internal block
+sysml-cli diagram -t stm model.sysml                     # State machine
+sysml-cli diagram -t act model.sysml                     # Activity
+sysml-cli diagram -t req model.sysml                     # Requirements
+sysml-cli diagram -t pkg model.sysml                     # Package
+sysml-cli diagram -t par model.sysml                     # Parametric
+sysml-cli diagram -t bdd -o plantuml model.sysml         # PlantUML output
+sysml-cli diagram -t bdd -o dot model.sysml              # Graphviz DOT
+sysml-cli diagram -t bdd -o d2 model.sysml               # D2
+sysml-cli diagram -t bdd -d LR --depth 2 model.sysml    # Layout + depth
 ```
 
-## Export
+**Diagram types:**
 
-sysml2-cli extracts FMI 3.0 interface contracts, generates Modelica stubs, and produces SSP (System Structure and Parameterization) XML — all from tree-sitter AST analysis.
+| Type | Description |
+|------|-------------|
+| `bdd` | Block Definition Diagram — definitions and relationships |
+| `ibd` | Internal Block Diagram — internal structure of a part |
+| `stm` | State Machine Diagram — states and transitions |
+| `act` | Activity Diagram — action flow with decisions and forks |
+| `req` | Requirements Diagram — requirements and trace status |
+| `pkg` | Package Diagram — packages and containment hierarchy |
+| `par` | Parametric Diagram — constraints and parameters |
 
-### List Exportable Parts
+**Output formats:** `mermaid` (default), `plantuml`, `dot`, `d2`
+
+| Option | Description |
+|--------|-------------|
+| `-t, --type <TYPE>` | Diagram type (required) |
+| `-o, --output-format <FMT>` | Output format (default: `mermaid`) |
+| `-s, --scope <NAME>` | Focus on a specific definition |
+| `-d, --direction <DIR>` | Layout: `TB`, `LR`, `BT`, `RL` |
+| `--depth <N>` | Maximum nesting depth |
+
+### simulate
+
+Run simulations on SysML v2 models: evaluate constraints, simulate state machines, or execute action flows.
 
 ```sh
-sysml2-cli export list model.sysml
+sysml-cli simulate list model.sysml              # Discover simulatable items
 ```
 
-Output:
-```
-Exportable Parts:
-  Engine (3 ports, 2 attributes, 0 connections)
-  Transmission (1 ports, 1 attributes, 0 connections)
-```
+#### simulate eval
 
-### Extract FMI Interfaces
+Evaluate constraints and calculations with variable bindings.
 
 ```sh
-# Text output
-sysml2-cli export interfaces model.sysml --part Engine
-
-# JSON output (for editor integration)
-sysml2-cli -f json export interfaces model.sysml --part Engine
+sysml-cli simulate eval model.sysml -b speed=100
+sysml-cli simulate eval model.sysml -n SpeedLimit -b speed=120
+sysml-cli simulate eval model.sysml -b mass=1500,velocity=30 -n KineticEnergy
 ```
 
-Output:
-```
-FMI Interface: Engine
-------------------------------------------------------------
-  Name            Direction  SysML Type   FMI Type   Causality    Port
-  ----------------------------------------------------------------------
-  fuelFlow        in         Real         Float64    input        fuelIn
-  torque          in         Real         Float64    input        driveOut
-  speed           in         Real         Float64    input        driveOut
-  ignitionOn      in         Boolean      Boolean    input        ignition
+| Option | Description |
+|--------|-------------|
+| `-b, --bind <BINDINGS>` | Variable bindings: `name=value` (comma-separated) |
+| `-n, --name <NAME>` | Evaluate only this constraint or calculation |
 
-  Attributes:
-    displacement : Real
-    cylinders : Integer
-```
+#### simulate state-machine
 
-The extraction handles:
-- Port definitions with `in item` / `out item` declarations
-- Conjugation (`~`) — flips direction (e.g., `port driveOut : ~DrivePort` makes `out` items become `in`)
-- SysML → FMI 3.0 type mapping (`Real` → `Float64`, `Integer` → `Int32`, etc.)
-- Attributes as FMI parameters
+Simulate a state machine step-by-step. Alias: `sm`.
 
-### Generate Modelica Stubs
+Supports `state def`, `exhibit state` (inside part definitions), and nested state regions (parallel orthogonal states). If `--events` is omitted and the machine has signal triggers, you will be prompted interactively.
 
 ```sh
-# Print to stdout
-sysml2-cli export modelica model.sysml --part Engine
-
-# Write to file
-sysml2-cli export modelica model.sysml --part Engine --output Engine.mo
+sysml-cli simulate state-machine model.sysml -n TrafficLight -e next,next
+sysml-cli simulate sm model.sysml -n Controller -b temperature=150
+sysml-cli simulate sm model.sysml    # Interactive event selection
 ```
 
-Output:
-```modelica
-partial model Engine
-  "Generated from SysML v2 part def Engine"
-  Modelica.Blocks.Interfaces.RealInput fuelFlow "From port fuelIn";
-  Modelica.Blocks.Interfaces.RealInput torque "From port driveOut";
-  Modelica.Blocks.Interfaces.RealInput speed "From port driveOut";
-  Modelica.Blocks.Interfaces.BooleanInput ignitionOn "From port ignition";
-  parameter Real displacement "From SysML attribute";
-  parameter Integer cylinders "From SysML attribute";
-equation
-  // Equations to be filled by model developer
-end Engine;
-```
+| Option | Description |
+|--------|-------------|
+| `-n, --name <NAME>` | State machine name (prompted if omitted) |
+| `-e, --events <EVENTS>` | Events to inject (comma-separated signal names) |
+| `-m, --max-steps <N>` | Max simulation steps (default: 100) |
+| `-b, --bind <BINDINGS>` | Variable bindings for guard expressions |
 
-### Generate SSP XML
+#### simulate action-flow
+
+Execute an action flow step-by-step. Alias: `af`.
+
+Walks through perform steps, decisions, forks/joins, accept/send actions, loops, and merge/terminate nodes, producing an execution trace.
 
 ```sh
-# Print SystemStructureDescription XML to stdout
-sysml2-cli export ssp model.sysml
-
-# Write to file
-sysml2-cli export ssp model.sysml --output system.ssd
+sysml-cli simulate action-flow model.sysml -n ProcessOrder
+sysml-cli simulate af model.sysml -b fuelLevel=80
 ```
 
-Extracts part usages as components and connections as SSP wiring, splitting dotted references (`engine.driveOut`) into element/connector pairs.
+| Option | Description |
+|--------|-------------|
+| `-n, --name <NAME>` | Action name (prompted if omitted) |
+| `-m, --max-steps <N>` | Max execution steps (default: 1000) |
+| `-b, --bind <BINDINGS>` | Variable bindings for conditionals |
 
-## Checks
+### trace
 
-sysml2-cli ships with 9 validation checks. Each can be individually disabled with `--disable <name>`.
+Generate a requirements traceability matrix.
+
+```sh
+sysml-cli trace model.sysml
+sysml-cli trace --check --min-coverage 80 model.sysml    # CI gate
+sysml-cli trace -f json model.sysml
+```
+
+| Option | Description |
+|--------|-------------|
+| `--check` | Exit with error if requirements lack satisfaction/verification |
+| `--min-coverage <PCT>` | Minimum coverage percentage (with `--check`) |
+
+### interfaces
+
+Analyze port interfaces and identify unconnected ports.
+
+```sh
+sysml-cli interfaces model.sysml
+sysml-cli interfaces --unconnected model.sysml
+```
+
+### new
+
+Generate a SysML v2 definition template to stdout. Use this as a starting point or pipe into a file.
+
+The `new` command creates template text — it does not modify existing files. To add elements to existing files, use [`edit add`](#edit).
+
+```sh
+sysml-cli new part-def Vehicle
+sysml-cli new part-def Vehicle --extends Base --doc "A vehicle"
+sysml-cli new part-def Vehicle -m "part engine:Engine" -m "part wheels:Wheel"
+sysml-cli new port-def FuelPort -m "in item fuel:FuelType"
+sysml-cli new view-def PartsView --expose "Vehicle::*" --filter part
+sysml-cli new constraint-def SpeedLimit -m "in speed:Real"
+sysml-cli new package VehiclePkg
+```
+
+**Available kinds:** `part-def`, `port-def`, `action-def`, `state-def`, `constraint-def`, `calc-def`, `requirement` (`req`), `enum-def`, `attribute-def` (`attr`), `item-def`, `view-def`, `viewpoint-def`, `package` (`pkg`), `use-case`, `connection-def`, `interface-def`, `flow-def`, `allocation-def`
+
+| Option | Description |
+|--------|-------------|
+| `--extends <TYPE>` | Specialization supertype (`:>` syntax) |
+| `--abstract` | Mark as abstract |
+| `--short-name <ALIAS>` | Short name (`<alias>` before the name) |
+| `--doc <TEXT>` | Documentation comment (`doc /* text */`) |
+| `-m, --member <SPEC>` | Add member (repeatable): `"[dir] kind name[:type]"` |
+| `--expose <PATTERN>` | (view-def) Expose clause: `"Vehicle::*"` |
+| `--filter <KIND>` | (view-def) Filter by element kind |
+
+### edit
+
+Surgically modify SysML v2 files using CST-aware byte-accurate positions.
+
+#### edit add
+
+Add a definition or usage to an existing file. For usage-level elements (`part`, `port`, etc.), automatically inserts inside an existing definition body.
+
+```sh
+sysml-cli edit add model.sysml part engine -t Engine
+sysml-cli edit add model.sysml port fuelIn -t FuelPort --inside Vehicle
+sysml-cli edit add model.sysml part-def Wheel --dry-run
+sysml-cli edit add model.sysml attribute mass -t Real --inside Vehicle
+```
+
+| Option | Description |
+|--------|-------------|
+| `-t, --type-ref <TYPE>` | Type reference (`: Type` for usages, `:>` for defs) |
+| `--inside <NAME>` | Insert inside this definition (auto-detected for usages) |
+| `--doc <TEXT>` | Documentation comment |
+| `--extends <TYPE>` | Specialization supertype (definition kinds) |
+| `--abstract` | Mark as abstract (definition kinds) |
+| `--short-name <ALIAS>` | Short name alias |
+| `-m, --member <SPEC>` | Add members (definition kinds) |
+| `--dry-run` | Preview as unified diff |
+
+#### edit remove
+
+Remove an element by name.
+
+```sh
+sysml-cli edit remove model.sysml Engine --dry-run
+sysml-cli edit remove model.sysml Engine
+```
+
+#### edit rename
+
+Rename an element and update all references.
+
+```sh
+sysml-cli edit rename model.sysml Engine Motor --dry-run
+sysml-cli edit rename model.sysml Engine Motor
+```
+
+### fmt
+
+Format SysML v2 files. CST-aware indentation that handles nested definitions, comments, and state machines correctly.
+
+```sh
+sysml-cli fmt model.sysml
+sysml-cli fmt --check model.sysml         # CI: exit 1 if unformatted
+sysml-cli fmt --diff model.sysml          # Show diff without writing
+sysml-cli fmt --indent-width 2 model.sysml
+```
+
+### export
+
+Export FMI/SSP artifacts from SysML models.
+
+```sh
+sysml-cli export list model.sysml                              # List exportable parts
+sysml-cli export interfaces model.sysml --part Engine           # FMI 3.0 interfaces
+sysml-cli export modelica model.sysml --part Engine             # Modelica stub
+sysml-cli export modelica model.sysml --part Engine -o Engine.mo
+sysml-cli export ssp model.sysml                                # SSP XML
+sysml-cli export ssp model.sysml -o system.ssd
+```
+
+The FMI extraction handles port definitions with `in item`/`out item`, conjugation (`~`), SysML-to-FMI type mapping (`Real` -> `Float64`, `Integer` -> `Int32`, etc.), and attributes as parameters.
+
+### completions
+
+Generate shell completion scripts.
+
+```sh
+sysml-cli completions bash
+sysml-cli completions zsh
+sysml-cli completions fish
+sysml-cli completions elvish
+sysml-cli completions powershell
+```
+
+## Validation Checks
+
+sysml-cli ships with 9 validation checks. Each can be individually disabled with `--disable <name>`.
 
 | Check | Name | Severity | Description |
 |-------|------|----------|-------------|
-| Syntax | `syntax` | Error | Reports tree-sitter parse errors and missing syntax elements |
-| Duplicates | `duplicates` | Error | Detects definitions of the same kind with identical names |
-| Unused | `unused` | Note | Definitions that are never referenced anywhere in the file |
-| Unresolved | `unresolved` | Warning | Type references and connection/allocation targets that don't resolve |
-| Unsatisfied | `unsatisfied` | Warning | Requirement definitions with no corresponding `satisfy` statement |
-| Unverified | `unverified` | Warning | Requirement definitions with no corresponding `verify` statement |
+| Syntax | `syntax` | Error | Tree-sitter parse errors and missing syntax elements |
+| Duplicates | `duplicates` | Error | Definitions of the same kind with identical names |
+| Unused | `unused` | Note | Definitions never referenced in the file |
+| Unresolved | `unresolved` | Warning | Type references and targets that don't resolve |
+| Unsatisfied | `unsatisfied` | Warning | Requirements with no `satisfy` statement |
+| Unverified | `unverified` | Warning | Requirements with no `verify` statement |
 | Port Types | `port-types` | Warning | Connected ports with incompatible types |
-| Constraints | `constraints` | Warning | Constraint definitions with a body but no constraint expression |
-| Calculations | `calculations` | Warning | Calculation definitions with a body but no return statement |
+| Constraints | `constraints` | Warning | Constraint defs with a body but no constraint expression |
+| Calculations | `calculations` | Warning | Calc defs with a body but no return statement |
 
 ## Diagnostic Codes
 
@@ -267,7 +405,7 @@ sysml2-cli ships with 9 validation checks. Each can be individually disabled wit
 
 | Code | Check | Message |
 |------|-------|---------|
-| E001 | syntax | `Syntax error: near <context>` or `Missing expected syntax element: near <context>` |
+| E001 | syntax | `Syntax error: near <context>` |
 | E002 | duplicates | `duplicate <kind> '<name>' (first defined at line <n>)` |
 
 ### Warnings
@@ -319,29 +457,43 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Install sysml2-cli
+      - name: Install sysml-cli
         run: |
-          git clone https://github.com/jackhale98/tree-sitter-sysml.git
-          git clone https://github.com/jackhale98/sysml-lint.git
-          cd sysml-lint
+          git clone --recurse-submodules https://github.com/jackhale98/sysml-cli.git /tmp/sysml-cli
+          cd /tmp/sysml-cli
           cargo build --release
-          echo "$PWD/target/release" >> $GITHUB_PATH
+          echo "/tmp/sysml-cli/target/release" >> $GITHUB_PATH
 
-      - name: Lint SysML models
-        run: sysml2-cli lint --severity warning models/**/*.sysml
+      - name: Lint models
+        run: sysml-cli lint --severity warning models/**/*.sysml
+
+      - name: Check formatting
+        run: sysml-cli fmt --check models/**/*.sysml
+
+      - name: Check requirement coverage
+        run: sysml-cli trace --check --min-coverage 80 models/**/*.sysml
 ```
 
 ## Editor Integration
 
 ### Emacs (sysml2-mode)
 
-sysml2-cli integrates with [sysml2-mode](https://github.com/jackhale98/sysml2-mode) for Flymake diagnostics, interactive simulation, and FMI export. With `sysml2-cli` on your `$PATH`:
+sysml-cli integrates with [sysml2-mode](https://github.com/jackhale98/sysml2-mode) for Flymake diagnostics, interactive simulation, and FMI export. With `sysml-cli` on your `$PATH`:
 
 - **Flymake**: Diagnostics appear inline as you edit
 - **Simulation**: `M-x sysml2-simulate` for constraints, state machines, action flows
-- **FMI Export**: `M-x sysml2-fmi-extract-interfaces` uses tree-sitter AST extraction via sysml2-cli
-- **Modelica**: `M-x sysml2-fmi-generate-modelica` generates stubs via sysml2-cli
-- **SSP**: `M-x sysml2-cosim-generate-ssp` generates SystemStructureDescription via sysml2-cli
+- **FMI Export**: `M-x sysml2-fmi-extract-interfaces` extracts interfaces via sysml-cli
+- **Diagrams**: `M-x sysml2-diagram` generates diagrams inline
+
+### JSON output for other editors
+
+All commands support `-f json` for structured output suitable for editor integration:
+
+```sh
+sysml-cli lint -f json model.sysml          # Diagnostics as JSON array
+sysml-cli list -f json model.sysml          # Element list as JSON
+sysml-cli simulate list -f json model.sysml # Simulatable items as JSON
+```
 
 ## Building from Source
 
@@ -349,38 +501,54 @@ sysml2-cli integrates with [sysml2-mode](https://github.com/jackhale98/sysml2-mo
 
 - Rust 1.70+ (stable)
 - C compiler (gcc or clang) for tree-sitter grammar compilation
-- [tree-sitter-sysml](https://github.com/jackhale98/tree-sitter-sysml) grammar source
 
 ```sh
-git clone https://github.com/jackhale98/tree-sitter-sysml.git
-git clone https://github.com/jackhale98/sysml-lint.git
-cd sysml-lint
+git clone --recurse-submodules https://github.com/jackhale98/sysml-cli.git
+cd sysml-cli
 cargo build --release
 cargo test
+```
+
+If you didn't clone with `--recurse-submodules`:
+
+```sh
+git submodule update --init
 ```
 
 ## Architecture
 
 ```
-src/
-  main.rs          CLI entry point (clap subcommands: lint, simulate, export)
-  lib.rs           Public module exports
-  parser.rs        Tree-sitter FFI + Model extraction (direction, conjugation, scope)
-  model.rs         Model types: definitions, usages, connections, flows, etc.
-  diagnostic.rs    Diagnostic/Severity types and error codes
-  output.rs        Text and JSON formatters
-  resolver.rs      Multi-file import resolution
-  checks/          9 validation checks (syntax, duplicates, references, etc.)
-  sim/             Simulation engine (constraints, state machines, action flows)
-  export/
-    mod.rs         Export module declarations
-    fmi.rs         FMI 3.0 interface extraction and type mapping
-    modelica.rs    Modelica partial model stub generation
-    ssp.rs         SSP SystemStructureDescription XML generation
-tests/
-  integration.rs   Integration tests
-test/
-  fixtures/        SysML v2 example files for testing
+crates/
+  sysml-core/                 Core library (no CLI dependencies)
+    src/
+      parser.rs               Tree-sitter FFI + model extraction
+      model.rs                Model types: definitions, usages, connections
+      diagnostic.rs           Diagnostic/severity types and error codes
+      resolver.rs             Multi-file import resolution
+      checks/                 9 validation checks
+      sim/                    Simulation engine
+        state_parser.rs       State machine model extraction
+        state_sim.rs          State machine simulation
+        action_parser.rs      Action flow model extraction
+        action_exec.rs        Action flow execution
+        constraint_eval.rs    Constraint/calculation evaluation
+        expr.rs               Expression types and environment
+      codegen/                Code generation and editing
+        template.rs           SysML definition template generation
+        edit.rs               Byte-accurate surgical text edits
+        format.rs             CST-aware source formatting
+      diagram/                Diagram generation (7 types, 4 formats)
+      export/                 FMI 3.0, Modelica, SSP export
+      query/                  Model querying (list, show, trace)
+  sysml-cli/                  CLI frontend
+    src/
+      main.rs                 Clap command definitions and dispatch
+      commands/               One module per command
+      output.rs               Output formatting
+    tests/
+      cli.rs                  CLI integration tests
+tree-sitter-sysml/            Grammar (git submodule)
+test/fixtures/                SysML v2 test files
 ```
 
 ## License

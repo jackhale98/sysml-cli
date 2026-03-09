@@ -276,6 +276,31 @@ fn execute_step(
             // Execute body once (no collection runtime available)
             execute_step(body, state, config);
         }
+        ActionStep::Accept { signal, .. } => {
+            let desc = match signal {
+                Some(s) => format!("accept {}", s),
+                None => "accept".to_string(),
+            };
+            state.trace.push(ActionExecStep {
+                step: state.step,
+                kind: "accept".to_string(),
+                description: desc,
+            });
+            state.step += 1;
+        }
+        ActionStep::Terminate { target, .. } => {
+            let desc = match target {
+                Some(t) => format!("terminate {}", t),
+                None => "terminate".to_string(),
+            };
+            state.trace.push(ActionExecStep {
+                step: state.step,
+                kind: "terminate".to_string(),
+                description: desc,
+            });
+            state.step += 1;
+            state.status = ActionExecStatus::Completed;
+        }
         ActionStep::Done { .. } => {
             state.trace.push(ActionExecStep {
                 step: state.step,

@@ -1,4 +1,4 @@
-/// Diagnostic types for sysml-lint validation results.
+/// Diagnostic types for sysml-cli validation results.
 
 use crate::model::Span;
 use serde::Serialize;
@@ -62,7 +62,7 @@ impl Diagnostic {
     }
 }
 
-/// Diagnostic codes used by sysml2-cli.
+/// Diagnostic codes used by sysml-cli.
 pub mod codes {
     // Errors
     pub const SYNTAX_ERROR: &str = "E001";

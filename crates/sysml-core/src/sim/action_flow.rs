@@ -80,6 +80,16 @@ pub enum ActionStep {
         body: Box<ActionStep>,
         span: Span,
     },
+    /// Accept action: `accept Signal` or `accept when condition`.
+    Accept {
+        signal: Option<String>,
+        span: Span,
+    },
+    /// Terminate action: `terminate` or `terminate name;`
+    Terminate {
+        target: Option<String>,
+        span: Span,
+    },
     /// Done / terminal node.
     Done {
         span: Span,
