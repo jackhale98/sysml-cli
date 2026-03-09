@@ -10,6 +10,12 @@ pub(crate) fn run(
     indent_width: usize,
 ) -> ExitCode {
     use sysml_core::codegen::edit;
+    use sysml_core::codegen::format::{format_source, FormatOptions};
+
+    let opts = FormatOptions {
+        indent_width,
+        trailing_newline: true,
+    };
 
     let mut any_unformatted = false;
 
@@ -19,7 +25,7 @@ pub(crate) fn run(
             Err(code) => return code,
         };
 
-        let formatted = format_sysml(&source, indent_width);
+        let formatted = format_source(&source, &opts);
 
         if formatted == source {
             continue;
@@ -45,39 +51,4 @@ pub(crate) fn run(
     } else {
         ExitCode::SUCCESS
     }
-}
-
-fn format_sysml(source: &str, indent_width: usize) -> String {
-    let mut out = String::new();
-    let mut depth: usize = 0;
-    let indent_str = " ".repeat(indent_width);
-
-    for line in source.lines() {
-        let trimmed = line.trim();
-
-        if trimmed.is_empty() {
-            out.push('\n');
-            continue;
-        }
-
-        if trimmed.starts_with('}') {
-            depth = depth.saturating_sub(1);
-        }
-
-        for _ in 0..depth {
-            out.push_str(&indent_str);
-        }
-        out.push_str(trimmed);
-        out.push('\n');
-
-        if trimmed.ends_with('{') {
-            depth += 1;
-        }
-    }
-
-    if !out.ends_with('\n') {
-        out.push('\n');
-    }
-
-    out
 }
