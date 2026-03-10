@@ -2,7 +2,9 @@
 
 This tutorial walks through a complete systems engineering workflow using the `sysml` command-line tool. You will build a model from scratch, validate it, generate diagrams, run simulations, and use lifecycle management features.
 
-We will model a **weather station** — a small embedded system with sensors, a controller, and a display.
+We will model a **weather station** — a small embedded system with sensors, a controller, and a display. Every model element is created through CLI commands.
+
+> **Tip:** If you prefer not to type flags, run `sysml add` with no arguments to launch an interactive wizard that guides you through creating any element.
 
 ## Prerequisites
 
@@ -24,77 +26,62 @@ sysml --version
 
 ### 1.1 Initialize a project
 
-Create a new directory and initialize it as a sysml project:
-
 ```sh
 mkdir weather-station && cd weather-station
 sysml init
 ```
 
-This creates a `.sysml/` directory with a `config.toml` file. The tool auto-detects your model root and project name from the directory.
+This creates a `.sysml/` directory with a `config.toml` file.
 
 ### 1.2 Explore help topics
-
-If you are new to SysML v2, read the built-in guides:
 
 ```sh
 sysml guide                    # list available topics
 sysml guide getting-started    # first-time tutorial
 sysml guide sysml-basics       # SysML v2 language overview
-sysml guide requirements       # requirements management
 ```
 
 ### 1.3 Generate an example project
-
-To see what a complete SysML project looks like, generate one of the built-in examples:
 
 ```sh
 sysml example --list
 sysml example brake-system -o /tmp/brake-example
 ```
 
-This creates multiple `.sysml` files with teaching comments. Feel free to explore them.
+### 1.4 Learn SysML syntax with --teach
 
-## Part 2: Building the Model with CLI Commands
-
-We will build the weather station model incrementally using `sysml add`. This shows the CLI-first workflow — you never need to write SysML syntax by hand.
-
-### 2.1 Create a seed file
-
-Start with a minimal package wrapper. This is the only hand-written SysML in this tutorial:
+If you are new to SysML v2, the `--teach` flag adds explanatory comments to generated code:
 
 ```sh
-cat > model.sysml << 'EOF'
-package WeatherStation {
-}
-EOF
+sysml add --stdout --teach part-def Motor
 ```
 
-### 2.2 Add attribute definitions
+Use this on any element kind to understand the syntax before building your model.
 
-Create reusable value types:
+## Part 2: Building the Model
+
+In SysML v2, **definitions** (e.g., `part def Sensor`) are reusable types, while **usages** (e.g., `part tempSensor : Sensor`) are instances of those types placed inside an assembly. This tutorial creates definitions first, then assembles them with usages.
+
+### 2.1 Create the model file
+
+Generate the package and redirect it into the model file:
 
 ```sh
-sysml add model.sysml attribute-def TemperatureValue
-sysml add model.sysml attribute-def HumidityValue
-sysml add model.sysml attribute-def PressureValue
-sysml add model.sysml attribute-def WindSpeedValue
+sysml add --stdout package WeatherStation --doc "Weather station model" > model.sysml
 ```
 
-### 2.3 Add enum definitions
+### 2.2 Add enum definitions with members
 
-Create enumerations. The `add` command creates the definition; enum members need to be added inside the body:
+Enums provide fixed sets of choices. Use `-m` to add members directly:
 
 ```sh
-sysml add model.sysml enum-def DisplayMode
-sysml add model.sysml enum-def SensorStatus
+sysml add model.sysml enum-def DisplayMode -m summary -m detailed -m alert
+sysml add model.sysml enum-def SensorStatus -m ok -m degraded -m failed
 ```
 
-> **Note:** Enum members (`enum summary;`, `enum detailed;`, etc.) are not yet supported by `sysml add`. After creating the enum definitions, add the members by hand or use `sysml add --stdout enum-def DisplayMode` to preview the structure and edit the file.
+### 2.3 Add port definitions
 
-### 2.4 Add port definitions with members
-
-Create ports with directional items using the `-m` flag:
+Ports define interaction points. Use `-m` with direction modifiers:
 
 ```sh
 sysml add model.sysml port-def SensorDataPort \
@@ -107,9 +94,9 @@ sysml add model.sysml port-def PowerPort \
     -m "in item voltage:ScalarValues::Real"
 ```
 
-### 2.5 Add part definitions
+### 2.4 Add part definitions (reusable types)
 
-Create an abstract base sensor type with ports and attributes:
+A **part definition** defines a reusable component type. Create an abstract base sensor with attributes and ports:
 
 ```sh
 sysml add model.sysml part-def Sensor --abstract \
@@ -120,7 +107,7 @@ sysml add model.sysml part-def Sensor --abstract \
     -m "port power:PowerPort"
 ```
 
-Create specialized sensor types that extend the base:
+Create specialized sensors that extend the base. `--extends` adds `:> Sensor` specialization:
 
 ```sh
 sysml add model.sysml part-def TemperatureSensor --extends Sensor \
@@ -140,15 +127,21 @@ sysml add model.sysml part-def WindSensor --extends Sensor \
     -m "attribute maxSpeed:ScalarValues::Real"
 ```
 
-Create the controller, display, power supply, and enclosure:
+Create the remaining component types:
 
 ```sh
 sysml add model.sysml part-def Controller \
-    --doc "Central processing unit that reads sensor data and drives the display" \
+    --doc "Central processing unit" \
+    -m "port tempIn:SensorDataPort" \
+    -m "port humidIn:SensorDataPort" \
+    -m "port pressIn:SensorDataPort" \
+    -m "port windIn:SensorDataPort" \
+    -m "port displayOut:DisplayDataPort" \
+    -m "port power:PowerPort" \
     -m "attribute firmware_version:ScalarValues::String"
 
 sysml add model.sysml part-def Display \
-    --doc "LCD display for showing weather readings" \
+    --doc "LCD display for weather readings" \
     -m "port dataIn:DisplayDataPort" \
     -m "port power:PowerPort" \
     -m "attribute mode:DisplayMode" \
@@ -165,33 +158,23 @@ sysml add model.sysml part-def Enclosure \
     -m "attribute ip_rating:ScalarValues::String"
 ```
 
-### 2.6 Preview before committing
-
-Use `--dry-run` to see what would change before writing:
+### 2.5 Add a connection definition
 
 ```sh
-sysml add model.sysml part-def ConnectionDef --dry-run
-```
-
-Or generate to stdout to inspect the SysML text:
-
-```sh
-sysml add --stdout part-def ConnectionDef \
+sysml add model.sysml connection-def SensorConnection \
     -m "part source:Sensor" -m "part target:Controller"
 ```
 
-### 2.7 Add the main assembly
+### 2.6 Build the main assembly with part usages
 
-Create the top-level assembly definition:
+A **part usage** creates a specific instance of a part definition inside an assembly. Create the top-level assembly and populate it:
 
 ```sh
 sysml add model.sysml part-def WeatherStationUnit \
     --doc "Complete weather station assembly"
-```
 
-Add part usages inside it with `--inside`:
-
-```sh
+# Part usages — these are instances of the definitions above.
+# -t sets the type reference, --inside places them in the assembly.
 sysml add model.sysml part tempSensor -t TemperatureSensor --inside WeatherStationUnit
 sysml add model.sysml part humiditySensor -t HumiditySensor --inside WeatherStationUnit
 sysml add model.sysml part pressureSensor -t PressureSensor --inside WeatherStationUnit
@@ -202,99 +185,61 @@ sysml add model.sysml part power -t PowerSupply --inside WeatherStationUnit
 sysml add model.sysml part enclosure -t Enclosure --inside WeatherStationUnit
 ```
 
-### 2.8 Add connections (hand-edit)
+### 2.7 Add connections between parts
 
-Connection usages with `connect ... to ...` binding syntax are not yet supported by `sysml add`. Add these inside the `WeatherStationUnit` body by hand:
-
-```sysml
-        connection tempConn : SensorConnection
-            connect tempSensor.dataOut to controller.tempIn;
-
-        connection humidConn : SensorConnection
-            connect humiditySensor.dataOut to controller.humidIn;
-
-        connection pressConn : SensorConnection
-            connect pressureSensor.dataOut to controller.pressIn;
-
-        connection windConn : SensorConnection
-            connect windSensor.dataOut to controller.windIn;
-
-        connection displayConn
-            connect controller.displayOut to display.dataIn;
-```
-
-> **Future work:** `sysml add` will support connection bindings in a future release.
-
-### 2.9 Learn SysML syntax with --teach
-
-If you are new to SysML v2, use `--teach` to see explanatory comments alongside generated code:
+Use `--connect` to wire parts together inside the assembly:
 
 ```sh
-sysml add --stdout --teach part-def Motor
+sysml add model.sysml connection tempConn -t SensorConnection \
+    --connect "tempSensor.dataOut to controller.tempIn" --inside WeatherStationUnit
+
+sysml add model.sysml connection humidConn -t SensorConnection \
+    --connect "humiditySensor.dataOut to controller.humidIn" --inside WeatherStationUnit
+
+sysml add model.sysml connection pressConn -t SensorConnection \
+    --connect "pressureSensor.dataOut to controller.pressIn" --inside WeatherStationUnit
+
+sysml add model.sysml connection windConn -t SensorConnection \
+    --connect "windSensor.dataOut to controller.windIn" --inside WeatherStationUnit
+
+sysml add model.sysml connection displayConn \
+    --connect "controller.displayOut to display.dataIn" --inside WeatherStationUnit
 ```
 
-This produces annotated SysML with comments explaining each language construct.
-
-### 2.10 Validate the model
-
-Run the linter to check for structural issues:
+### 2.8 Validate and explore
 
 ```sh
 sysml lint model.sysml
-```
-
-You should see output like:
-
-```
-model.sysml:X:Y: note[W001]: part def `Enclosure` is defined but never referenced
-...
-Found 0 errors, N warnings, M notes.
-```
-
-Notes about unused definitions are normal at this stage — we have not added requirements or verification yet. To suppress notes:
-
-```sh
-sysml lint --severity warning model.sysml
-```
-
-### 2.11 Explore the model
-
-List all elements:
-
-```sh
 sysml list model.sysml
-sysml list --kind parts model.sysml       # part definitions only
-sysml list --kind ports model.sysml       # port definitions only
-sysml list --parent WeatherStationUnit model.sysml
-```
-
-Inspect a specific element:
-
-```sh
+sysml list --kind parts model.sysml        # part definitions only
+sysml list --kind ports model.sysml        # port definitions only
+sysml list --parent WeatherStationUnit model.sysml   # usages inside the assembly
 sysml show model.sysml WeatherStationUnit
-sysml show --raw model.sysml TemperatureSensor   # raw SysML source text
-```
-
-View model statistics:
-
-```sh
+sysml show --raw model.sysml TemperatureSensor       # raw SysML source text
 sysml stats model.sysml
 ```
+
+### 2.9 Using interactive mode
+
+Instead of typing all these flags, `sysml add` launches an interactive wizard:
+
+```sh
+sysml add                  # full wizard — choose what to create, name it, pick a file
+sysml add model.sysml      # guided mode — wizard with model-aware type suggestions
+```
+
+The wizard shows available types from your model and supports all element kinds including connections, imports, satisfy/verify relationships, and enum definitions with members.
 
 ## Part 3: Editing the Model
 
 ### 3.1 Add a new sensor
-
-Extend the model with a rain gauge sensor:
 
 ```sh
 sysml add model.sysml part-def RainGauge --doc "Measures rainfall in mm/hr" --extends Sensor
 sysml add model.sysml part rainGauge -t RainGauge --inside WeatherStationUnit
 ```
 
-### 3.2 Preview changes with --dry-run
-
-Before writing, preview the diff:
+### 3.2 Preview with --dry-run
 
 ```sh
 sysml add model.sysml part-def Anemometer --doc "Wind direction sensor" --dry-run
@@ -302,90 +247,75 @@ sysml add model.sysml part-def Anemometer --doc "Wind direction sensor" --dry-ru
 
 ### 3.3 Generate to stdout
 
-Generate SysML text without modifying any file:
-
 ```sh
 sysml add --stdout part-def GPSSensor --doc "Location tracking" \
     -m "attribute latitude:Real" -m "attribute longitude:Real"
 ```
 
-Output:
+### 3.4 Multiplicity
 
-```sysml
-part def GPSSensor {
-    doc /* Location tracking */
-    attribute latitude : Real;
-    attribute longitude : Real;
-}
+Use bracket notation on member specs for cardinality:
+
+```sh
+sysml add --stdout part-def Vehicle \
+    -m "part wheels:Wheel[4]" -m "attribute doors:Door[2..5]"
 ```
 
-### 3.4 Remove and rename elements
-
-Remove an element:
+### 3.5 Remove and rename
 
 ```sh
 sysml remove model.sysml RainGauge --dry-run    # preview first
 sysml remove model.sysml RainGauge              # apply
-```
-
-Rename an element and update all references:
-
-```sh
 sysml rename model.sysml WindSensor Anemometer --dry-run
 ```
 
 ## Part 4: Requirements and Traceability
 
-### 4.1 Add requirements
+### 4.1 Create the requirements file
 
-Create a file called `requirements.sysml`:
-
-```sysml
-// Weather Station Requirements
-
-package WeatherStationRequirements {
-
-    import WeatherStation::*;
-
-    requirement def TemperatureAccuracy {
-        doc /* The temperature sensor shall measure temperature
-               with an accuracy of +/- 0.5 degrees Celsius */
-        subject station : WeatherStationUnit;
-    }
-
-    requirement def OperatingRange {
-        doc /* The weather station shall operate in temperatures
-               from -40C to +60C */
-        subject station : WeatherStationUnit;
-    }
-
-    requirement def BatteryLife {
-        doc /* The weather station shall operate for at least
-               72 hours without solar charging */
-        subject station : WeatherStationUnit;
-    }
-
-    requirement def UpdateRate {
-        doc /* The display shall update readings at least
-               every 5 seconds */
-        subject station : WeatherStationUnit;
-    }
-
-    requirement def IPRating {
-        doc /* The enclosure shall achieve IP65 or higher rating */
-        subject station : WeatherStationUnit;
-    }
-
-    // Satisfaction: link requirements to implementation
-    satisfy requirement TemperatureAccuracy by WeatherStationUnit;
-    satisfy requirement OperatingRange by WeatherStationUnit;
-    satisfy requirement BatteryLife by WeatherStationUnit;
-    satisfy requirement UpdateRate by WeatherStationUnit;
-    satisfy requirement IPRating by WeatherStationUnit;
-}
+```sh
+sysml add --stdout package WeatherStationRequirements \
+    --doc "Weather station requirements" > requirements.sysml
 ```
 
-### 4.2 Generate the traceability matrix
+Add an import so requirements can reference model elements:
+
+```sh
+sysml add requirements.sysml import "WeatherStation::*"
+```
+
+### 4.2 Add requirements
+
+```sh
+sysml add requirements.sysml requirement TemperatureAccuracy \
+    --doc "The temperature sensor shall measure with +/- 0.5C accuracy"
+
+sysml add requirements.sysml requirement OperatingRange \
+    --doc "The station shall operate from -40C to +60C"
+
+sysml add requirements.sysml requirement BatteryLife \
+    --doc "The station shall operate 72 hours without solar charging"
+
+sysml add requirements.sysml requirement UpdateRate \
+    --doc "The display shall update readings every 5 seconds"
+
+sysml add requirements.sysml requirement IPRating \
+    --doc "The enclosure shall achieve IP65 or higher"
+```
+
+### 4.3 Link requirements to implementation with satisfy
+
+```sh
+sysml add requirements.sysml satisfy TemperatureAccuracy -t WeatherStationUnit
+sysml add requirements.sysml satisfy OperatingRange -t WeatherStationUnit
+sysml add requirements.sysml satisfy BatteryLife -t WeatherStationUnit
+sysml add requirements.sysml satisfy UpdateRate -t WeatherStationUnit
+sysml add requirements.sysml satisfy IPRating -t WeatherStationUnit
+```
+
+Or use the flag syntax: `sysml add --satisfy TemperatureAccuracy --by WeatherStationUnit`
+
+### 4.4 Generate the traceability matrix
 
 ```sh
 sysml trace requirements.sysml
@@ -405,61 +335,48 @@ IPRating             WeatherStationUnit   -
 Coverage: 5/5 satisfied (100%), 0/5 verified (0%)
 ```
 
-All requirements are satisfied but none are verified yet. To use this as a CI gate:
+Use as a CI gate:
 
 ```sh
 sysml trace --check --min-coverage 80 requirements.sysml
 ```
 
-### 4.3 Check model coverage
+### 4.5 Check model coverage
 
 ```sh
 sysml coverage model.sysml
 ```
 
-This reports documentation coverage, typed usages, requirement satisfaction, and an overall quality score.
-
 ## Part 5: Verification Cases
 
-### 5.1 Add verification cases
+### 5.1 Create the verification file
 
-Create `verification.sysml`:
+```sh
+sysml add --stdout package WeatherStationVerification \
+    --doc "Verification cases" > verification.sysml
 
-```sysml
-// Verification Cases
-
-package WeatherStationVerification {
-
-    import WeatherStation::*;
-    import WeatherStationRequirements::*;
-
-    verification case def TestTemperatureAccuracy {
-        doc /* Verify temperature sensor accuracy against reference thermometer */
-        subject station : WeatherStationUnit;
-        objective {
-            verify requirement TemperatureAccuracy;
-        }
-    }
-
-    verification case def TestOperatingRange {
-        doc /* Environmental chamber test across full temperature range */
-        subject station : WeatherStationUnit;
-        objective {
-            verify requirement OperatingRange;
-        }
-    }
-
-    verification case def TestBatteryLife {
-        doc /* Continuous operation test without solar input */
-        subject station : WeatherStationUnit;
-        objective {
-            verify requirement BatteryLife;
-        }
-    }
-}
+sysml add verification.sysml import "WeatherStation::*"
+sysml add verification.sysml import "WeatherStationRequirements::*"
 ```
 
-### 5.2 Check verification coverage
+### 5.2 Add verification case definitions
+
+Verification cases have a complex internal structure (`objective { verify requirement ... }`) that requires hand-editing after creation. Create the skeleton with `add`, then edit the objective block:
+
+```sh
+sysml add verification.sysml requirement TestTemperatureAccuracy \
+    --doc "Verify temperature sensor accuracy against reference thermometer"
+
+sysml add verification.sysml requirement TestOperatingRange \
+    --doc "Environmental chamber test across full temperature range"
+
+sysml add verification.sysml requirement TestBatteryLife \
+    --doc "Continuous operation test without solar input"
+```
+
+> **Note:** Full `verification case def` syntax with `objective { verify requirement ... }` is not yet supported by `sysml add`. For proper verification case structure, edit the generated definitions to use `verification case def` and add the objective blocks. See `sysml add --teach --stdout requirement TestCase` for syntax guidance.
+
+### 5.3 Check verification coverage
 
 ```sh
 sysml verify coverage verification.sysml requirements.sysml
@@ -467,21 +384,17 @@ sysml verify list verification.sysml
 sysml verify status verification.sysml requirements.sysml
 ```
 
-### 5.3 Execute a verification case interactively
-
-> **Note:** This command requires an interactive terminal — it prompts you step-by-step.
+### 5.4 Execute a verification case interactively
 
 ```sh
 sysml verify run verification.sysml --case TestTemperatureAccuracy --author "Jane Smith"
 ```
 
-The tool walks you through each step of the test, collects your pass/fail judgments, and writes a TOML execution record to `.sysml/records/`.
+The tool walks you through each step, collects pass/fail judgments, and writes a TOML record to `.sysml/records/`.
 
 ## Part 6: Diagrams
 
 ### 6.1 Block Definition Diagram (BDD)
-
-Shows definitions and their relationships:
 
 ```sh
 sysml diagram -t bdd model.sysml
@@ -497,13 +410,11 @@ sysml diagram -t bdd -o d2 model.sysml
 
 ### 6.2 Internal Block Diagram (IBD)
 
-Shows the internal structure of a specific part — requires `--scope`:
-
 ```sh
 sysml diagram -t ibd --scope WeatherStationUnit model.sysml
 ```
 
-This shows the parts inside WeatherStationUnit and their connections.
+Shows parts inside WeatherStationUnit and their connections.
 
 ### 6.3 Requirements Diagram
 
@@ -511,34 +422,40 @@ This shows the parts inside WeatherStationUnit and their connections.
 sysml diagram -t req requirements.sysml
 ```
 
-Shows requirements with their satisfaction and verification links.
-
 ### 6.4 State Machine Diagram
 
-First, add a state machine to the model. Append to `model.sysml`:
+Add a state machine using `sysml add`. The definition can be created via CLI, but transitions require hand-editing since they use complex `first ... accept ... then` syntax:
 
-```sysml
-    // Add inside the WeatherStation package:
-
-    state def StationStates {
-        entry; then off;
-
-        state off;
-        state initializing;
-        state monitoring;
-        state alerting;
-        state lowPower;
-
-        transition first off accept powerOn then initializing;
-        transition first initializing then monitoring;
-        transition first monitoring accept alertTrigger then alerting;
-        transition first alerting accept clearAlert then monitoring;
-        transition first monitoring accept lowBattery then lowPower;
-        transition first lowPower accept charged then monitoring;
-    }
+```sh
+sysml add model.sysml state-def StationStates \
+    --doc "Weather station operating states"
 ```
 
-Then generate the diagram:
+Then add the states and transitions by editing `model.sysml` to fill in the body:
+
+```sysml
+state def StationStates {
+    doc /* Weather station operating states */
+    entry; then off;
+
+    state off;
+    state initializing;
+    state monitoring;
+    state alerting;
+    state lowPower;
+
+    transition first off accept powerOn then initializing;
+    transition first initializing then monitoring;
+    transition first monitoring accept alertTrigger then alerting;
+    transition first alerting accept clearAlert then monitoring;
+    transition first monitoring accept lowBattery then lowPower;
+    transition first lowPower accept charged then monitoring;
+}
+```
+
+> **Note:** State transitions and `entry/then` syntax are not yet supported by `sysml add`. This is the one area where hand-editing is required.
+
+Generate the diagram:
 
 ```sh
 sysml diagram -t stm --scope StationStates model.sysml
@@ -546,13 +463,18 @@ sysml diagram -t stm --scope StationStates model.sysml
 
 ### 6.5 Activity Diagram
 
-Add an action definition and generate:
+Create an action definition:
+
+```sh
+sysml add model.sysml action-def ReadSensors \
+    --doc "Read all sensor data and update display"
+```
+
+Action successions (`first ... then ...`) require hand-editing inside the action body.
 
 ```sh
 sysml diagram -t act --scope ReadSensors model.sysml
 ```
-
-> **Note:** The `--scope` flag is needed when a file contains multiple action definitions.
 
 ### 6.6 Other diagram types
 
@@ -568,20 +490,36 @@ sysml diagram -t ucd model.sysml      # Use case diagram
 
 ### 7.1 Constraint evaluation
 
-Create `constraints.sysml`:
+Create constraint and calc definitions:
+
+```sh
+sysml add --stdout constraint-def TemperatureLimit \
+    --doc "Operating temperature range" > constraints.sysml
+
+sysml add constraints.sysml constraint-def PowerBudget \
+    --doc "Maximum power consumption"
+
+sysml add constraints.sysml calc-def BatteryRuntime \
+    --doc "Calculate battery runtime in hours"
+```
+
+Constraint expressions and calc bodies require hand-editing. Edit `constraints.sysml` to add:
 
 ```sysml
 constraint def TemperatureLimit {
+    doc /* Operating temperature range */
     in temp : Real;
     temp >= -40 and temp <= 60;
 }
 
 constraint def PowerBudget {
+    doc /* Maximum power consumption */
     in consumption : Real;
     consumption <= 500;
 }
 
 calc def BatteryRuntime {
+    doc /* Calculate battery runtime in hours */
     in capacity : Real;
     in consumption : Real;
     return hours : Real;
@@ -589,7 +527,9 @@ calc def BatteryRuntime {
 }
 ```
 
-Evaluate constraints with variable bindings:
+> **Note:** Constraint expressions and calc return bodies are not yet supported by `sysml add`. The CLI creates the definition skeleton; you add the math.
+
+Evaluate with variable bindings:
 
 ```sh
 sysml simulate eval constraints.sysml -n TemperatureLimit -b temp=25
@@ -602,30 +542,10 @@ sysml simulate eval constraints.sysml -n BatteryRuntime -b capacity=12,consumpti
 # Output: calc BatteryRuntime: 60
 ```
 
-> **Known limitation:** The constraint evaluator has issues with compound boolean
-> expressions using `and`/`or` when evaluating all constraints at once. Use `-n` to
-> evaluate specific constraints individually for reliable results.
-
 ### 7.2 State machine simulation
-
-Using the StationStates defined earlier:
 
 ```sh
 sysml simulate sm model.sysml -n StationStates -e powerOn,alertTrigger,clearAlert,lowBattery,charged
-```
-
-Output shows the step-by-step state transitions:
-
-```
-State Machine: StationStates
-Initial state: off
-
-  Step 0: off -- [powerOn]--> initializing
-  Step 1: initializing --> monitoring
-  Step 2: monitoring -- [alertTrigger]--> alerting
-  Step 3: alerting -- [clearAlert]--> monitoring
-  Step 4: monitoring -- [lowBattery]--> lowPower
-  ...
 ```
 
 Without `--events`, the tool prompts you interactively to select events from the available triggers.
@@ -636,113 +556,70 @@ Without `--events`, the tool prompts you interactively to select events from the
 sysml simulate af model.sysml -n ReadSensors
 ```
 
-Traces through action steps following `first ... then ...` succession links.
-
 ### 7.4 List simulatable elements
 
 ```sh
 sysml simulate list model.sysml
 ```
 
-Shows all constraints, calculations, state machines, and actions in the file.
-
-## Part 8: Analysis Commands
-
-### 8.1 Dependency analysis
-
-See what an element depends on and what references it:
+## Part 8: Analysis
 
 ```sh
+# Dependency analysis
 sysml deps model.sysml WeatherStationUnit
-sysml deps model.sysml TemperatureSensor --reverse   # what references this
-sysml deps model.sysml Controller --forward           # what this depends on
-```
+sysml deps model.sysml TemperatureSensor --reverse
 
-### 8.2 Interface analysis
-
-List all ports and find unconnected ones:
-
-```sh
+# Interface analysis — find unconnected ports
 sysml interfaces model.sysml
 sysml interfaces --unconnected model.sysml
-```
 
-Unconnected ports represent interface gaps — things that should probably be connected.
-
-### 8.3 Allocation analysis
-
-If your model uses allocation relationships (mapping logical actions to physical parts):
-
-```sh
+# Allocation analysis
 sysml allocation model.sysml
-sysml allocation --check model.sysml    # fail if unallocated items exist
-```
+sysml allocation --check model.sysml
 
-### 8.4 Semantic diff
-
-Compare two versions of a model:
-
-```sh
+# Semantic diff — compare two model versions
 cp model.sysml model-v2.sysml
-# (make some changes to model-v2.sysml)
 sysml diff model.sysml model-v2.sysml
 ```
 
-Unlike text-based diff, this compares at the model level — detecting structural changes regardless of formatting.
-
 ## Part 9: Formatting
 
-### 9.1 Format files
-
-The formatter uses the Concrete Syntax Tree (CST) for accurate, structure-aware formatting:
-
 ```sh
-sysml fmt model.sysml
-```
-
-Preview changes without writing:
-
-```sh
-sysml fmt --diff model.sysml
-```
-
-Use in CI to enforce formatting:
-
-```sh
-sysml fmt --check model.sysml    # exit 1 if not formatted
-```
-
-Customize indentation:
-
-```sh
-sysml fmt --indent-width 2 model.sysml
+sysml fmt model.sysml                   # format in place
+sysml fmt --diff model.sysml            # preview changes
+sysml fmt --check model.sysml           # CI mode — exit 1 if unformatted
+sysml fmt --indent-width 2 model.sysml  # custom indent
 ```
 
 ## Part 10: Lifecycle Management
 
-These commands work with domain library types. The tool ships with library files in `libraries/` that define base types for risk, tolerance, BOM, manufacturing, and quality.
+These commands work with domain library types shipped in `libraries/`.
 
 ### 10.1 Risk Management
 
-Create a risk model file `risks.sysml` using the domain library patterns:
+Create risks interactively with the wizard:
 
-```sysml
-package WeatherStationRisks {
-    import WeatherStation::*;
-
-    part def riskMoistureIngress :> SysMLRisk::RiskDef {
-        doc /* Moisture entering the enclosure could damage electronics */
-        attribute redefines severity = SysMLRisk::SeverityLevel::critical;
-        attribute redefines likelihood = SysMLRisk::LikelihoodLevel::occasional;
-    }
-
-    part def riskSolarFailure :> SysMLRisk::RiskDef {
-        doc /* Solar panel degradation reduces charging capability */
-        attribute redefines severity = SysMLRisk::SeverityLevel::moderate;
-        attribute redefines likelihood = SysMLRisk::LikelihoodLevel::remote;
-    }
-}
+```sh
+sysml risk add
 ```
+
+Or create a risk file with CLI commands:
+
+```sh
+sysml add --stdout package WeatherStationRisks \
+    --doc "Risk register" > risks.sysml
+sysml add risks.sysml import "WeatherStation::*"
+
+sysml add risks.sysml part-def riskMoistureIngress \
+    --extends "SysMLRisk::RiskDef" \
+    --doc "Moisture entering the enclosure could damage electronics"
+
+sysml add risks.sysml part-def riskSolarFailure \
+    --extends "SysMLRisk::RiskDef" \
+    --doc "Solar panel degradation reduces charging capability"
+```
+
+> **Note:** Risk severity/likelihood enum attribute values (`attribute redefines severity = ...`) require hand-editing after creation. The `sysml risk add` wizard handles this automatically.
 
 Analyze risks:
 
@@ -752,285 +629,157 @@ sysml risk matrix risks.sysml -I libraries/
 sysml risk fmea risks.sysml -I libraries/
 ```
 
-> **Interactive:** `sysml risk add` launches a wizard that prompts for severity, likelihood, and other fields, then generates the SysML text for you.
-
 ### 10.2 Tolerance Analysis
 
-For models with tolerance dimension chains (using the `SysMLTolerance` library):
-
 ```sh
-sysml tol analyze model.sysml -I libraries/                     # worst-case
-sysml tol analyze model.sysml -I libraries/ --method rss        # root sum of squares
+sysml tol analyze model.sysml -I libraries/
+sysml tol analyze model.sysml -I libraries/ --method rss
 sysml tol analyze model.sysml -I libraries/ --method monte-carlo --iterations 50000
 sysml tol sensitivity model.sysml -I libraries/
 ```
 
 ### 10.3 Bill of Materials
 
-For models with BOM attributes (using the `SysMLBOM` library):
-
 ```sh
 sysml bom rollup model.sysml --root WeatherStationUnit -I libraries/
 sysml bom rollup model.sysml --root WeatherStationUnit --include-mass --include-cost -I libraries/
 sysml bom where-used model.sysml --part TemperatureSensor -I libraries/
-sysml bom export model.sysml --root WeatherStationUnit -I libraries/   # CSV output
+sysml bom export model.sysml --root WeatherStationUnit -I libraries/
 ```
 
 ### 10.4 Supplier Management
 
 ```sh
-sysml source list model.sysml -I libraries/     # list suppliers
-sysml source asl model.sysml -I libraries/      # approved source list
-sysml source rfq --part TemperatureSensor --quantity 1000 --description "Industrial temp sensor, -40 to +60C"
+sysml source list model.sysml -I libraries/
+sysml source asl model.sysml -I libraries/
+sysml source rfq --part TemperatureSensor --quantity 1000 --description "Industrial temp sensor"
 ```
 
-The `rfq` command generates a request-for-quotation document.
-
-### 10.5 Manufacturing Execution
-
-For models with manufacturing routing definitions:
+### 10.5 Manufacturing
 
 ```sh
 sysml mfg list model.sysml -I libraries/
+sysml mfg spc --parameter SensorCalibration \
+    --values 0.48,0.52,0.50,0.49,0.51,0.50,0.53,0.47,0.51,0.49
+sysml mfg start-lot    # interactive lot creation
+sysml mfg step          # advance through routing steps
 ```
-
-Statistical Process Control on measurement data:
-
-```sh
-sysml mfg spc --parameter SensorCalibration --values 0.48,0.52,0.50,0.49,0.51,0.50,0.53,0.47,0.51,0.49
-```
-
-Output includes mean, standard deviation, UCL/LCL control limits, and a visual SPC chart.
-
-> **Interactive:** `sysml mfg start-lot` creates a production lot record, and `sysml mfg step <lot-id>` advances through each routing step with parameter recording.
 
 ### 10.6 Quality Control
-
-ANSI Z1.4 sampling plan lookup:
 
 ```sh
 sysml qc sample-size --lot-size 500
 sysml qc sample-size --lot-size 500 --aql 0.65 --level tightened
-```
-
-Process capability (Cp/Cpk) analysis:
-
-```sh
-sysml qc capability --usl 10.05 --lsl 9.95 --values 10.01,9.99,10.02,9.98,10.00,10.01,9.99,10.00,10.02,9.98
+sysml qc capability --usl 10.05 --lsl 9.95 \
+    --values 10.01,9.99,10.02,9.98,10.00,10.01,9.99,10.00,10.02,9.98
 ```
 
 ### 10.7 Quality Management (NCR, CAPA, Deviation)
 
-The tool manages three quality item types with distinct lifecycles:
-
-- **NCR** (Nonconformance Report): documents observed problems
-- **CAPA** (Corrective/Preventive Action): formal improvement programs
-- **Process Deviation**: approved departures from standard processes
+All created through interactive wizards:
 
 ```sh
-sysml quality list                    # show item types and workflows
-sysml quality create --type ncr       # interactive NCR creation wizard
-sysml quality create --type capa      # interactive CAPA creation
-sysml quality create --type deviation # interactive deviation request
-```
-
-Root cause analysis:
-
-```sh
+sysml quality list                     # show item types and workflows
+sysml quality create --type ncr        # interactive NCR creation
+sysml quality create --type capa       # interactive CAPA creation
+sysml quality create --type deviation  # interactive deviation request
 sysml quality rca --source NCR-001 --method five-why
 sysml quality rca --source NCR-001 --method fishbone
-```
-
-Add corrective actions to a CAPA:
-
-```sh
 sysml quality action --capa CAPA-001
-```
-
-Trend analysis:
-
-```sh
 sysml quality trend --group-by category
-sysml quality trend --group-by severity model.sysml
 ```
 
 ## Part 11: Export
 
-### 11.1 FMI 3.0 interfaces
-
-Extract interface items for co-simulation:
-
 ```sh
-sysml export interfaces model.sysml --part Controller
-sysml export list model.sysml    # list exportable parts
-```
-
-### 11.2 Modelica stubs
-
-Generate a Modelica partial model:
-
-```sh
+sysml export interfaces model.sysml --part Controller   # FMI 3.0 interfaces
+sysml export list model.sysml                           # list exportable parts
 sysml export modelica model.sysml --part Controller -o Controller.mo
-```
-
-### 11.3 SSP (System Structure Package)
-
-Generate SystemStructureDescription XML:
-
-```sh
-sysml export ssp model.sysml -o system.ssd
+sysml export ssp model.sysml -o system.ssd              # SSP XML
 ```
 
 ## Part 12: Cross-Domain Reports
 
-### 12.1 Project dashboard
-
 ```sh
 sysml report dashboard model.sysml requirements.sysml verification.sysml
-```
-
-Shows an executive summary combining model statistics, requirement coverage, risk status, and quality items.
-
-### 12.2 Requirement traceability thread
-
-Trace a single requirement through the full lifecycle:
-
-```sh
-sysml report traceability requirements.sysml verification.sysml --requirement TemperatureAccuracy
-```
-
-### 12.3 Gate readiness review
-
-Check whether a project milestone is ready:
-
-```sh
+sysml report traceability requirements.sysml verification.sysml \
+    --requirement TemperatureAccuracy
 sysml report gate model.sysml requirements.sysml verification.sysml \
     --gate-name CDR --min-coverage 80
 ```
 
 ## Part 13: Pipelines and CI
 
-### 13.1 Define a CI pipeline
-
-Add to `.sysml/config.toml`:
-
-```toml
-[[pipeline]]
-name = "ci"
-steps = [
-    "lint model.sysml requirements.sysml verification.sysml",
-    "fmt --check model.sysml requirements.sysml verification.sysml",
-    "trace --check --min-coverage 80 requirements.sysml",
-    "coverage --check --min-score 60 model.sysml"
-]
-
-[[pipeline]]
-name = "pre-commit"
-steps = [
-    "lint model.sysml",
-    "fmt --check model.sysml"
-]
-```
-
-Or create one interactively:
+### 13.1 Define a pipeline
 
 ```sh
 sysml pipeline create ci
 ```
 
+Or add manually to `.sysml/config.toml`:
+
+```toml
+[[pipeline]]
+name = "ci"
+steps = [
+    "lint model.sysml requirements.sysml",
+    "fmt --check model.sysml",
+    "trace --check --min-coverage 80 requirements.sysml",
+]
+```
+
 ### 13.2 Run a pipeline
 
 ```sh
-sysml pipeline list                  # show defined pipelines
-sysml pipeline run ci --dry-run      # preview commands
-sysml pipeline run ci                # execute all steps in order
+sysml pipeline list
+sysml pipeline run ci --dry-run      # preview
+sysml pipeline run ci                # execute
 ```
 
-The pipeline stops at the first failing step with a non-zero exit code — suitable for CI integration.
-
-### 13.3 GitHub Actions example
+### 13.3 GitHub Actions
 
 ```yaml
 name: SysML Model Validation
 on: [push, pull_request]
-
 jobs:
   validate:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-        with:
-          submodules: recursive
-
-      - name: Install Rust
-        uses: dtolnay/rust-toolchain@stable
-
-      - name: Install sysml
-        run: cargo install --path crates/sysml-cli
-
-      - name: Run CI pipeline
-        run: sysml pipeline run ci
+        with: { submodules: recursive }
+      - uses: dtolnay/rust-toolchain@stable
+      - run: cargo install --path crates/sysml-cli
+      - run: sysml pipeline run ci
 ```
 
-### 13.4 JSON output for tooling
-
-Most commands support JSON output for integration with other tools:
+### 13.4 JSON output
 
 ```sh
 sysml lint -f json model.sysml
 sysml list -f json model.sysml
 sysml trace -f json requirements.sysml
 sysml stats -f json model.sysml
-sysml coverage -f json model.sysml
 ```
 
 ## Part 14: Multi-File Models
 
-### 14.1 Cross-file import resolution
-
-When definitions are spread across multiple files, pass all files together:
-
 ```sh
+# Pass all files together
 sysml lint model.sysml requirements.sysml verification.sysml
-```
 
-Or use the `-I` flag to include additional directories:
-
-```sh
+# Or include directories
 sysml lint model.sysml -I libraries/
-```
 
-### 14.2 Standard library path
-
-Set a standard library location via config, flag, or environment variable:
-
-```sh
-# Flag
+# Standard library path (flag, env var, or config)
 sysml lint model.sysml --stdlib-path /path/to/sysml-stdlib
-
-# Environment variable
 export SYSML_STDLIB_PATH=/path/to/sysml-stdlib
-sysml lint model.sysml
 
-# Config (.sysml/config.toml)
-# [project]
-# stdlib_path = "/path/to/sysml-stdlib"
-```
-
-### 14.3 Building the project index
-
-For large projects, build a cache of all elements:
-
-```sh
+# Build a project index
 sysml index
 sysml index --stats
 ```
 
-With the optional SQLite feature (`--features sqlite` at build time), the index persists to `.sysml/cache.db` for faster startup.
-
 ## Part 15: Shell Completions
-
-Generate tab-completion for your shell:
 
 ```sh
 sysml completions bash > ~/.local/share/bash-completion/completions/sysml
@@ -1042,35 +791,51 @@ sysml completions fish > ~/.config/fish/completions/sysml.fish
 
 | Task | Command |
 |------|---------|
+| Interactive wizard | `sysml add` |
+| Add definition to file | `sysml add model.sysml part-def Name` |
+| Add usage inside def | `sysml add model.sysml part name -t Type --inside Parent` |
+| Add connection | `sysml add model.sysml connection c1 --connect "a.x to b.y" --inside Assy` |
+| Add enum with members | `sysml add model.sysml enum-def Color -m red -m green -m blue` |
+| Add satisfy relationship | `sysml add model.sysml satisfy ReqName -t Element` |
+| Add import | `sysml add model.sysml import "Pkg::*"` |
+| Generate to stdout | `sysml add --stdout part-def Name` |
+| Learn SysML syntax | `sysml add --stdout --teach part-def Name` |
+| Remove element | `sysml remove model.sysml Name` |
+| Rename element | `sysml rename model.sysml Old New` |
 | Validate a model | `sysml lint model.sysml` |
 | List all elements | `sysml list model.sysml` |
 | Show element details | `sysml show model.sysml Vehicle` |
-| Generate BDD diagram | `sysml diagram -t bdd model.sysml` |
-| Generate IBD diagram | `sysml diagram -t ibd --scope Part model.sysml` |
-| Generate STM diagram | `sysml diagram -t stm --scope Machine model.sysml` |
+| BDD diagram | `sysml diagram -t bdd model.sysml` |
+| IBD diagram | `sysml diagram -t ibd --scope Part model.sysml` |
 | Simulate state machine | `sysml simulate sm model.sysml -e event1,event2` |
 | Evaluate constraint | `sysml simulate eval model.sysml -n Name -b var=value` |
 | Requirements trace | `sysml trace requirements.sysml` |
-| Model coverage | `sysml coverage model.sysml` |
-| Add element to file | `sysml add model.sysml part-def Name` |
-| Add via wizard | `sysml add` |
-| Generate to stdout | `sysml add --stdout part-def Name` |
-| Remove element | `sysml remove model.sysml Name` |
-| Rename element | `sysml rename model.sysml Old New` |
 | Format file | `sysml fmt model.sysml` |
-| Risk matrix | `sysml risk matrix model.sysml` |
+| Risk matrix | `sysml risk matrix model.sysml -I libraries/` |
 | BOM rollup | `sysml bom rollup model.sysml --root Part` |
 | SPC analysis | `sysml mfg spc --parameter Name --values 1,2,3` |
-| Cp/Cpk analysis | `sysml qc capability --usl 10.05 --lsl 9.95 --values ...` |
 | Run CI pipeline | `sysml pipeline run ci` |
-| Initialize project | `sysml init` |
 | JSON output | Add `-f json` to most commands |
 
-## Known Limitations and Future Work
+## What Requires Hand-Editing
 
-- **Constraint evaluator**: Compound boolean expressions (`a >= x and a <= y`) may not evaluate correctly when run across all constraints simultaneously. Use `-n` to target specific constraints.
-- **Action flow simulation**: The action flow simulator may produce duplicate step entries in some succession patterns. This affects display output only.
-- **Import resolution**: The `import` keyword is recognized but cross-package type resolution depends on passing all relevant files via `-I` or command-line arguments. There is no automatic package discovery from `import` statements alone.
-- **View filtering**: The `--view` flag reads view definitions from the model but only supports `filter @SysML::PartUsage`-style patterns — not arbitrary constraint expressions.
-- **BDD diagram**: When a file contains both a package and a part definition with the same name, the diagram may generate duplicate class entries.
-- **Interactive commands**: Commands requiring user input (`add` wizard, `verify run`, `quality create`, `mfg start-lot`, `mfg step`) require a TTY. They cannot run in non-interactive CI environments. Use flags to bypass interactivity where available.
+The `sysml add` command generates most SysML constructs, but some complex syntax currently requires manual editing after the CLI creates the skeleton:
+
+| Construct | CLI creates | You add by hand |
+|-----------|------------|-----------------|
+| State machine transitions | `state-def` skeleton | `transition first A accept E then B;` |
+| Action successions | `action-def` skeleton | `first step1 then step2;` |
+| Constraint expressions | `constraint-def` skeleton | `x >= 0 and x <= 100;` |
+| Calc return expressions | `calc-def` skeleton | `a * b + c` |
+| Verification objectives | `requirement` skeleton | `objective { verify requirement R; }` |
+| Attribute redefinitions | `part-def :> Base` | `attribute redefines severity = ...;` |
+
+For all of these, use `sysml add --teach --stdout <kind> <name>` to see the full syntax with explanations before editing.
+
+## Known Limitations
+
+- **Constraint evaluator**: Compound boolean expressions may not evaluate correctly across all constraints simultaneously. Use `-n` to target specific constraints.
+- **Action flow simulation**: May produce duplicate step entries in some succession patterns.
+- **Import resolution**: Depends on passing all files via `-I` or command-line arguments. No automatic package discovery.
+- **BDD diagram**: May generate duplicate entries when a package and part definition share the same name.
+- **Interactive commands**: `add` wizard, `verify run`, `quality create`, `mfg start-lot` require a TTY. Use flags to bypass interactivity in CI.
