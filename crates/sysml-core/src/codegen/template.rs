@@ -138,6 +138,20 @@ pub fn generate_template(opts: &TemplateOptions) -> String {
     out
 }
 
+/// Parse generated SysML text through tree-sitter and return any syntax errors.
+pub fn validate_generated(text: &str) -> Result<(), Vec<String>> {
+    let model = crate::parser::parse_file("<generated>", text);
+    if model.syntax_errors.is_empty() {
+        Ok(())
+    } else {
+        Err(model
+            .syntax_errors
+            .iter()
+            .map(|e| format!("line {}: {} ({})", e.span.start_row, e.message, e.context))
+            .collect())
+    }
+}
+
 /// Parse a member spec string like "part engine:Engine" or "in port fuelIn:FuelPort".
 pub fn parse_member_spec(s: &str) -> Option<MemberSpec> {
     let parts: Vec<&str> = s.split_whitespace().collect();
@@ -310,6 +324,18 @@ mod tests {
         assert_eq!(m2.direction.as_deref(), Some("in"));
         assert_eq!(m2.usage_kind, "port");
         assert_eq!(m2.name, "fuelIn");
+    }
+
+    #[test]
+    fn validate_generated_valid() {
+        let valid = "part def Vehicle;\n";
+        assert!(validate_generated(valid).is_ok());
+    }
+
+    #[test]
+    fn validate_generated_with_body() {
+        let valid = "part def Vehicle {\n    part engine : Engine;\n}\n";
+        assert!(validate_generated(valid).is_ok());
     }
 
     #[test]

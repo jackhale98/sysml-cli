@@ -1,6 +1,6 @@
 # Lifecycle Commands
 
-Domain commands for verification, risk, tolerance, BOM, supply chain, manufacturing, quality, and CAPA management. These commands operate on SysML v2 models using the [domain libraries](../domain-libraries.md).
+Domain commands for verification, risk, tolerance, BOM, supply chain, manufacturing, quality control, and quality management (NCR/CAPA/deviation). These commands operate on SysML v2 models using the [domain libraries](../domain-libraries.md).
 
 ## verify
 
@@ -233,27 +233,31 @@ sysml qc capability --usl 10.05 --lsl 9.95 --values "10.01,9.99,10.02,9.98,10.00
 
 Output includes Cp, Cpk, mean, standard deviation, and a capability assessment.
 
-## capa
+## quality
 
-Nonconformance tracking and corrective/preventive action management.
+Quality management: NCR, CAPA, and Process Deviation — three distinct quality item types.
 
-### capa list
+- **NCR** (Nonconformance Report): documents observed nonconformances
+- **CAPA** (Corrective/Preventive Action): formal action programs to address root causes
+- **Process Deviation**: planned, approved departures from standard processes
 
-Show CAPA status overview and workflow guidance.
+### quality list
+
+Show quality item types, their lifecycles, and workflow guidance.
 
 ```sh
-sysml capa list
+sysml quality list
 ```
 
-### capa trend
+### quality trend
 
-Analyze NCR trends grouped by category or severity.
+Analyze NCR trends grouped by category, severity, part, or supplier.
 
 ```sh
-sysml capa trend --group-by category
-sysml capa trend --group-by severity model.sysml
+sysml quality trend --group-by category
+sysml quality trend --group-by severity model.sysml
 ```
 
 | Option | Description |
 |--------|-------------|
-| `--group-by <DIM>` | Grouping dimension: `category`, `severity` (default: `category`) |
+| `--group-by <DIM>` | Grouping dimension: `category`, `severity`, `part`, `supplier` (default: `category`) |

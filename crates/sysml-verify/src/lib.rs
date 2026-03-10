@@ -583,6 +583,87 @@ fn result_rank(r: &ExecutionResult) -> u8 {
 }
 
 // ========================================================================
+// SysML generation
+// ========================================================================
+
+/// Generate SysML text for a verification case definition.
+pub fn verification_case_to_sysml(
+    name: &str,
+    requirements: &[String],
+    method: &str,
+    steps: &[String],
+) -> String {
+    let mut out = format!("verification def {} {{\n", name);
+    for req in requirements {
+        out.push_str(&format!("    verify requirement {};\n", req));
+    }
+    out.push_str(&format!("    attribute method = VerificationMethod::{};\n", method));
+    for (i, step) in steps.iter().enumerate() {
+        out.push_str(&format!("    action step{} {{ doc /* {} */ }}\n", i + 1, step));
+    }
+    out.push_str("}\n");
+    out
+}
+
+/// Build wizard steps for interactive verification case creation.
+pub fn build_verify_add_wizard(model: Option<&sysml_core::model::Model>) -> Vec<sysml_core::interactive::WizardStep> {
+    use sysml_core::interactive::*;
+
+    let method_choices = if let Some(m) = model {
+        let choices = sysml_core::query::get_enum_choices(m, "VerificationMethod");
+        if !choices.is_empty() {
+            choices.into_iter().map(|(v, _)| ChoiceOption::new(&v, &v)).collect()
+        } else {
+            default_method_choices()
+        }
+    } else {
+        default_method_choices()
+    };
+
+    vec![
+        WizardStep::string("name", "Verification case name")
+            .with_explanation("Name for the verification case definition."),
+        WizardStep::string("requirements", "Requirements to verify (comma-separated)")
+            .with_explanation("Which requirement definitions does this test verify?"),
+        WizardStep {
+            id: "method".into(),
+            prompt: "Verification method".into(),
+            explanation: Some("How will this be verified?".into()),
+            kind: PromptKind::Choice(method_choices),
+            required: true,
+            default: None,
+        },
+        WizardStep::string("steps", "Test steps (comma-separated)")
+            .with_explanation("Brief description of each test step.")
+            .optional(),
+    ]
+}
+
+/// Interpret wizard results into (element_name, sysml_text).
+pub fn interpret_verify_add_wizard(result: &sysml_core::interactive::WizardResult) -> Option<(String, String)> {
+    let name = result.get_string("name")?;
+    let reqs_str = result.get_string("requirements")?;
+    let method = result.get_string("method")?;
+    let requirements: Vec<String> = reqs_str.split(',').map(|s| s.trim().to_string()).collect();
+    let steps: Vec<String> = result
+        .get_string("steps")
+        .map(|s| s.split(',').map(|s| s.trim().to_string()).collect())
+        .unwrap_or_default();
+    let sysml = verification_case_to_sysml(name, &requirements, method, &steps);
+    Some((name.to_string(), sysml))
+}
+
+fn default_method_choices() -> Vec<sysml_core::interactive::ChoiceOption> {
+    use sysml_core::interactive::ChoiceOption;
+    vec![
+        ChoiceOption::new("test", "test"),
+        ChoiceOption::new("analysis", "analysis"),
+        ChoiceOption::new("inspection", "inspection"),
+        ChoiceOption::new("demonstration", "demonstration"),
+    ]
+}
+
+// ========================================================================
 // Tests
 // ========================================================================
 
@@ -612,6 +693,7 @@ mod tests {
             short_name: None,
             doc: None,
             is_abstract: false,
+            enum_members: Vec::new(),
             parent_def: None,
             body_start_byte: None,
             body_end_byte: None,
@@ -633,6 +715,7 @@ mod tests {
             short_name: None,
             doc: None,
             is_abstract: false,
+            enum_members: Vec::new(),
             parent_def: None,
             body_start_byte: None,
             body_end_byte: None,
@@ -1206,5 +1289,45 @@ mod tests {
             > result_rank(&ExecutionResult::Fail));
         assert!(result_rank(&ExecutionResult::Fail)
             > result_rank(&ExecutionResult::Blocked(String::new())));
+    }
+
+    // -- SysML generator tests ----------------------------------------------
+
+    #[test]
+    fn verification_case_to_sysml_basic() {
+        let sysml = verification_case_to_sysml(
+            "TestBrakes",
+            &["BrakeReq".to_string()],
+            "test",
+            &["Apply brake pedal".to_string(), "Measure stopping distance".to_string()],
+        );
+        assert!(sysml.contains("verification def TestBrakes {"));
+        assert!(sysml.contains("verify requirement BrakeReq;"));
+        assert!(sysml.contains("VerificationMethod::test"));
+        assert!(sysml.contains("step1"));
+        assert!(sysml.contains("step2"));
+    }
+
+    #[test]
+    fn build_verify_wizard_defaults() {
+        let steps = build_verify_add_wizard(None);
+        assert!(steps.len() >= 3);
+        assert_eq!(steps[0].id, "name");
+        assert_eq!(steps[1].id, "requirements");
+        assert_eq!(steps[2].id, "method");
+    }
+
+    #[test]
+    fn interpret_verify_wizard() {
+        use sysml_core::interactive::*;
+        let mut result = WizardResult::new();
+        result.set("name", WizardAnswer::String("TestBrakes".into()));
+        result.set("requirements", WizardAnswer::String("BrakeReq,SafetyReq".into()));
+        result.set("method", WizardAnswer::String("test".into()));
+        result.set("steps", WizardAnswer::String("Push pedal,Check distance".into()));
+        let (name, sysml) = interpret_verify_add_wizard(&result).unwrap();
+        assert_eq!(name, "TestBrakes");
+        assert!(sysml.contains("verify requirement BrakeReq;"));
+        assert!(sysml.contains("verify requirement SafetyReq;"));
     }
 }

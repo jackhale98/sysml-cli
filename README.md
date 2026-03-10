@@ -88,7 +88,7 @@ sysml report dashboard model.sysml              # Project health
 | `source` | Supplier management, RFQ, approved source lists | |
 | `mfg` | Manufacturing routings and SPC | |
 | `qc` | Quality control, sampling plans, Cp/Cpk | |
-| `capa` | Nonconformance tracking and corrective actions | |
+| `quality` | Quality management (NCR, CAPA, Process Deviation) | |
 | **Project** | | [project](docs/commands/project.md) |
 | `init` | Initialize a `.sysml/` project | |
 | `index` | Build or rebuild project index | |
@@ -108,7 +108,7 @@ The tool ships with SysML v2 domain libraries that provide base types for lifecy
 | `sysml-bom.sysml` | `SysMLBOM` | PartIdentity, MassProperty, SupplierDef |
 | `sysml-manufacturing.sysml` | `SysMLManufacturing` | ProcessDef, RoutingDef, WorkInstructionDef |
 | `sysml-quality.sysml` | `SysMLQuality` | InspectionPlanDef, GaugeRRDef, sampling |
-| `sysml-capa.sysml` | `SysMLCAPA` | NCR categories, dispositions, CAPA status |
+| `sysml-capa.sysml` | `SysMLCAPA` | NCR/CAPA/Deviation lifecycles, categories, dispositions |
 | `sysml-project.sysml` | `SysMLProject` | Phase gates, milestone definitions |
 
 See [Domain Libraries](docs/domain-libraries.md) for detailed type references and usage patterns.

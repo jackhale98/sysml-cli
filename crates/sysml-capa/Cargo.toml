@@ -2,7 +2,7 @@
 name = "sysml-capa"
 version = "0.3.0"
 edition = "2021"
-description = "Nonconformance and corrective action domain for SysML v2 models"
+description = "Quality domain (NCR, CAPA, Process Deviation) for SysML v2 models"
 license = "GPL-3.0-or-later"
 repository = "https://github.com/jackhale98/sysml-cli"
 

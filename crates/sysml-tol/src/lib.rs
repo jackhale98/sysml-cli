@@ -753,6 +753,73 @@ pub fn extract_dimension_chains(
 }
 
 // =========================================================================
+// SysML generation
+// =========================================================================
+
+/// Generate SysML text for a tolerance chain constraint.
+pub fn tolerance_chain_to_sysml(name: &str, contributors: &[(String, f64, f64)]) -> String {
+    let mut out = format!("constraint def {} {{\n", name);
+    out.push_str("    doc /* Tolerance stack-up chain */\n");
+    for (cname, nominal, tolerance) in contributors {
+        out.push_str(&format!(
+            "    attribute {} : Real = {} +/- {};\n",
+            cname, nominal, tolerance
+        ));
+    }
+    out.push_str("}\n");
+    out
+}
+
+/// Build wizard steps for interactive tolerance chain creation.
+pub fn build_tol_add_wizard(model: Option<&sysml_core::model::Model>) -> Vec<sysml_core::interactive::WizardStep> {
+    use sysml_core::interactive::*;
+
+    let dist_choices = if let Some(m) = model {
+        let choices = sysml_core::query::get_enum_choices(m, "DistributionType");
+        if !choices.is_empty() {
+            choices.into_iter().map(|(v, _)| ChoiceOption::new(&v, &v)).collect()
+        } else {
+            default_distribution_choices()
+        }
+    } else {
+        default_distribution_choices()
+    };
+
+    vec![
+        WizardStep::string("name", "Tolerance chain name")
+            .with_explanation("Name for the tolerance stack-up analysis."),
+        WizardStep {
+            id: "distribution".into(),
+            prompt: "Default distribution type".into(),
+            explanation: Some("Statistical distribution assumed for contributors.".into()),
+            kind: PromptKind::Choice(dist_choices),
+            required: true,
+            default: None,
+        },
+        WizardStep::number("contributor_count", "Number of contributors")
+            .with_explanation("How many dimensions contribute to this stack?")
+            .with_bounds(Some(1.0), Some(50.0)),
+    ]
+}
+
+/// Interpret wizard results into (element_name, sysml_text).
+pub fn interpret_tol_add_wizard(result: &sysml_core::interactive::WizardResult) -> Option<(String, String)> {
+    let name = result.get_string("name")?;
+    // Generate a placeholder chain (actual contributors would come from follow-up prompts)
+    let sysml = tolerance_chain_to_sysml(name, &[]);
+    Some((name.to_string(), sysml))
+}
+
+fn default_distribution_choices() -> Vec<sysml_core::interactive::ChoiceOption> {
+    use sysml_core::interactive::ChoiceOption;
+    vec![
+        ChoiceOption::new("normal", "normal"),
+        ChoiceOption::new("uniform", "uniform"),
+        ChoiceOption::new("triangular", "triangular"),
+    ]
+}
+
+// =========================================================================
 // Tests
 // =========================================================================
 
@@ -1356,6 +1423,7 @@ mod tests {
             short_name: None,
             doc: None,
             is_abstract: false,
+            enum_members: Vec::new(),
             parent_def: None,
             body_start_byte: None,
             body_end_byte: None,
@@ -1496,5 +1564,40 @@ mod tests {
     fn distribution_type_serializable() {
         let json = serde_json::to_string(&DistributionType::SkewedLeft).unwrap();
         assert_eq!(json, "\"skewed_left\"");
+    }
+
+    // -- SysML generator tests ----------------------------------------------
+
+    #[test]
+    fn tolerance_chain_to_sysml_basic() {
+        let sysml = tolerance_chain_to_sysml(
+            "BoltStack",
+            &[
+                ("length1".to_string(), 10.0, 0.1),
+                ("length2".to_string(), 5.0, 0.05),
+            ],
+        );
+        assert!(sysml.contains("constraint def BoltStack {"));
+        assert!(sysml.contains("attribute length1 : Real = 10 +/- 0.1;"));
+        assert!(sysml.contains("attribute length2 : Real = 5 +/- 0.05;"));
+    }
+
+    #[test]
+    fn build_tol_wizard_defaults() {
+        let steps = build_tol_add_wizard(None);
+        assert!(steps.len() >= 2);
+        assert_eq!(steps[0].id, "name");
+    }
+
+    #[test]
+    fn interpret_tol_wizard() {
+        use sysml_core::interactive::*;
+        let mut result = WizardResult::new();
+        result.set("name", WizardAnswer::String("GapStack".into()));
+        result.set("distribution", WizardAnswer::String("normal".into()));
+        result.set("contributor_count", WizardAnswer::Number(3.0));
+        let (name, sysml) = interpret_tol_add_wizard(&result).unwrap();
+        assert_eq!(name, "GapStack");
+        assert!(sysml.contains("constraint def GapStack"));
     }
 }

@@ -133,7 +133,7 @@ Types for quality control inspection and measurement.
 
 ### SysMLCAPA (`sysml-capa.sysml`)
 
-Types for nonconformance and corrective/preventive action management.
+Quality management types: NCR, CAPA, and Process Deviation — three distinct quality item types, each with its own lifecycle.
 
 | Type | Kind | Description |
 |------|------|-------------|
@@ -141,8 +141,12 @@ Types for nonconformance and corrective/preventive action management.
 | `SeverityClass` | enum def | `critical`, `major`, `minor`, `observation` |
 | `Disposition` | enum def | `useAsIs`, `rework`, `repair`, `scrap`, `returnToVendor`, `sortAndScreen`, `deviate` |
 | `CorrectiveActionType` | enum def | `designChange`, `processChange`, `supplierChange`, `trainingRetraining`, etc. |
-| `RootCauseMethod` | enum def | `fiveWhy`, `fishbone`, `faultTreeAnalysis`, `eightD`, etc. |
-| `CapaStatus` | enum def | `initiated` through `closed` (9 states) |
+| `NcrStatus` | enum def | NCR lifecycle: `open`, `investigating`, `dispositioned`, `verified`, `closed`, `reopened` |
+| `CapaStatus` | enum def | CAPA lifecycle: `initiated` through `closed` (8 states) |
+| `CapaSource` | enum def | `ncr`, `auditFinding`, `customerComplaint`, `processImprovement`, etc. |
+| `CapaType` | enum def | `corrective`, `preventive` |
+| `DeviationStatus` | enum def | Deviation lifecycle: `requested` through `closed` (7 states) |
+| `DeviationScope` | enum def | `lot`, `processStep`, `productLine`, `temporary`, `permanent` |
 
 ### SysMLProject (`sysml-project.sysml`)
 

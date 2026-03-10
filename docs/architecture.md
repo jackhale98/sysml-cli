@@ -16,7 +16,7 @@ crates/
   sysml-source/       Supplier management
   sysml-mfg/          Manufacturing execution
   sysml-qc/           Quality control
-  sysml-capa/         Nonconformance and CAPA
+  sysml-capa/         Quality management (NCR, CAPA, Process Deviation)
   sysml-report/       Cross-domain reporting
 libraries/            Domain library .sysml files
 tree-sitter-sysml/    Grammar (git submodule)

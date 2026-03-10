@@ -7,7 +7,10 @@ use std::process::ExitCode;
 use clap::{Parser, Subcommand};
 
 mod commands;
+mod model_writer;
 mod output;
+mod records;
+mod wizard;
 
 #[derive(Parser)]
 #[command(
@@ -26,8 +29,9 @@ GETTING STARTED:
   Show element details:   sysml show model.sysml Vehicle
   Generate a diagram:     sysml diagram -t bdd -o mermaid model.sysml
   Simulate a state machine: sysml simulate state-machine model.sysml
-  Create a new definition: sysml new part-def Vehicle --doc 'A vehicle'
-  Edit an existing file:  sysml edit add model.sysml part engine -t Engine
+  Add to a model:         sysml add model.sysml part-def Vehicle --doc 'A vehicle'
+  Interactive wizard:     sysml add
+  Remove from a model:    sysml remove model.sysml Engine
   Format a file:          sysml fmt model.sysml
   Export to FMI:          sysml export interfaces model.sysml --part MyPart
 
@@ -193,12 +197,15 @@ enum Command {
         #[arg(required = true)]
         file: PathBuf,
 
-        /// Diagram type (see DIAGRAM TYPES above).
-        #[arg(short = 't', long = "type", required = true)]
+        /// Diagram type: bdd, ibd, stm, act, req, pkg, par.
+        #[arg(short = 't', long = "type", required = true,
+              value_parser = ["bdd", "ibd", "stm", "act", "req", "pkg", "par"],
+              help_heading = "Diagram")]
         diagram_type: String,
 
-        /// Output format (see OUTPUT FORMATS above).
-        #[arg(short = 'o', long = "output-format", default_value = "mermaid")]
+        /// Output format: mermaid, plantuml, dot, d2 (and aliases).
+        #[arg(short = 'o', long = "output-format", default_value = "mermaid",
+              value_parser = ["mermaid", "mmd", "plantuml", "puml", "dot", "graphviz", "d2", "terrastruct"])]
         output_format: String,
 
         /// Focus diagram on a specific definition.
@@ -237,80 +244,130 @@ enum Command {
         #[command(subcommand)]
         kind: ExportCommand,
     },
-    /// Generate a new SysML v2 definition to stdout.
+    /// Add an element to a SysML model — interactively or with flags.
     ///
-    /// Prints boilerplate text for a definition (part def, port def, etc.)
-    /// to standard output. Pipe or redirect to a file as needed.
-    /// To insert into an existing file, use `edit add` instead.
+    /// With no arguments, launches a guided wizard using domain vocabulary.
+    /// With a file, kind, and name, inserts directly (power-user mode).
+    /// With --stdout, prints to terminal without modifying files.
     ///
     /// KINDS:
     ///   part-def, port-def, action-def, state-def, constraint-def, calc-def,
     ///   requirement (req), enum-def, attribute-def (attr), item-def, view-def,
     ///   viewpoint-def, package (pkg), use-case, connection-def, interface-def,
-    ///   flow-def, allocation-def
+    ///   flow-def, allocation-def, part, port, attribute, action, state, item
     ///
     /// EXAMPLES:
-    ///   sysml-cli new part-def Vehicle
-    ///   sysml-cli new part-def Vehicle --extends Base --doc "A vehicle"
-    ///   sysml-cli new part-def Vehicle -m "part engine:Engine" -m "part wheels:Wheel"
-    ///   sysml-cli new port-def FuelPort -m "in item fuel:FuelType"
-    ///   sysml-cli new view-def PartsView --expose "Vehicle::*" --filter part
-    ///   sysml-cli new part-def Vehicle >> model.sysml
-    New {
+    ///   sysml add                                        (interactive wizard)
+    ///   sysml add model.sysml part-def Vehicle           (insert into file)
+    ///   sysml add --stdout part-def Vehicle              (print to stdout)
+    ///   sysml add model.sysml part engine -t Engine      (usage inside def)
+    ///   sysml add model.sysml part-def Vehicle --doc 'A vehicle' -m 'part engine:Engine'
+    ///   sysml add --teach --stdout part-def Vehicle      (teaching comments)
+    Add {
+        /// Target SysML file (omit for interactive or stdout mode).
+        file: Option<PathBuf>,
+
         /// Element kind (see KINDS above).
-        #[arg(required = true)]
-        kind: String,
+        kind: Option<String>,
 
         /// Element name.
-        #[arg(required = true)]
-        name: String,
+        name: Option<String>,
 
-        /// Specialization: the definition extends (specializes) this supertype.
-        /// Generates `:>` syntax, e.g., `part def Car :> Vehicle`.
+        /// Type reference (`: Type` for usages, `:> Type` for defs with --extends).
+        #[arg(short = 't', long)]
+        type_ref: Option<String>,
+
+        /// Insert inside this definition (auto-detected if omitted for usages).
         #[arg(long)]
-        extends: Option<String>,
+        inside: Option<String>,
 
-        /// Mark as abstract (cannot be instantiated directly).
+        /// Preview changes as a unified diff without writing.
         #[arg(long)]
-        r#abstract: bool,
+        dry_run: bool,
 
-        /// Short name alias. In SysML v2, appears as `<alias>` before the name.
-        /// Example: --short-name V produces `part def <V> Vehicle`.
+        /// Print generated SysML to stdout without modifying files.
         #[arg(long)]
-        short_name: Option<String>,
+        stdout: bool,
 
-        /// Documentation comment text. Generates `doc /* text */` inside the body.
+        /// Include teaching comments (like scaffold element).
+        #[arg(long)]
+        teach: bool,
+
+        /// Documentation comment text.
         #[arg(long)]
         doc: Option<String>,
 
-        /// Add a member (repeatable). Format: "[direction] kind name[:type]".
-        /// Examples: "part engine:Engine", "in port fuel:FuelPort", "attribute mass".
+        /// Specialization supertype.
+        #[arg(long)]
+        extends: Option<String>,
+
+        /// Mark as abstract.
+        #[arg(long)]
+        r#abstract: bool,
+
+        /// Short name alias.
+        #[arg(long)]
+        short_name: Option<String>,
+
+        /// Add members (repeatable). Format: "[direction] kind name[:type]".
         #[arg(long = "member", short = 'm')]
         members: Vec<String>,
 
-        /// (view-def only) Expose clause: qualified name pattern to include.
-        /// Examples: "Vehicle::*" (direct children), "Package::**" (recursive).
+        /// (view-def only) Expose clause.
         #[arg(long = "expose")]
         exposes: Vec<String>,
 
-        /// (view-def only) Filter by element kind. Only elements of this type are shown.
-        /// Examples: "part", "port", "requirement".
+        /// (view-def only) Filter by element kind.
         #[arg(long)]
         filter: Option<String>,
+
+        /// Launch interactive wizard even when args are provided.
+        #[arg(short = 'i', long)]
+        interactive: bool,
     },
-    /// Edit SysML v2 files: add, remove, or rename elements.
+    /// Remove a named element from a SysML file.
     ///
-    /// Surgically modifies SysML v2 files using byte-accurate CST positions.
-    /// All subcommands support --dry-run to preview changes as a unified diff.
+    /// Removes the element and its body from the file.
     ///
     /// EXAMPLES:
-    ///   sysml-cli edit add model.sysml part engine -t Engine
-    ///   sysml-cli edit add model.sysml part-def Wheel
-    ///   sysml-cli edit remove model.sysml Engine
-    ///   sysml-cli edit rename model.sysml Engine Motor --dry-run
-    Edit {
-        #[command(subcommand)]
-        kind: EditCommand,
+    ///   sysml remove model.sysml Engine
+    ///   sysml remove model.sysml Engine --dry-run
+    Remove {
+        /// Target SysML file.
+        #[arg(required = true)]
+        file: PathBuf,
+
+        /// Name of the element to remove.
+        #[arg(required = true)]
+        name: String,
+
+        /// Preview changes without writing.
+        #[arg(long)]
+        dry_run: bool,
+    },
+    /// Rename an element and update all references.
+    ///
+    /// Finds all whole-word occurrences of the old name and replaces them.
+    ///
+    /// EXAMPLES:
+    ///   sysml rename model.sysml Engine Motor
+    ///   sysml rename model.sysml Engine Motor --dry-run
+    Rename {
+        /// Target SysML file.
+        #[arg(required = true)]
+        file: PathBuf,
+
+        /// Current name of the element.
+        #[arg(required = true)]
+        old_name: String,
+
+        /// New name for the element.
+        #[arg(required = true)]
+        new_name: String,
+
+        /// Preview changes without writing.
+        #[arg(long)]
+        dry_run: bool,
     },
     /// Format SysML v2 files.
     ///
@@ -477,18 +534,26 @@ enum Command {
         #[command(subcommand)]
         kind: VerifyCommand,
     },
-    /// Generate SysML v2 scaffolding and example projects.
+    /// Generate a complete example project with teaching comments.
     ///
-    /// Create element templates with teaching comments, domain-specific
-    /// templates, or complete example projects.
+    /// Creates a set of SysML v2 files forming a working example project
+    /// with parts, requirements, and verification cases.
     ///
     /// EXAMPLES:
-    ///   sysml scaffold element part-def Vehicle
-    ///   sysml scaffold example brake-system
-    ///   sysml scaffold list-examples
-    Scaffold {
-        #[command(subcommand)]
-        kind: ScaffoldCommand,
+    ///   sysml example brake-system
+    ///   sysml example sensor-module -o ./myproject
+    ///   sysml example --list
+    Example {
+        /// Example name (omit with --list to see available examples).
+        name: Option<String>,
+
+        /// Output directory (default: current directory).
+        #[arg(short = 'o', long)]
+        output: Option<PathBuf>,
+
+        /// List available example projects.
+        #[arg(long)]
+        list: bool,
     },
     /// Risk management commands.
     ///
@@ -565,17 +630,18 @@ enum Command {
         #[command(subcommand)]
         kind: QcCommand,
     },
-    /// Corrective and preventive action (CAPA) commands.
+    /// Quality management commands (NCR, CAPA, Process Deviation).
     ///
-    /// Track nonconformances, analyze trends, and manage the
-    /// CAPA lifecycle.
+    /// Create and manage nonconformance reports (NCRs), corrective/preventive
+    /// action programs (CAPAs), and process deviations — each as distinct
+    /// quality items with their own lifecycle.
     ///
     /// EXAMPLES:
-    ///   sysml capa trend model.sysml
-    ///   sysml capa list
-    Capa {
+    ///   sysml quality trend model.sysml
+    ///   sysml quality list
+    Quality {
         #[command(subcommand)]
-        kind: CapaCommand,
+        kind: QualityCommand,
     },
     /// Cross-domain reporting commands.
     ///
@@ -625,110 +691,6 @@ enum Command {
     },
 }
 
-#[derive(Subcommand)]
-pub(crate) enum EditCommand {
-    /// Add an element (definition or usage) to a SysML file.
-    ///
-    /// For usage-level kinds (part, port, attribute, etc.), the element is
-    /// inserted inside an existing definition. If --inside is not given and
-    /// the file has definitions with bodies, you'll be prompted to choose one.
-    ///
-    /// For definition-level kinds (part-def, port-def, etc.), the element is
-    /// added at the top level of the file.
-    ///
-    /// EXAMPLES:
-    ///   sysml-cli edit add model.sysml part engine -t Engine
-    ///   sysml-cli edit add model.sysml port fuelIn -t FuelPort --inside Vehicle
-    ///   sysml-cli edit add model.sysml part-def Wheel --dry-run
-    Add {
-        /// Target SysML file.
-        #[arg(required = true)]
-        file: PathBuf,
-
-        /// Element kind. For usages: part, port, attribute, item, ref, action, state.
-        /// For definitions: part-def, port-def, action-def, etc.
-        #[arg(required = true)]
-        kind: String,
-
-        /// Element name.
-        #[arg(required = true)]
-        name: String,
-
-        /// Type reference (generates `: Type` for usages, `:> Type` for defs).
-        #[arg(short = 't', long)]
-        type_ref: Option<String>,
-
-        /// Insert inside this definition (auto-detected if omitted for usages).
-        #[arg(long)]
-        inside: Option<String>,
-
-        /// Preview changes as a unified diff without writing.
-        #[arg(long)]
-        dry_run: bool,
-
-        /// Documentation comment text.
-        #[arg(long)]
-        doc: Option<String>,
-
-        /// Specialization supertype (generates `:>` for defs; usages already have -t).
-        #[arg(long)]
-        extends: Option<String>,
-
-        /// Mark definition as abstract.
-        #[arg(long)]
-        r#abstract: bool,
-
-        /// Short name alias.
-        #[arg(long)]
-        short_name: Option<String>,
-
-        /// Add members (repeatable). Format: "[direction] kind name[:type]".
-        #[arg(long = "member", short = 'm')]
-        members: Vec<String>,
-    },
-    /// Remove an element (definition or usage) from a file by name.
-    ///
-    /// Removes the entire line(s) of the element. Searches definitions first,
-    /// then usages.
-    ///
-    /// EXAMPLE: sysml-cli edit remove model.sysml Engine --dry-run
-    Remove {
-        /// Target SysML file.
-        #[arg(required = true)]
-        file: PathBuf,
-
-        /// Name of the element to remove.
-        #[arg(required = true)]
-        name: String,
-
-        /// Show changes without writing.
-        #[arg(long)]
-        dry_run: bool,
-    },
-    /// Rename an element and update all references to it.
-    ///
-    /// Finds all whole-word occurrences of the old name and replaces them.
-    /// This includes the definition itself and all type references to it.
-    ///
-    /// EXAMPLE: sysml-cli edit rename model.sysml Engine Motor --dry-run
-    Rename {
-        /// Target SysML file.
-        #[arg(required = true)]
-        file: PathBuf,
-
-        /// Current name of the element.
-        #[arg(required = true)]
-        old_name: String,
-
-        /// New name for the element.
-        #[arg(required = true)]
-        new_name: String,
-
-        /// Preview changes as a unified diff without writing.
-        #[arg(long)]
-        dry_run: bool,
-    },
-}
 
 #[derive(Subcommand)]
 pub(crate) enum SimulateCommand {
@@ -890,54 +852,6 @@ pub(crate) enum VerifyCommand {
     },
 }
 
-#[derive(Subcommand)]
-pub(crate) enum ScaffoldCommand {
-    /// Generate a SysML v2 element with teaching comments.
-    ///
-    /// Like `sysml new`, but includes explanatory comments.
-    Element {
-        /// Element kind (part-def, port-def, etc.).
-        #[arg(required = true)]
-        kind: String,
-
-        /// Element name.
-        #[arg(required = true)]
-        name: String,
-
-        /// Specialization supertype.
-        #[arg(long)]
-        extends: Option<String>,
-
-        /// Documentation comment.
-        #[arg(long)]
-        doc: Option<String>,
-
-        /// Disable teaching comments.
-        #[arg(long)]
-        no_comments: bool,
-    },
-    /// Generate a complete example project.
-    ///
-    /// Writes a set of SysML v2 files forming a working example project
-    /// with parts, requirements, and verification cases.
-    ///
-    /// EXAMPLES:
-    ///   sysml scaffold example brake-system
-    ///   sysml scaffold example sensor-module
-    Example {
-        /// Example name (use `list-examples` to see available examples).
-        #[arg(required = true)]
-        name: String,
-
-        /// Output directory (default: current directory).
-        #[arg(short, long)]
-        output: Option<PathBuf>,
-    },
-    /// List available example projects.
-    ListExamples,
-    /// List available element kinds for scaffolding.
-    ListKinds,
-}
 
 #[derive(Subcommand)]
 pub(crate) enum RiskCommand {
@@ -1101,16 +1015,16 @@ pub(crate) enum QcCommand {
 }
 
 #[derive(Subcommand)]
-pub(crate) enum CapaCommand {
+pub(crate) enum QualityCommand {
     /// Analyze NCR trends grouped by category or severity.
     Trend {
         /// SysML v2 files to correlate with NCR data.
         files: Vec<PathBuf>,
-        /// Grouping dimension: category, severity.
+        /// Grouping dimension: category, severity, part, supplier.
         #[arg(long, default_value = "category")]
         group_by: String,
     },
-    /// Show CAPA status overview and workflow guidance.
+    /// Show quality item status overview and workflow guidance.
     List,
 }
 
@@ -1194,22 +1108,23 @@ fn main() -> ExitCode {
         } => commands::diagram::run(&cli, file, diagram_type, output_format, scope.as_deref(), direction.as_deref(), *depth),
         Command::Simulate { kind } => commands::simulate::run(&cli, kind),
         Command::Export { kind } => commands::export::run(&cli, kind),
-        Command::New {
-            kind,
-            name,
-            extends,
-            r#abstract,
-            short_name,
-            doc,
-            members,
-            exposes,
-            filter,
-        } => commands::new::run(
-            kind, name, extends.as_deref(), *r#abstract,
-            short_name.as_deref(), doc.as_deref(), members, exposes,
-            filter.as_deref(),
+        Command::Add {
+            file, kind, name, type_ref, inside, dry_run, stdout,
+            teach, doc, extends, r#abstract, short_name, members,
+            exposes, filter, interactive,
+        } => commands::add::run(
+            file.as_ref(), kind.as_deref(), name.as_deref(),
+            type_ref.as_deref(), inside.as_deref(), *dry_run, *stdout,
+            *teach, doc.as_deref(), extends.as_deref(), *r#abstract,
+            short_name.as_deref(), members, exposes,
+            filter.as_deref(), *interactive,
         ),
-        Command::Edit { kind } => commands::edit::run(kind),
+        Command::Remove { file, name, dry_run } => {
+            commands::remove::run(file, name, *dry_run)
+        }
+        Command::Rename { file, old_name, new_name, dry_run } => {
+            commands::rename::run(file, old_name, new_name, *dry_run)
+        }
         Command::Fmt {
             files,
             check,
@@ -1231,14 +1146,16 @@ fn main() -> ExitCode {
             commands::check::run(&cli, files, disable, severity, *lint_only)
         }
         Command::Verify { kind } => commands::verify::run(&cli, kind),
-        Command::Scaffold { kind } => commands::scaffold::run(kind),
+        Command::Example { name, output, list } => {
+            commands::scaffold::run_example_command(name.as_deref(), output.as_ref(), *list)
+        }
         Command::Risk { kind } => commands::risk::run(&cli, kind),
         Command::Tol { kind } => commands::tol::run(&cli, kind),
         Command::Bom { kind } => commands::bom::run(&cli, kind),
         Command::Source { kind } => commands::source::run(&cli, kind),
         Command::Mfg { kind } => commands::mfg::run(&cli, kind),
         Command::Qc { kind } => commands::qc::run(&cli, kind),
-        Command::Capa { kind } => commands::capa::run(&cli, kind),
+        Command::Quality { kind } => commands::quality::run(&cli, kind),
         Command::Report { kind } => commands::report::run(&cli, kind),
         Command::Guide { topic } => commands::help_topics::run(topic.as_deref()),
     }

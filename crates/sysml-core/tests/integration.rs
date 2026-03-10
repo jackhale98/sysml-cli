@@ -2,7 +2,7 @@
 
 use sysml_core::checks;
 use sysml_core::diagnostic::Severity;
-use sysml_core::model::Visibility;
+use sysml_core::model::{DefKind, Visibility};
 use sysml_core::parser as sysml_parser;
 
 fn lint(source: &str) -> Vec<sysml_core::diagnostic::Diagnostic> {
@@ -442,3 +442,20 @@ fn parse_subsets_keyword() {
 
 // Short name on usages: the grammar only supports short_name on definitions,
 // not on most usage types. Skipping usage short_name test for now.
+
+#[test]
+fn parse_enum_members() {
+    let model = parse(r#"
+        enum def Color {
+            enum red;
+            enum green;
+            enum blue;
+        }
+    "#);
+    let color = model.find_def("Color").expect("Color should be found");
+    assert_eq!(color.kind, DefKind::Enum);
+    assert!(color.enum_members.len() >= 2,
+        "Expected at least 2 enum members, got {}: {:?}",
+        color.enum_members.len(),
+        color.enum_members.iter().map(|m| &m.name).collect::<Vec<_>>());
+}

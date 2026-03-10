@@ -188,7 +188,7 @@ fn diagram_invalid_type() {
         .args(["diagram", "-t", "xyz", &fixture("simple-vehicle.sysml")])
         .assert()
         .failure()
-        .stderr(predicate::str::contains("unknown diagram type"));
+        .stderr(predicate::str::contains("invalid value"));
 }
 
 // ========================================================================
@@ -245,23 +245,23 @@ fn trace_requirements() {
 }
 
 // ========================================================================
-// new
+// add (replaces new + edit add)
 // ========================================================================
 
 #[test]
-fn new_part_def_to_stdout() {
+fn add_stdout_part_def() {
     cmd()
-        .args(["new", "part-def", "Vehicle"])
+        .args(["add", "--stdout", "part-def", "Vehicle"])
         .assert()
         .success()
         .stdout(predicate::str::contains("part def Vehicle;"));
 }
 
 #[test]
-fn new_with_members() {
+fn add_stdout_with_members() {
     cmd()
         .args([
-            "new", "part-def", "Vehicle",
+            "add", "--stdout", "part-def", "Vehicle",
             "-m", "part engine:Engine",
             "--doc", "A vehicle",
         ])
@@ -272,10 +272,10 @@ fn new_with_members() {
 }
 
 #[test]
-fn new_view_def_with_expose() {
+fn add_stdout_view_def_with_expose() {
     cmd()
         .args([
-            "new", "view-def", "PartsView",
+            "add", "--stdout", "view-def", "PartsView",
             "--expose", "Vehicle::*",
             "--filter", "part",
         ])
@@ -286,27 +286,78 @@ fn new_view_def_with_expose() {
 }
 
 #[test]
-fn new_unknown_kind() {
+fn add_stdout_unknown_usage() {
+    // Unknown kinds are treated as usage-level and produce "kind name;" output
     cmd()
-        .args(["new", "bogus-thing", "Foo"])
+        .args(["add", "--stdout", "bogus", "Foo"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("bogus Foo;"));
+}
+
+#[test]
+fn add_stdout_unknown_def_kind() {
+    // A kind with "def" suffix but not recognized should error
+    cmd()
+        .args(["add", "--stdout", "bogus-def", "Foo"])
         .assert()
         .failure()
-        .stderr(predicate::str::contains("unknown element kind"));
+        .stderr(predicate::str::contains("unknown"));
+}
+
+#[test]
+fn add_insert_into_file() {
+    let dir = tempfile::tempdir().unwrap();
+    let file = dir.path().join("test.sysml");
+    fs::write(&file, "part def Vehicle;\n").unwrap();
+
+    cmd()
+        .args([
+            "add",
+            file.to_str().unwrap(),
+            "part-def", "Engine",
+            "--dry-run",
+        ])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("+part def Engine;"));
 }
 
 // ========================================================================
-// edit
+// remove (replaces edit remove)
 // ========================================================================
 
 #[test]
-fn edit_rename_dry_run() {
+fn remove_dry_run() {
     let dir = tempfile::tempdir().unwrap();
     let file = dir.path().join("test.sysml");
     fs::write(&file, "part def Vehicle;\npart def Engine;\n").unwrap();
 
     cmd()
         .args([
-            "edit", "rename",
+            "remove",
+            file.to_str().unwrap(),
+            "Engine",
+            "--dry-run",
+        ])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("-part def Engine;"));
+}
+
+// ========================================================================
+// rename (replaces edit rename)
+// ========================================================================
+
+#[test]
+fn rename_dry_run() {
+    let dir = tempfile::tempdir().unwrap();
+    let file = dir.path().join("test.sysml");
+    fs::write(&file, "part def Vehicle;\npart def Engine;\n").unwrap();
+
+    cmd()
+        .args([
+            "rename",
             file.to_str().unwrap(),
             "Engine", "Motor",
             "--dry-run",
@@ -315,24 +366,6 @@ fn edit_rename_dry_run() {
         .success()
         .stdout(predicate::str::contains("-part def Engine;"))
         .stdout(predicate::str::contains("+part def Motor;"));
-}
-
-#[test]
-fn edit_remove_dry_run() {
-    let dir = tempfile::tempdir().unwrap();
-    let file = dir.path().join("test.sysml");
-    fs::write(&file, "part def Vehicle;\npart def Engine;\n").unwrap();
-
-    cmd()
-        .args([
-            "edit", "remove",
-            file.to_str().unwrap(),
-            "Engine",
-            "--dry-run",
-        ])
-        .assert()
-        .success()
-        .stdout(predicate::str::contains("-part def Engine;"));
 }
 
 // ========================================================================

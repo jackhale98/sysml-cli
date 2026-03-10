@@ -630,6 +630,97 @@ fn csv_escape(s: &str) -> String {
 }
 
 // ---------------------------------------------------------------------------
+// SysML generation
+// ---------------------------------------------------------------------------
+
+/// Generate SysML text for a part with BOM attributes.
+pub fn part_with_bom_to_sysml(
+    name: &str,
+    part_number: Option<&str>,
+    category: Option<&str>,
+    mass: Option<f64>,
+    cost: Option<f64>,
+) -> String {
+    let mut out = format!("part def {} {{\n", name);
+    if let Some(pn) = part_number {
+        out.push_str(&format!("    attribute partNumber = \"{}\";\n", pn));
+    }
+    if let Some(cat) = category {
+        out.push_str(&format!("    attribute category = PartCategory::{};\n", cat));
+    }
+    if let Some(m) = mass {
+        out.push_str(&format!("    attribute mass : MassProperty = {};\n", m));
+    }
+    if let Some(c) = cost {
+        out.push_str(&format!("    attribute cost : CostProperty = {};\n", c));
+    }
+    out.push_str("}\n");
+    out
+}
+
+/// Build wizard steps for interactive BOM part creation.
+pub fn build_bom_add_wizard(model: Option<&sysml_core::model::Model>) -> Vec<sysml_core::interactive::WizardStep> {
+    use sysml_core::interactive::*;
+
+    let category_choices = if let Some(m) = model {
+        let choices = sysml_core::query::get_enum_choices(m, "PartCategory");
+        if !choices.is_empty() {
+            choices.into_iter().map(|(v, _)| ChoiceOption::new(&v, &v)).collect()
+        } else {
+            default_category_choices()
+        }
+    } else {
+        default_category_choices()
+    };
+
+    vec![
+        WizardStep::string("name", "Part definition name")
+            .with_explanation("Name for the new part in the bill of materials."),
+        WizardStep::string("part_number", "Part number")
+            .with_explanation("Manufacturing part number or identifier.")
+            .optional(),
+        WizardStep {
+            id: "category".into(),
+            prompt: "Part category".into(),
+            explanation: Some("Classification of this part.".into()),
+            kind: PromptKind::Choice(category_choices),
+            required: false,
+            default: None,
+        },
+        WizardStep::number("mass", "Mass (kg)")
+            .with_explanation("Part mass in kilograms.")
+            .with_bounds(Some(0.0), None)
+            .optional(),
+        WizardStep::number("cost", "Unit cost")
+            .with_explanation("Cost per unit.")
+            .with_bounds(Some(0.0), None)
+            .optional(),
+    ]
+}
+
+/// Interpret wizard results into (element_name, sysml_text).
+pub fn interpret_bom_add_wizard(result: &sysml_core::interactive::WizardResult) -> Option<(String, String)> {
+    let name = result.get_string("name")?;
+    let part_number = result.get_string("part_number");
+    let category = result.get_string("category");
+    let mass = result.get_number("mass");
+    let cost = result.get_number("cost");
+    let sysml = part_with_bom_to_sysml(name, part_number, category, mass, cost);
+    Some((name.to_string(), sysml))
+}
+
+fn default_category_choices() -> Vec<sysml_core::interactive::ChoiceOption> {
+    use sysml_core::interactive::ChoiceOption;
+    vec![
+        ChoiceOption::new("mechanical", "mechanical"),
+        ChoiceOption::new("electrical", "electrical"),
+        ChoiceOption::new("software", "software"),
+        ChoiceOption::new("fastener", "fastener"),
+        ChoiceOption::new("raw_material", "raw material"),
+    ]
+}
+
+// ---------------------------------------------------------------------------
 // Tests
 // ---------------------------------------------------------------------------
 
@@ -656,6 +747,7 @@ mod tests {
             short_name: None,
             doc: None,
             is_abstract: false,
+            enum_members: Vec::new(),
             parent_def: None,
             body_start_byte: None,
             body_end_byte: None,
@@ -800,6 +892,7 @@ mod tests {
             short_name: None,
             doc: None,
             is_abstract: false,
+            enum_members: Vec::new(),
             parent_def: None,
             body_start_byte: None,
             body_end_byte: None,
@@ -1211,5 +1304,47 @@ mod tests {
         assert_eq!(parse_make_or_buy(Some("BUY")), MakeOrBuy::Buy);
         assert_eq!(parse_make_or_buy(Some("make_and_buy")), MakeOrBuy::MakeAndBuy);
         assert_eq!(parse_make_or_buy(None), MakeOrBuy::Tbd);
+    }
+
+    // -- SysML generator tests ----------------------------------------------
+
+    #[test]
+    fn part_with_bom_basic() {
+        let sysml = part_with_bom_to_sysml(
+            "Resistor", Some("R-100"), Some("electrical"), Some(0.001), Some(0.05),
+        );
+        assert!(sysml.contains("part def Resistor {"));
+        assert!(sysml.contains("partNumber = \"R-100\""));
+        assert!(sysml.contains("PartCategory::electrical"));
+        assert!(sysml.contains("mass : MassProperty = 0.001"));
+        assert!(sysml.contains("cost : CostProperty = 0.05"));
+    }
+
+    #[test]
+    fn part_with_bom_minimal() {
+        let sysml = part_with_bom_to_sysml("Widget", None, None, None, None);
+        assert!(sysml.contains("part def Widget {"));
+        assert!(!sysml.contains("partNumber"));
+    }
+
+    #[test]
+    fn build_bom_wizard_defaults() {
+        let steps = build_bom_add_wizard(None);
+        assert!(steps.len() >= 3);
+        assert_eq!(steps[0].id, "name");
+    }
+
+    #[test]
+    fn interpret_bom_wizard() {
+        use sysml_core::interactive::*;
+        let mut result = WizardResult::new();
+        result.set("name", WizardAnswer::String("Bracket".into()));
+        result.set("part_number", WizardAnswer::String("BR-200".into()));
+        result.set("category", WizardAnswer::String("mechanical".into()));
+        result.set("mass", WizardAnswer::Number(0.5));
+        let (name, sysml) = interpret_bom_add_wizard(&result).unwrap();
+        assert_eq!(name, "Bracket");
+        assert!(sysml.contains("partNumber = \"BR-200\""));
+        assert!(sysml.contains("PartCategory::mechanical"));
     }
 }

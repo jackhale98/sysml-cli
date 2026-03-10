@@ -1079,6 +1079,22 @@ pub fn coverage_report(model: &Model) -> CoverageReport {
     }
 }
 
+/// Get enum member choices for use in wizard prompts.
+/// Returns (member_name, doc) pairs from the named enum definition.
+pub fn get_enum_choices(model: &Model, enum_name: &str) -> Vec<(String, Option<String>)> {
+    model
+        .definitions
+        .iter()
+        .find(|d| d.kind == DefKind::Enum && d.name == enum_name)
+        .map(|d| {
+            d.enum_members
+                .iter()
+                .map(|m| (m.name.clone(), m.doc.clone()))
+                .collect()
+        })
+        .unwrap_or_default()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1576,6 +1592,29 @@ mod tests {
             "got {:?}",
             report.untyped_usages
         );
+    }
+
+    #[test]
+    fn get_enum_choices_returns_members() {
+        let model = parse_file("test.sysml", r#"
+            enum def Color {
+                enum red;
+                enum green;
+                enum blue;
+            }
+        "#);
+        let choices = get_enum_choices(&model, "Color");
+        let names: Vec<&str> = choices.iter().map(|(n, _)| n.as_str()).collect();
+        assert!(names.contains(&"red"), "Should contain red, got {:?}", names);
+        assert!(names.contains(&"green"), "Should contain green, got {:?}", names);
+        assert!(names.contains(&"blue"), "Should contain blue, got {:?}", names);
+    }
+
+    #[test]
+    fn get_enum_choices_missing_enum() {
+        let model = parse_file("test.sysml", "part def Vehicle;");
+        let choices = get_enum_choices(&model, "NonExistent");
+        assert!(choices.is_empty());
     }
 
     #[test]

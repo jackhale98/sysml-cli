@@ -509,6 +509,7 @@ mod tests {
             short_name: None,
             doc: None,
             is_abstract: false,
+            enum_members: Vec::new(),
             parent_def: None,
             body_start_byte: None,
             body_end_byte: None,

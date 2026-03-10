@@ -1,11 +1,20 @@
 package SysMLCAPA {
     doc /*
-     * Domain library for corrective and preventive action management.
-     * Provides definitions for nonconformance tracking, severity
-     * classification, disposition, and CAPA workflow states.
+     * Domain library for quality management.
+     *
+     * Three distinct quality item types:
+     * - NCR (Nonconformance Report) — documents observed nonconformances
+     * - CAPA (Corrective/Preventive Action) — formal action programs
+     * - Process Deviation — planned departures from standard processes
+     *
+     * Each type has its own lifecycle states, distinct from the others.
      */
 
     private import ScalarValues::*;
+
+    // =====================================================================
+    // Shared enums
+    // =====================================================================
 
     enum def NonconformanceCategory {
         doc /* Classifies a nonconformance by the type of defect observed. */
@@ -41,7 +50,7 @@ package SysMLCAPA {
     }
 
     enum def CorrectiveActionType {
-        doc /* Categorizes the type of corrective action taken to address a root cause. */
+        doc /* Categorizes the type of corrective action taken. */
         enum designChange;
         enum processChange;
         enum supplierChange;
@@ -53,16 +62,73 @@ package SysMLCAPA {
         enum noActionRequired;
     }
 
-    enum def CapaStatus {
-        doc /* Tracks a CAPA record through its full lifecycle from initiation to closure. */
-        enum initiated;
+    // =====================================================================
+    // NCR lifecycle
+    // =====================================================================
+
+    enum def NcrStatus {
+        doc /* Lifecycle states for a nonconformance report. */
+        enum open;
         enum investigating;
-        enum rootCauseIdentified;
-        enum actionPlanned;
-        enum actionImplemented;
-        enum effectivenessVerified;
+        enum dispositioned;
+        enum verified;
+        enum closed;
+        enum reopened;
+    }
+
+    // =====================================================================
+    // CAPA lifecycle
+    // =====================================================================
+
+    enum def CapaStatus {
+        doc /* Lifecycle states for a corrective/preventive action program. */
+        enum initiated;
+        enum rootCauseAnalysis;
+        enum planningActions;
+        enum implementing;
+        enum verifyingEffectiveness;
+        enum pendingClosure;
         enum closed;
         enum closedIneffective;
-        enum reopened;
+    }
+
+    enum def CapaSource {
+        doc /* What triggered the CAPA. */
+        enum ncr;
+        enum auditFinding;
+        enum customerComplaint;
+        enum processImprovement;
+        enum regulatoryObservation;
+        enum managementReview;
+    }
+
+    enum def CapaType {
+        doc /* Whether the CAPA is corrective or preventive. */
+        enum corrective;
+        enum preventive;
+    }
+
+    // =====================================================================
+    // Process Deviation lifecycle
+    // =====================================================================
+
+    enum def DeviationStatus {
+        doc /* Lifecycle states for a process deviation. */
+        enum requested;
+        enum underReview;
+        enum approved;
+        enum denied;
+        enum active;
+        enum expired;
+        enum closed;
+    }
+
+    enum def DeviationScope {
+        doc /* Scope of a process deviation. */
+        enum lot;
+        enum processStep;
+        enum productLine;
+        enum temporary;
+        enum permanent;
     }
 }

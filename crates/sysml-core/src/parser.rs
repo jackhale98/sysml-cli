@@ -136,7 +136,7 @@ fn def_kind_from_node(kind: &str) -> Option<DefKind> {
         "view_definition" => Some(DefKind::View),
         "viewpoint_definition" => Some(DefKind::Viewpoint),
         "rendering_definition" => Some(DefKind::Rendering),
-        "enum_definition" => Some(DefKind::Enum),
+        "enum_definition" | "enumeration_definition" => Some(DefKind::Enum),
         "attribute_definition" => Some(DefKind::Attribute),
         "item_definition" => Some(DefKind::Item),
         "allocation_definition" => Some(DefKind::Allocation),
@@ -329,7 +329,7 @@ fn get_short_name(node: &Node, source: &[u8]) -> Option<String> {
 fn get_doc_comment(node: &Node, source: &[u8]) -> Option<String> {
     let mut cursor = node.walk();
     for child in node.children(&mut cursor) {
-        if child.kind() == "definition_body" {
+        if child.kind() == "definition_body" || child.kind() == "enumeration_body" {
             let mut bc = child.walk();
             for body_child in child.children(&mut bc) {
                 if body_child.kind() == "doc_comment" {
@@ -556,11 +556,34 @@ fn walk_node_scoped(
                     short_name,
                     doc: doc.clone(),
                     is_abstract: is_abstract_val,
+                    enum_members: Vec::new(),
                     parent_def: parent_def_name.map(|s| s.to_string()),
                     body_start_byte,
                     body_end_byte,
                     qualified_name: None,
                 });
+
+                // Extract enum members for enum definitions
+                if def_kind == DefKind::Enum {
+                    let def_idx = model.definitions.len() - 1;
+                    let mut cursor_body = node.walk();
+                    for child in node.children(&mut cursor_body) {
+                        if child.kind() == "definition_body" || child.kind() == "enumeration_body" {
+                            let mut bc = child.walk();
+                            for body_child in child.children(&mut bc) {
+                                if body_child.kind() == "enum_usage" || body_child.kind() == "enum_member" {
+                                    if let Some(member_name) = field_text(&body_child, "name", source) {
+                                        let member_doc = get_doc_comment(&body_child, source);
+                                        model.definitions[def_idx].enum_members.push(EnumMember {
+                                            name: member_name,
+                                            doc: member_doc,
+                                        });
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
 
                 // Collect doc comments as model-level comments
                 if let Some(text) = doc {
@@ -780,7 +803,7 @@ fn extract_allocation(node: &Node, source: &[u8], model: &mut Model) {
 fn get_body_braces(node: &Node) -> (Option<usize>, Option<usize>) {
     let mut cursor = node.walk();
     for child in node.children(&mut cursor) {
-        if child.kind() == "definition_body" || child.kind() == "state_body" {
+        if child.kind() == "definition_body" || child.kind() == "state_body" || child.kind() == "enumeration_body" {
             let mut body_cursor = child.walk();
             let mut open = None;
             let mut close = None;

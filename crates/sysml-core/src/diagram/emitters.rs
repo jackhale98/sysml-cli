@@ -99,13 +99,14 @@ fn render_mermaid_class_diagram(out: &mut String, graph: &DiagramGraph) {
             .unwrap_or_default();
         out.push_str(&format!(
             "    {} {} {}{}\n",
-            edge.target, arrow, edge.source, label
+            mermaid_id(&edge.target), arrow, mermaid_id(&edge.source), label
         ));
     }
 }
 
 fn render_mermaid_class_node(out: &mut String, node: &DiagramNode, indent: &str) {
-    out.push_str(&format!("{}class {} {{\n", indent, node.id));
+    let id = mermaid_id(&node.id);
+    out.push_str(&format!("{}class {} {{\n", indent, id));
     if let Some(ref st) = node.stereotype {
         out.push_str(&format!("{}    {}\n", indent, st));
     }
@@ -121,13 +122,14 @@ fn render_mermaid_stm(out: &mut String, graph: &DiagramGraph) {
         out.push_str(&format!("    direction {}\n", graph.direction.mermaid_code()));
     }
     for node in &graph.nodes {
+        let id = mermaid_id(&node.id);
         match node.kind {
             NodeKind::InitialState | NodeKind::FinalState => {}
             NodeKind::State => {
                 if node.attributes.is_empty() {
-                    out.push_str(&format!("    {} : {}\n", node.id, node.label));
+                    out.push_str(&format!("    {} : {}\n", id, node.label));
                 } else {
-                    out.push_str(&format!("    state \"{}\" as {} {{\n", node.label, node.id));
+                    out.push_str(&format!("    state \"{}\" as {} {{\n", node.label, id));
                     for (k, v) in &node.attributes {
                         out.push_str(&format!("        {} / {}\n", k, v));
                     }
@@ -141,12 +143,12 @@ fn render_mermaid_stm(out: &mut String, graph: &DiagramGraph) {
         let src = if edge.source == "__initial__" {
             "[*]".to_string()
         } else {
-            edge.source.clone()
+            mermaid_id(&edge.source)
         };
         let tgt = if edge.target == "__final__" {
             "[*]".to_string()
         } else {
-            edge.target.clone()
+            mermaid_id(&edge.target)
         };
         let label = edge
             .label
@@ -160,15 +162,16 @@ fn render_mermaid_stm(out: &mut String, graph: &DiagramGraph) {
 fn render_mermaid_activity(out: &mut String, graph: &DiagramGraph) {
     out.push_str(&format!("flowchart {}\n", graph.direction.mermaid_code()));
     for node in &graph.nodes {
+        let id = mermaid_id(&node.id);
         let shape = match node.kind {
-            NodeKind::InitialState => format!("    {}(( ))\n", node.id),
-            NodeKind::FinalState => format!("    {}((( )))\n", node.id),
-            NodeKind::Action => format!("    {}[\"{}\"]\n", node.id, node.label),
-            NodeKind::Decision => format!("    {}{{\"{}\"}}\n", node.id, node.label),
+            NodeKind::InitialState => format!("    {}(( ))\n", id),
+            NodeKind::FinalState => format!("    {}(( \u{25CF} ))\n", id),
+            NodeKind::Action => format!("    {}[\"{}\"]\n", id, node.label),
+            NodeKind::Decision => format!("    {}{{\"{}\"}}\n", id, node.label),
             NodeKind::Fork | NodeKind::Join => {
-                format!("    {}[\"|\"]\n", node.id)
+                format!("    {}[\"|\"]\n", id)
             }
-            _ => format!("    {}[\"{}\"]\n", node.id, node.label),
+            _ => format!("    {}[\"{}\"]\n", id, node.label),
         };
         out.push_str(&shape);
     }
@@ -180,7 +183,7 @@ fn render_mermaid_activity(out: &mut String, graph: &DiagramGraph) {
             .unwrap_or_default();
         out.push_str(&format!(
             "    {} -->{} {}\n",
-            edge.source, label, edge.target
+            mermaid_id(&edge.source), label, mermaid_id(&edge.target)
         ));
     }
 }
@@ -188,10 +191,11 @@ fn render_mermaid_activity(out: &mut String, graph: &DiagramGraph) {
 fn render_mermaid_flowchart(out: &mut String, graph: &DiagramGraph) {
     out.push_str(&format!("flowchart {}\n", graph.direction.mermaid_code()));
     for node in &graph.nodes {
+        let id = mermaid_id(&node.id);
         let shape = match node.kind {
-            NodeKind::Requirement => format!("{}[\"{}\"]\n", node.id, node.label),
-            NodeKind::Block => format!("{}([\"{}\"]\n)", node.id, node.label),
-            _ => format!("{}[\"{}\"]\n", node.id, node.label),
+            NodeKind::Requirement => format!("{}[\"{}\"]\n", id, node.label),
+            NodeKind::Block => format!("{}([\"{}\"])\n", id, node.label),
+            _ => format!("{}[\"{}\"]\n", id, node.label),
         };
         out.push_str(&format!("    {}", shape));
     }
@@ -207,7 +211,7 @@ fn render_mermaid_flowchart(out: &mut String, graph: &DiagramGraph) {
             .unwrap_or_default();
         out.push_str(&format!(
             "    {} {}{} {}\n",
-            edge.source, style, label, edge.target
+            mermaid_id(&edge.source), style, label, mermaid_id(&edge.target)
         ));
     }
 }
@@ -660,6 +664,17 @@ fn render_d2_node(out: &mut String, node: &DiagramNode, indent: &str) {
     }
 }
 
+/// Make a Mermaid-safe identifier (replace special chars).
+fn mermaid_id(id: &str) -> String {
+    if id == "__initial__" {
+        "initial".to_string()
+    } else if id == "__final__" {
+        "final_state".to_string()
+    } else {
+        id.replace(':', "_").replace(' ', "_").replace('.', "_")
+    }
+}
+
 /// Make a D2-safe identifier (replace special chars).
 fn d2_id(id: &str) -> String {
     if id == "__initial__" {
@@ -815,6 +830,98 @@ mod tests {
         graph.direction = LayoutDirection::LeftRight;
         let output = render(&graph, DiagramFormat::Mermaid);
         assert!(output.contains("direction LR"));
+    }
+
+    #[test]
+    fn mermaid_id_sanitizes() {
+        assert_eq!(super::mermaid_id("Foo::Bar"), "Foo__Bar");
+        assert_eq!(super::mermaid_id("hello world"), "hello_world");
+        assert_eq!(super::mermaid_id("a.b.c"), "a_b_c");
+        assert_eq!(super::mermaid_id("__initial__"), "initial");
+        assert_eq!(super::mermaid_id("__final__"), "final_state");
+        assert_eq!(super::mermaid_id("simple"), "simple");
+    }
+
+    #[test]
+    fn mermaid_req_block_node_syntax() {
+        // Regression: Block node had newline inside parens: "id([\"label\"]\n)"
+        // Fixed to: "id([\"label\"])\n"
+        let graph = DiagramGraph {
+            title: "Test".to_string(),
+            kind: DiagramKind::Req,
+            nodes: vec![
+                DiagramNode {
+                    id: "block1".to_string(),
+                    label: "MyBlock".to_string(),
+                    kind: NodeKind::Block,
+                    stereotype: None,
+                    attributes: vec![],
+                },
+            ],
+            edges: vec![],
+            subgraphs: vec![],
+            direction: LayoutDirection::TopBottom,
+            max_depth: None,
+        };
+        let output = render(&graph, DiagramFormat::Mermaid);
+        // Should NOT contain "]\n)" (broken syntax)
+        assert!(!output.contains("]\n)"), "Block node should not have newline inside parens");
+        // Should contain "])\n" (correct syntax)
+        assert!(output.contains("])\n"), "Block node should have closing paren before newline");
+    }
+
+    #[test]
+    fn mermaid_act_final_state_no_triple_paren() {
+        // Regression: FinalState used ((( ))) which is invalid mermaid
+        // Fixed to (( ● )) using unicode BLACK CIRCLE
+        let graph = DiagramGraph {
+            title: "Test".to_string(),
+            kind: DiagramKind::Act,
+            nodes: vec![
+                DiagramNode {
+                    id: "end1".to_string(),
+                    label: "".to_string(),
+                    kind: NodeKind::FinalState,
+                    stereotype: None,
+                    attributes: vec![],
+                },
+            ],
+            edges: vec![],
+            subgraphs: vec![],
+            direction: LayoutDirection::TopBottom,
+            max_depth: None,
+        };
+        let output = render(&graph, DiagramFormat::Mermaid);
+        // Should NOT contain triple parens
+        assert!(!output.contains("((("), "FinalState should not use triple parens");
+        // Should contain double parens with filled circle
+        assert!(output.contains("(("), "FinalState should use double parens");
+    }
+
+    #[test]
+    fn mermaid_flowchart_uses_sanitized_ids() {
+        // Verify that IDs with colons get sanitized in mermaid output
+        let graph = DiagramGraph {
+            title: "Test".to_string(),
+            kind: DiagramKind::Req,
+            nodes: vec![
+                DiagramNode {
+                    id: "Pkg::Req1".to_string(),
+                    label: "Requirement 1".to_string(),
+                    kind: NodeKind::Requirement,
+                    stereotype: None,
+                    attributes: vec![],
+                },
+            ],
+            edges: vec![],
+            subgraphs: vec![],
+            direction: LayoutDirection::TopBottom,
+            max_depth: None,
+        };
+        let output = render(&graph, DiagramFormat::Mermaid);
+        // Should use sanitized ID (no colons)
+        assert!(output.contains("Pkg__Req1"), "IDs with colons should be sanitized");
+        assert!(!output.contains("Pkg::Req1"), "Raw colons should not appear in mermaid IDs");
     }
 
     #[test]

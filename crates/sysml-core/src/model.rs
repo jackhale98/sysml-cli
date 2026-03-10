@@ -151,6 +151,9 @@ pub struct Definition {
     /// Whether the definition is abstract.
     #[serde(skip_serializing_if = "std::ops::Not::not")]
     pub is_abstract: bool,
+    /// Members of an enum definition.
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub enum_members: Vec<EnumMember>,
     /// Name of the enclosing definition, if any.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub parent_def: Option<String>,
@@ -163,6 +166,13 @@ pub struct Definition {
     /// Fully qualified name (populated by qualify_model).
     #[serde(skip_serializing_if = "Option::is_none")]
     pub qualified_name: Option<crate::qualified_name::QualifiedName>,
+}
+
+/// A member of an enum definition.
+#[derive(Debug, Clone, Serialize)]
+pub struct EnumMember {
+    pub name: String,
+    pub doc: Option<String>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize)]

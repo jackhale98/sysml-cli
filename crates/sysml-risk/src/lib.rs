@@ -1026,6 +1026,176 @@ pub fn risk_trend(assessments: &[RiskAssessment]) -> Vec<(String, u32)> {
 }
 
 // =========================================================================
+// SysML generation
+// =========================================================================
+
+/// Generate SysML text for a risk definition.
+pub fn risk_to_sysml(
+    name: &str,
+    title: &str,
+    severity: &str,
+    likelihood: &str,
+    detectability: &str,
+    category: Option<&str>,
+) -> String {
+    let mut out = format!("part {} : RiskDef {{\n", name);
+    out.push_str(&format!("    doc /* {} */\n", title));
+    out.push_str(&format!(
+        "    attribute redefines severity = SeverityLevel::{};\n",
+        severity
+    ));
+    out.push_str(&format!(
+        "    attribute redefines likelihood = LikelihoodLevel::{};\n",
+        likelihood
+    ));
+    out.push_str(&format!(
+        "    attribute redefines detectability = DetectabilityLevel::{};\n",
+        detectability
+    ));
+    if let Some(cat) = category {
+        out.push_str(&format!(
+            "    attribute redefines category = RiskCategory::{};\n",
+            cat
+        ));
+    }
+    out.push_str("}\n");
+    out
+}
+
+/// Build wizard steps for interactive risk creation.
+/// If a model is provided, enum choices are extracted from it.
+pub fn build_risk_add_wizard(model: Option<&sysml_core::model::Model>) -> Vec<sysml_core::interactive::WizardStep> {
+    use sysml_core::interactive::*;
+
+    let severity_choices = if let Some(m) = model {
+        let choices = sysml_core::query::get_enum_choices(m, "SeverityLevel");
+        if !choices.is_empty() {
+            choices.into_iter().map(|(v, d)| {
+                let mut opt = ChoiceOption::new(&v, &v);
+                if let Some(desc) = d {
+                    opt = opt.with_description(desc);
+                }
+                opt
+            }).collect()
+        } else {
+            default_severity_choices()
+        }
+    } else {
+        default_severity_choices()
+    };
+
+    let likelihood_choices = if let Some(m) = model {
+        let choices = sysml_core::query::get_enum_choices(m, "LikelihoodLevel");
+        if !choices.is_empty() {
+            choices.into_iter().map(|(v, _)| ChoiceOption::new(&v, &v)).collect()
+        } else {
+            default_likelihood_choices()
+        }
+    } else {
+        default_likelihood_choices()
+    };
+
+    let detectability_choices = if let Some(m) = model {
+        let choices = sysml_core::query::get_enum_choices(m, "DetectabilityLevel");
+        if !choices.is_empty() {
+            choices.into_iter().map(|(v, _)| ChoiceOption::new(&v, &v)).collect()
+        } else {
+            default_detectability_choices()
+        }
+    } else {
+        default_detectability_choices()
+    };
+
+    vec![
+        WizardStep::string("title", "Risk title")
+            .with_explanation("A brief description of the risk being identified."),
+        WizardStep {
+            id: "severity".into(),
+            prompt: "Severity level".into(),
+            explanation: Some("How severe would the impact be if this risk occurs?".into()),
+            kind: PromptKind::Choice(severity_choices),
+            required: true,
+            default: None,
+        },
+        WizardStep {
+            id: "likelihood".into(),
+            prompt: "Likelihood level".into(),
+            explanation: Some("How likely is this risk to occur?".into()),
+            kind: PromptKind::Choice(likelihood_choices),
+            required: true,
+            default: None,
+        },
+        WizardStep {
+            id: "detectability".into(),
+            prompt: "Detectability level".into(),
+            explanation: Some("How easily can this risk be detected before impact?".into()),
+            kind: PromptKind::Choice(detectability_choices),
+            required: true,
+            default: None,
+        },
+    ]
+}
+
+/// Interpret wizard results into (element_name, sysml_text).
+pub fn interpret_risk_add_wizard(result: &sysml_core::interactive::WizardResult) -> Option<(String, String)> {
+    let title = result.get_string("title")?;
+    let severity = result.get_string("severity")?;
+    let likelihood = result.get_string("likelihood")?;
+    let detectability = result.get_string("detectability")?;
+
+    // Generate a camelCase name from the title
+    let name = format!("risk{}", title_to_identifier(title));
+    let sysml = risk_to_sysml(&name, title, severity, likelihood, detectability, None);
+    Some((name, sysml))
+}
+
+fn title_to_identifier(title: &str) -> String {
+    title
+        .split_whitespace()
+        .map(|w| {
+            let mut chars = w.chars();
+            match chars.next() {
+                Some(c) => format!("{}{}", c.to_uppercase(), chars.as_str().to_lowercase()),
+                None => String::new(),
+            }
+        })
+        .collect()
+}
+
+fn default_severity_choices() -> Vec<sysml_core::interactive::ChoiceOption> {
+    use sysml_core::interactive::ChoiceOption;
+    vec![
+        ChoiceOption::new("negligible", "negligible"),
+        ChoiceOption::new("marginal", "marginal"),
+        ChoiceOption::new("moderate", "moderate"),
+        ChoiceOption::new("critical", "critical"),
+        ChoiceOption::new("catastrophic", "catastrophic"),
+    ]
+}
+
+fn default_likelihood_choices() -> Vec<sysml_core::interactive::ChoiceOption> {
+    use sysml_core::interactive::ChoiceOption;
+    vec![
+        ChoiceOption::new("improbable", "improbable"),
+        ChoiceOption::new("remote", "remote"),
+        ChoiceOption::new("occasional", "occasional"),
+        ChoiceOption::new("probable", "probable"),
+        ChoiceOption::new("frequent", "frequent"),
+    ]
+}
+
+fn default_detectability_choices() -> Vec<sysml_core::interactive::ChoiceOption> {
+    use sysml_core::interactive::ChoiceOption;
+    vec![
+        ChoiceOption::new("high", "high"),
+        ChoiceOption::new("moderate", "moderate"),
+        ChoiceOption::new("low", "low"),
+        ChoiceOption::new("very_low", "very low"),
+        ChoiceOption::new("undetectable", "undetectable"),
+    ]
+}
+
+// =========================================================================
 // Tests
 // =========================================================================
 
@@ -1241,6 +1411,7 @@ mod tests {
             short_name: None,
             doc: None,
             is_abstract: false,
+            enum_members: Vec::new(),
             parent_def: None,
             body_start_byte: None,
             body_end_byte: None,
@@ -1265,6 +1436,7 @@ mod tests {
             short_name: None,
             doc: None,
             is_abstract: false,
+            enum_members: Vec::new(),
             parent_def: None,
             body_start_byte: None,
             body_end_byte: None,
@@ -1737,6 +1909,59 @@ mod tests {
         assert!(json.contains("\"cells\""));
     }
 
+    // -- SysML generator tests ----------------------------------------------
+
+    #[test]
+    fn risk_to_sysml_basic() {
+        let sysml = risk_to_sysml(
+            "riskBrakeFail", "Brake system failure",
+            "critical", "remote", "moderate", None,
+        );
+        assert!(sysml.contains("part riskBrakeFail : RiskDef {"));
+        assert!(sysml.contains("doc /* Brake system failure */"));
+        assert!(sysml.contains("SeverityLevel::critical"));
+        assert!(sysml.contains("LikelihoodLevel::remote"));
+        assert!(sysml.contains("DetectabilityLevel::moderate"));
+    }
+
+    #[test]
+    fn risk_to_sysml_with_category() {
+        let sysml = risk_to_sysml(
+            "riskOverheat", "Overheating", "marginal", "occasional",
+            "high", Some("safety"),
+        );
+        assert!(sysml.contains("RiskCategory::safety"));
+    }
+
+    #[test]
+    fn build_risk_wizard_defaults() {
+        let steps = build_risk_add_wizard(None);
+        assert_eq!(steps.len(), 4);
+        assert_eq!(steps[0].id, "title");
+        assert_eq!(steps[1].id, "severity");
+        assert_eq!(steps[2].id, "likelihood");
+        assert_eq!(steps[3].id, "detectability");
+    }
+
+    #[test]
+    fn interpret_risk_wizard() {
+        use sysml_core::interactive::*;
+        let mut result = WizardResult::new();
+        result.set("title", WizardAnswer::String("Brake leak".into()));
+        result.set("severity", WizardAnswer::String("critical".into()));
+        result.set("likelihood", WizardAnswer::String("remote".into()));
+        result.set("detectability", WizardAnswer::String("moderate".into()));
+        let (name, sysml) = interpret_risk_add_wizard(&result).unwrap();
+        assert_eq!(name, "riskBrakeLeak");
+        assert!(sysml.contains("SeverityLevel::critical"));
+    }
+
+    #[test]
+    fn title_to_identifier_converts() {
+        assert_eq!(title_to_identifier("brake fluid leak"), "BrakeFluidLeak");
+        assert_eq!(title_to_identifier("Overheating"), "Overheating");
+    }
+
     // -- Test helpers -------------------------------------------------------
 
     fn sample_risk() -> RiskDef {
@@ -1795,6 +2020,7 @@ mod tests {
             short_name: None,
             doc: None,
             is_abstract: false,
+            enum_members: Vec::new(),
             parent_def: None,
             body_start_byte: None,
             body_end_byte: None,
@@ -1864,6 +2090,7 @@ mod tests {
             short_name: None,
             doc: None,
             is_abstract: false,
+            enum_members: Vec::new(),
             parent_def: None,
             body_start_byte: None,
             body_end_byte: None,
@@ -1884,6 +2111,7 @@ mod tests {
             short_name: None,
             doc: None,
             is_abstract: false,
+            enum_members: Vec::new(),
             parent_def: None,
             body_start_byte: None,
             body_end_byte: None,
