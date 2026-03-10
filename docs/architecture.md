@@ -57,6 +57,7 @@ src/
   project.rs              Project discovery (walk-up from CWD)
   record.rs               TOML record system (append-only records)
   cache.rs                In-memory cache (nodes, edges, records)
+  sqlite_cache.rs         SQLite-backed persistent cache (optional, `sqlite` feature)
   index.rs                Indexer (populates cache from files)
   interactive.rs          Wizard framework (WizardStep, WizardRunner)
   checks/                 9 validation checks
@@ -87,3 +88,5 @@ src/
 **Git-native records**: Append-only TOML records use filenames that encode timestamp + author + hash, making merge conflicts impossible. Entity records use `BTreeMap` for deterministic key ordering.
 
 **Progressive enhancement**: The tool works with zero configuration for pure SysML v2 analysis. The `.sysml/` project, cache, records, and domain libraries are opt-in.
+
+**Optional SQLite cache**: When built with `--features sqlite`, the index command persists the in-memory cache to `.sysml/cache.db` using `rusqlite` (bundled). The `SqliteCache` has the same query API as the in-memory `Cache`. It stores a git HEAD hash so stale caches can be detected. The feature is opt-in — the default build uses only the in-memory cache.

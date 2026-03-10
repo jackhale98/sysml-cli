@@ -688,3 +688,142 @@ fn quality_action_requires_terminal() {
         .failure()
         .stderr(predicate::str::contains("interactive terminal"));
 }
+
+// ========================================================================
+// pipeline
+// ========================================================================
+
+#[test]
+fn pipeline_list_no_project() {
+    // Running without .sysml/config.toml should fail
+    cmd()
+        .args(["pipeline", "list"])
+        .current_dir(std::env::temp_dir())
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains("config.toml"));
+}
+
+#[test]
+fn pipeline_run_no_project() {
+    cmd()
+        .args(["pipeline", "run", "ci"])
+        .current_dir(std::env::temp_dir())
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains("config.toml"));
+}
+
+#[test]
+fn pipeline_list_with_config() {
+    let tmp = std::env::temp_dir().join("sysml_pipeline_test_list");
+    let _ = std::fs::remove_dir_all(&tmp);
+    std::fs::create_dir_all(tmp.join(".sysml")).unwrap();
+    std::fs::write(
+        tmp.join(".sysml/config.toml"),
+        r#"
+[project]
+name = "PipeTest"
+
+[[pipeline]]
+name = "ci"
+steps = ["lint *.sysml", "fmt --check *.sysml"]
+"#,
+    )
+    .unwrap();
+
+    cmd()
+        .args(["pipeline", "list"])
+        .current_dir(&tmp)
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("ci"))
+        .stdout(predicate::str::contains("2 steps"));
+
+    let _ = std::fs::remove_dir_all(&tmp);
+}
+
+#[test]
+fn pipeline_run_dry_run() {
+    let tmp = std::env::temp_dir().join("sysml_pipeline_test_dry");
+    let _ = std::fs::remove_dir_all(&tmp);
+    std::fs::create_dir_all(tmp.join(".sysml")).unwrap();
+    std::fs::write(
+        tmp.join(".sysml/config.toml"),
+        r#"
+[project]
+name = "DryTest"
+
+[[pipeline]]
+name = "check"
+steps = ["lint model.sysml"]
+"#,
+    )
+    .unwrap();
+
+    cmd()
+        .args(["pipeline", "run", "check", "--dry-run"])
+        .current_dir(&tmp)
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("Pipeline: check"))
+        .stdout(predicate::str::contains("dry run"));
+
+    let _ = std::fs::remove_dir_all(&tmp);
+}
+
+#[test]
+fn pipeline_run_unknown_name() {
+    let tmp = std::env::temp_dir().join("sysml_pipeline_test_unknown");
+    let _ = std::fs::remove_dir_all(&tmp);
+    std::fs::create_dir_all(tmp.join(".sysml")).unwrap();
+    std::fs::write(
+        tmp.join(".sysml/config.toml"),
+        "[project]\nname = \"Test\"\n",
+    )
+    .unwrap();
+
+    cmd()
+        .args(["pipeline", "run", "nonexistent"])
+        .current_dir(&tmp)
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains("no pipeline named"));
+
+    let _ = std::fs::remove_dir_all(&tmp);
+}
+
+#[test]
+fn stdlib_path_flag_accepted() {
+    // Just verify the --stdlib-path flag is accepted without error
+    cmd()
+        .args(["--stdlib-path", "/nonexistent/stdlib", "lint", &fixture("simple-vehicle.sysml")])
+        .assert()
+        .success();
+}
+
+#[test]
+fn pipeline_create_adds_to_config() {
+    let tmp = std::env::temp_dir().join("sysml_pipeline_test_create");
+    let _ = std::fs::remove_dir_all(&tmp);
+    std::fs::create_dir_all(tmp.join(".sysml")).unwrap();
+    std::fs::write(
+        tmp.join(".sysml/config.toml"),
+        "[project]\nname = \"CreateTest\"\n",
+    )
+    .unwrap();
+
+    cmd()
+        .args(["pipeline", "create", "deploy"])
+        .current_dir(&tmp)
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("Created pipeline"));
+
+    // Verify the config was updated
+    let config_content = std::fs::read_to_string(tmp.join(".sysml/config.toml")).unwrap();
+    assert!(config_content.contains("[[pipeline]]"));
+    assert!(config_content.contains("deploy"));
+
+    let _ = std::fs::remove_dir_all(&tmp);
+}

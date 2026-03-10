@@ -49,6 +49,33 @@ pub(crate) fn run(cli: &Cli, full: bool, stats: bool) -> ExitCode {
     let elapsed = started.elapsed();
     let cache_stats = cache.stats();
 
+    // Persist to SQLite if the feature is enabled
+    #[cfg(feature = "sqlite")]
+    {
+        let db_path = project_root.join(".sysml/cache.db");
+        if let Ok(sqlite) = sysml_core::sqlite_cache::SqliteCache::open(&db_path) {
+            sqlite.clear();
+            for node in cache.all_nodes() {
+                sqlite.add_node(node.clone());
+            }
+            for edge in cache.all_edges() {
+                sqlite.add_edge(edge.clone());
+            }
+            for record in cache.all_records() {
+                sqlite.add_record(record.clone());
+            }
+            for ref_edge in cache.all_ref_edges() {
+                sqlite.add_ref_edge(ref_edge.clone());
+            }
+            if let Ok(head) = get_git_head(&project_root) {
+                sqlite.set_git_head(&head);
+            }
+            if !cli.quiet {
+                eprintln!("  Cache persisted to {}", db_path.display());
+            }
+        }
+    }
+
     if stats {
         print_stats(cli, &cache_stats, elapsed);
     } else {
@@ -56,6 +83,23 @@ pub(crate) fn run(cli: &Cli, full: bool, stats: bool) -> ExitCode {
     }
 
     ExitCode::SUCCESS
+}
+
+#[cfg(feature = "sqlite")]
+fn get_git_head(project_root: &std::path::Path) -> Result<String, std::io::Error> {
+    let output = std::process::Command::new("git")
+        .arg("rev-parse")
+        .arg("HEAD")
+        .current_dir(project_root)
+        .output()?;
+    if output.status.success() {
+        Ok(String::from_utf8_lossy(&output.stdout).trim().to_string())
+    } else {
+        Err(std::io::Error::new(
+            std::io::ErrorKind::Other,
+            "git rev-parse HEAD failed",
+        ))
+    }
 }
 
 fn print_stats(

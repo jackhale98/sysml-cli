@@ -16,7 +16,7 @@ use sysml_core::model::Span;
 use sysml_core::parser as sysml_parser;
 use sysml_core::record::RecordEnvelope;
 
-use crate::{Cli, collect_files_recursive};
+use crate::{Cli, collect_files_recursive, resolve_include_paths};
 use crate::output;
 
 pub fn run(
@@ -38,10 +38,11 @@ pub fn run(
         .filter(|c| !disabled.contains(c.name()))
         .collect();
 
-    // Build project resolver if includes are specified or multi-file
-    let project = if !cli.include.is_empty() {
+    // Build project resolver if includes or stdlib are specified
+    let effective_includes = resolve_include_paths(cli);
+    let project = if !effective_includes.is_empty() {
         let mut all_files: Vec<PathBuf> = files.to_vec();
-        for inc in &cli.include {
+        for inc in &effective_includes {
             if inc.is_dir() {
                 collect_files_recursive(inc, &mut all_files);
             } else {

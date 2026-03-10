@@ -134,6 +134,39 @@ pub(crate) fn prompt_events(available_signals: &[String]) -> Vec<String> {
     events
 }
 
+/// Resolve the effective include paths by combining:
+/// 1. CLI `--include` paths
+/// 2. `--stdlib-path` (CLI flag or SYSML_STDLIB_PATH env)
+/// 3. Config file `stdlib_path` (from `.sysml/config.toml`)
+///
+/// Returns a combined list of include paths for import resolution.
+pub(crate) fn resolve_include_paths(cli: &crate::Cli) -> Vec<PathBuf> {
+    let mut paths = cli.include.clone();
+
+    // Add stdlib path from CLI/env
+    if let Some(ref stdlib) = cli.stdlib_path {
+        if stdlib.is_dir() && !paths.contains(stdlib) {
+            paths.push(stdlib.clone());
+        }
+    }
+
+    // Try loading config for stdlib_path if not already provided
+    if cli.stdlib_path.is_none() {
+        let config_path = std::path::Path::new(".sysml/config.toml");
+        if config_path.exists() {
+            if let Ok(config) = sysml_core::config::ProjectConfig::load(config_path) {
+                if let Some(stdlib) = config.project.stdlib_path {
+                    if stdlib.is_dir() && !paths.contains(&stdlib) {
+                        paths.push(stdlib);
+                    }
+                }
+            }
+        }
+    }
+
+    paths
+}
+
 /// Generate shell completions for the given shell.
 pub(crate) fn generate_completions(shell: &str) {
     use clap::CommandFactory;

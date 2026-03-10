@@ -161,6 +161,28 @@ impl Cache {
             .collect()
     }
 
+    // -- bulk access (for SQLite transfer) ------------------------------------
+
+    /// Return all nodes in the cache.
+    pub fn all_nodes(&self) -> &[CacheNode] {
+        &self.nodes
+    }
+
+    /// Return all edges in the cache.
+    pub fn all_edges(&self) -> &[CacheEdge] {
+        &self.edges
+    }
+
+    /// Return all records in the cache.
+    pub fn all_records(&self) -> &[CacheRecord] {
+        &self.records
+    }
+
+    /// Return all reference edges in the cache.
+    pub fn all_ref_edges(&self) -> &[CacheRefEdge] {
+        &self.ref_edges
+    }
+
     // -- stats & git --------------------------------------------------------
 
     /// Return summary counts of cached data.

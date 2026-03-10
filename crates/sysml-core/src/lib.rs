@@ -31,3 +31,5 @@ pub mod query;
 pub mod record;
 pub mod resolver;
 pub mod sim;
+#[cfg(feature = "sqlite")]
+pub mod sqlite_cache;

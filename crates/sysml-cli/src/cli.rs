@@ -47,6 +47,13 @@ pub(crate) struct Cli {
     /// Definitions from these files are available to imported names.
     #[arg(short = 'I', long = "include", global = true)]
     pub(crate) include: Vec<PathBuf>,
+
+    /// Path to the SysML v2 standard library directory.
+    /// Definitions from the standard library are available for import resolution.
+    /// Can also be set via SYSML_STDLIB_PATH environment variable or
+    /// stdlib_path in .sysml/config.toml.
+    #[arg(long = "stdlib-path", global = true, env = "SYSML_STDLIB_PATH")]
+    pub(crate) stdlib_path: Option<PathBuf>,
 }
 
 #[derive(Subcommand)]
@@ -696,6 +703,20 @@ pub(crate) enum Command {
         /// Topic to display (omit to list all topics).
         topic: Option<String>,
     },
+    /// Run named validation pipelines defined in .sysml/config.toml.
+    ///
+    /// Pipelines are sequences of sysml commands that run in order.
+    /// Define them as [[pipeline]] entries in your project config.
+    ///
+    /// EXAMPLES:
+    ///   sysml pipeline list                     List available pipelines
+    ///   sysml pipeline run ci                    Run the "ci" pipeline
+    ///   sysml pipeline run ci --dry-run          Preview without executing
+    ///   sysml pipeline create pre-commit         Create a new pipeline interactively
+    Pipeline {
+        #[command(subcommand)]
+        kind: PipelineCommand,
+    },
 }
 
 // =========================================================================
@@ -1148,6 +1169,27 @@ pub(crate) enum QualityCommand {
         /// CAPA ID to add the action to.
         #[arg(long)]
         capa: Option<String>,
+    },
+}
+
+#[derive(Subcommand)]
+pub(crate) enum PipelineCommand {
+    /// List all pipelines defined in config.
+    List,
+    /// Run a named pipeline.
+    Run {
+        /// Pipeline name to run.
+        #[arg(required = true)]
+        name: String,
+        /// Preview commands without executing them.
+        #[arg(long)]
+        dry_run: bool,
+    },
+    /// Create a new pipeline in config (interactive).
+    Create {
+        /// Pipeline name.
+        #[arg(required = true)]
+        name: String,
     },
 }
 

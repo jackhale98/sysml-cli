@@ -96,5 +96,6 @@ fn main() -> ExitCode {
         Command::Quality { kind } => commands::quality::run(&cli, kind),
         Command::Report { kind } => commands::report::run(&cli, kind),
         Command::Guide { topic } => commands::help_topics::run(topic.as_deref()),
+        Command::Pipeline { ref kind } => commands::pipeline::run(kind, &cli.format, cli.quiet),
     }
 }

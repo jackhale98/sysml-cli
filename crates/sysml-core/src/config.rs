@@ -57,6 +57,20 @@ pub struct ProjectConfig {
     pub project: ProjectSection,
     #[serde(default)]
     pub defaults: DefaultsSection,
+    #[serde(default)]
+    pub pipelines: Vec<PipelineConfig>,
+}
+
+/// A named pipeline: a sequence of sysml commands to run in order.
+///
+/// Defined in config as `[[pipeline]]` array-of-tables entries.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct PipelineConfig {
+    /// Pipeline name (e.g. "ci", "nightly", "pre-commit").
+    pub name: String,
+    /// Ordered list of sysml commands to execute (without the `sysml` prefix).
+    /// Example: `["lint *.sysml", "trace --check *.sysml"]`
+    pub steps: Vec<String>,
 }
 
 /// The `[project]` section of the config file.
@@ -71,6 +85,9 @@ pub struct ProjectSection {
     /// Additional directories to search for library models.
     #[serde(default)]
     pub library_paths: Vec<PathBuf>,
+    /// Path to the SysML v2 standard library directory.
+    #[serde(default)]
+    pub stdlib_path: Option<PathBuf>,
 }
 
 /// The `[defaults]` section of the config file.
@@ -104,6 +121,7 @@ impl Default for ProjectConfig {
         Self {
             project: ProjectSection::default(),
             defaults: DefaultsSection::default(),
+            pipelines: Vec::new(),
         }
     }
 }
@@ -114,6 +132,7 @@ impl Default for ProjectSection {
             name: String::new(),
             model_root: default_model_root(),
             library_paths: Vec::new(),
+            stdlib_path: None,
         }
     }
 }
@@ -163,6 +182,12 @@ impl ProjectConfig {
                 .collect::<Vec<_>>()
                 .join(", ")
         ));
+        if let Some(ref stdlib) = self.project.stdlib_path {
+            out.push_str(&format!(
+                "stdlib_path = {}\n",
+                quote_toml_string(&stdlib.to_string_lossy())
+            ));
+        }
 
         out.push('\n');
         out.push_str("[defaults]\n");
@@ -178,6 +203,21 @@ impl ProjectConfig {
             "format = {}\n",
             quote_toml_string(&self.defaults.format)
         ));
+
+        for pipeline in &self.pipelines {
+            out.push('\n');
+            out.push_str("[[pipeline]]\n");
+            out.push_str(&format!("name = {}\n", quote_toml_string(&pipeline.name)));
+            out.push_str(&format!(
+                "steps = [{}]\n",
+                pipeline
+                    .steps
+                    .iter()
+                    .map(|s| quote_toml_string(s))
+                    .collect::<Vec<_>>()
+                    .join(", ")
+            ));
+        }
 
         out
     }
@@ -203,6 +243,8 @@ fn quote_toml_string(s: &str) -> String {
 fn parse_toml_config(input: &str) -> Result<ProjectConfig, ConfigError> {
     let mut config = ProjectConfig::default();
     let mut current_section: Option<&str> = None;
+    // Track current pipeline being built (for [[pipeline]] array-of-tables)
+    let mut current_pipeline: Option<PipelineConfig> = None;
 
     for (line_no, raw_line) in input.lines().enumerate() {
         let line = strip_comment(raw_line).trim();
@@ -211,8 +253,37 @@ fn parse_toml_config(input: &str) -> Result<ProjectConfig, ConfigError> {
             continue;
         }
 
-        // Section header
+        // Array-of-tables header: [[pipeline]]
+        if line.starts_with("[[") && line.ends_with("]]") {
+            let table_name = line[2..line.len() - 2].trim();
+            match table_name {
+                "pipeline" => {
+                    // Flush any previous pipeline
+                    if let Some(p) = current_pipeline.take() {
+                        config.pipelines.push(p);
+                    }
+                    current_pipeline = Some(PipelineConfig {
+                        name: String::new(),
+                        steps: Vec::new(),
+                    });
+                    current_section = Some("pipeline");
+                    continue;
+                }
+                other => {
+                    return Err(ConfigError::Parse(format!(
+                        "line {}: unknown array-of-tables [[{other}]]",
+                        line_no + 1
+                    )));
+                }
+            }
+        }
+
+        // Section header: [project], [defaults]
         if line.starts_with('[') {
+            // Flush any in-progress pipeline
+            if let Some(p) = current_pipeline.take() {
+                config.pipelines.push(p);
+            }
             if !line.ends_with(']') {
                 return Err(ConfigError::Parse(format!(
                     "line {}: unclosed section header",
@@ -269,6 +340,12 @@ fn parse_toml_config(input: &str) -> Result<ProjectConfig, ConfigError> {
                     .map(PathBuf::from)
                     .collect();
             }
+            ("project", "stdlib_path") => {
+                let s = parse_string_value(value).map_err(|e| {
+                    ConfigError::Parse(format!("line {}: {e}", line_no + 1))
+                })?;
+                config.project.stdlib_path = Some(PathBuf::from(s));
+            }
             ("defaults", "author") => {
                 config.defaults.author = parse_string_value(value).map_err(|e| {
                     ConfigError::Parse(format!("line {}: {e}", line_no + 1))
@@ -285,6 +362,20 @@ fn parse_toml_config(input: &str) -> Result<ProjectConfig, ConfigError> {
                     ConfigError::Parse(format!("line {}: {e}", line_no + 1))
                 })?;
             }
+            ("pipeline", "name") => {
+                if let Some(ref mut p) = current_pipeline {
+                    p.name = parse_string_value(value).map_err(|e| {
+                        ConfigError::Parse(format!("line {}: {e}", line_no + 1))
+                    })?;
+                }
+            }
+            ("pipeline", "steps") => {
+                if let Some(ref mut p) = current_pipeline {
+                    p.steps = parse_string_array(value).map_err(|e| {
+                        ConfigError::Parse(format!("line {}: {e}", line_no + 1))
+                    })?;
+                }
+            }
             (sec, k) => {
                 return Err(ConfigError::Parse(format!(
                     "line {}: unknown key `{k}` in [{sec}]",
@@ -292,6 +383,11 @@ fn parse_toml_config(input: &str) -> Result<ProjectConfig, ConfigError> {
                 )));
             }
         }
+    }
+
+    // Flush trailing pipeline
+    if let Some(p) = current_pipeline.take() {
+        config.pipelines.push(p);
     }
 
     Ok(config)
@@ -562,12 +658,14 @@ name = "Brake\"System"
                 name: "RoundTrip".to_string(),
                 model_root: PathBuf::from("src/model/"),
                 library_paths: vec![PathBuf::from("libs/"), PathBuf::from("ext/")],
+                stdlib_path: None,
             },
             defaults: DefaultsSection {
                 author: "Bob".to_string(),
                 output_dir: PathBuf::from("out/"),
                 format: "json".to_string(),
             },
+            pipelines: Vec::new(),
         };
 
         let toml_str = cfg.to_toml_string();
@@ -630,5 +728,180 @@ name = "Brake\"System"
     fn parse_string_array_with_spaces() {
         let items = parse_string_array(r#"[ "a" , "b" , "c" ]"#).unwrap();
         assert_eq!(items, vec!["a", "b", "c"]);
+    }
+
+    // -- Pipeline config tests -----------------------------------------------
+
+    #[test]
+    fn parse_single_pipeline() {
+        let toml = r#"
+[project]
+name = "Test"
+
+[[pipeline]]
+name = "ci"
+steps = ["lint *.sysml", "trace --check *.sysml"]
+"#;
+        let cfg = ProjectConfig::from_toml_str(toml).unwrap();
+        assert_eq!(cfg.pipelines.len(), 1);
+        assert_eq!(cfg.pipelines[0].name, "ci");
+        assert_eq!(cfg.pipelines[0].steps, vec![
+            "lint *.sysml",
+            "trace --check *.sysml",
+        ]);
+    }
+
+    #[test]
+    fn parse_multiple_pipelines() {
+        let toml = r#"
+[project]
+name = "Multi"
+
+[[pipeline]]
+name = "ci"
+steps = ["lint *.sysml", "fmt --check *.sysml"]
+
+[[pipeline]]
+name = "nightly"
+steps = ["coverage --check --min-score 80 *.sysml", "report dashboard *.sysml"]
+"#;
+        let cfg = ProjectConfig::from_toml_str(toml).unwrap();
+        assert_eq!(cfg.pipelines.len(), 2);
+        assert_eq!(cfg.pipelines[0].name, "ci");
+        assert_eq!(cfg.pipelines[0].steps.len(), 2);
+        assert_eq!(cfg.pipelines[1].name, "nightly");
+        assert_eq!(cfg.pipelines[1].steps.len(), 2);
+        assert_eq!(cfg.pipelines[1].steps[0], "coverage --check --min-score 80 *.sysml");
+    }
+
+    #[test]
+    fn parse_pipeline_after_defaults() {
+        let toml = r#"
+[project]
+name = "Test"
+
+[defaults]
+format = "json"
+
+[[pipeline]]
+name = "check"
+steps = ["lint model.sysml"]
+"#;
+        let cfg = ProjectConfig::from_toml_str(toml).unwrap();
+        assert_eq!(cfg.defaults.format, "json");
+        assert_eq!(cfg.pipelines.len(), 1);
+        assert_eq!(cfg.pipelines[0].name, "check");
+    }
+
+    #[test]
+    fn parse_no_pipelines_is_empty() {
+        let toml = r#"
+[project]
+name = "NoPipes"
+"#;
+        let cfg = ProjectConfig::from_toml_str(toml).unwrap();
+        assert!(cfg.pipelines.is_empty());
+    }
+
+    #[test]
+    fn parse_pipeline_empty_steps() {
+        let toml = r#"
+[[pipeline]]
+name = "empty"
+steps = []
+"#;
+        let cfg = ProjectConfig::from_toml_str(toml).unwrap();
+        assert_eq!(cfg.pipelines.len(), 1);
+        assert!(cfg.pipelines[0].steps.is_empty());
+    }
+
+    #[test]
+    fn roundtrip_pipeline_config() {
+        let cfg = ProjectConfig {
+            project: ProjectSection {
+                name: "PipeTest".to_string(),
+                ..ProjectSection::default()
+            },
+            defaults: DefaultsSection::default(),
+            pipelines: vec![
+                PipelineConfig {
+                    name: "ci".to_string(),
+                    steps: vec!["lint *.sysml".to_string(), "fmt --check *.sysml".to_string()],
+                },
+                PipelineConfig {
+                    name: "deploy".to_string(),
+                    steps: vec!["report dashboard *.sysml".to_string()],
+                },
+            ],
+        };
+        let toml_str = cfg.to_toml_string();
+        let parsed = ProjectConfig::from_toml_str(&toml_str).unwrap();
+        assert_eq!(cfg, parsed);
+    }
+
+    #[test]
+    fn parse_stdlib_path() {
+        let toml = r#"
+[project]
+name = "StdLib"
+stdlib_path = "/usr/share/sysml/stdlib"
+"#;
+        let cfg = ProjectConfig::from_toml_str(toml).unwrap();
+        assert_eq!(
+            cfg.project.stdlib_path,
+            Some(PathBuf::from("/usr/share/sysml/stdlib"))
+        );
+    }
+
+    #[test]
+    fn parse_no_stdlib_path() {
+        let toml = "[project]\nname = \"NoStdLib\"\n";
+        let cfg = ProjectConfig::from_toml_str(toml).unwrap();
+        assert!(cfg.project.stdlib_path.is_none());
+    }
+
+    #[test]
+    fn roundtrip_stdlib_path() {
+        let cfg = ProjectConfig {
+            project: ProjectSection {
+                name: "StdTest".to_string(),
+                stdlib_path: Some(PathBuf::from("/opt/sysml/stdlib")),
+                ..ProjectSection::default()
+            },
+            defaults: DefaultsSection::default(),
+            pipelines: Vec::new(),
+        };
+        let toml_str = cfg.to_toml_string();
+        assert!(toml_str.contains("stdlib_path"));
+        let parsed = ProjectConfig::from_toml_str(&toml_str).unwrap();
+        assert_eq!(cfg, parsed);
+    }
+
+    #[test]
+    fn error_unknown_array_of_tables() {
+        let toml = "[[unknown]]\nfoo = \"bar\"\n";
+        let err = ProjectConfig::from_toml_str(toml).unwrap_err();
+        assert!(err.to_string().contains("unknown array-of-tables"));
+    }
+
+    #[test]
+    fn pipeline_between_sections() {
+        // Pipeline sandwiched between project and defaults
+        let toml = r#"
+[project]
+name = "Sandwich"
+
+[[pipeline]]
+name = "mid"
+steps = ["lint a.sysml"]
+
+[defaults]
+author = "Bob"
+"#;
+        let cfg = ProjectConfig::from_toml_str(toml).unwrap();
+        assert_eq!(cfg.project.name, "Sandwich");
+        assert_eq!(cfg.defaults.author, "Bob");
+        assert_eq!(cfg.pipelines.len(), 1);
+        assert_eq!(cfg.pipelines[0].name, "mid");
     }
 }

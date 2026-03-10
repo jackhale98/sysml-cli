@@ -23,6 +23,12 @@ cp target/release/sysml ~/.local/bin/
 
 The build compiles the [tree-sitter-sysml](https://github.com/jackhale98/tree-sitter-sysml) grammar from source (included as a submodule). Requires Rust 1.70+ and a C compiler (gcc or clang).
 
+To enable the optional SQLite-backed persistent cache:
+
+```sh
+cargo install --path crates/sysml-cli --features sqlite
+```
+
 ### Shell completions
 
 ```sh
@@ -59,6 +65,7 @@ sysml report dashboard model.sysml              # Project health
 | `-f, --format <FORMAT>` | Output format: `text`, `json` (default: `text`) |
 | `-q, --quiet` | Suppress summary line on stderr |
 | `-I, --include <PATH>` | Additional files/directories for import resolution |
+| `--stdlib-path <PATH>` | Path to the SysML v2 standard library directory (env: `SYSML_STDLIB_PATH`, config: `stdlib_path`) |
 
 ## Commands
 
@@ -99,6 +106,7 @@ sysml report dashboard model.sysml              # Project health
 | **Project** | | [project](docs/commands/project.md) |
 | `init` | Initialize a `.sysml/` project | |
 | `index` | Build or rebuild project index | |
+| `pipeline` | Run named validation pipelines from config | |
 | `report` | Cross-domain reports (dashboard, traceability, gate) | |
 | `guide` | Built-in help topics and tutorials | |
 | `completions` | Generate shell completion scripts | |

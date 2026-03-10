@@ -1,6 +1,6 @@
 # Project Commands
 
-Commands for project initialization, indexing, cross-domain reporting, help, and shell completions.
+Commands for project initialization, indexing, pipelines, cross-domain reporting, help, and shell completions.
 
 ## init
 
@@ -50,6 +50,54 @@ sysml index --stats    # Show index statistics
 | `--stats` | Show index statistics after building |
 
 The index accelerates cross-file queries. All commands work without it — the index is a performance optimization.
+
+When built with the `sqlite` feature, `sysml index` also persists the cache to `.sysml/cache.db`. The SQLite cache stores a git HEAD hash so stale caches can be detected automatically.
+
+## pipeline
+
+Run named validation pipelines defined in `.sysml/config.toml`. Pipelines are sequences of sysml commands that run in order, stopping on the first failure.
+
+```sh
+sysml pipeline list                       # List all defined pipelines
+sysml pipeline run ci                     # Run the "ci" pipeline
+sysml pipeline run ci --dry-run           # Preview without executing
+sysml pipeline create pre-commit          # Create a new pipeline with example steps
+```
+
+### pipeline list
+
+Show all pipelines defined in the project config.
+
+### pipeline run
+
+Run a named pipeline. Each step is executed as a separate `sysml` invocation.
+
+| Option | Description |
+|--------|-------------|
+| `<NAME>` | Pipeline name to run (required) |
+| `--dry-run` | Preview commands without executing them |
+
+### pipeline create
+
+Add a new pipeline to `.sysml/config.toml` with example steps (`lint *.sysml`, `fmt --check *.sysml`). Edit the config file to customize.
+
+| Option | Description |
+|--------|-------------|
+| `<NAME>` | Pipeline name (required) |
+
+### Config format
+
+Pipelines are defined as `[[pipeline]]` entries in `.sysml/config.toml`:
+
+```toml
+[[pipeline]]
+name = "ci"
+steps = ["lint *.sysml", "fmt --check *.sysml"]
+
+[[pipeline]]
+name = "pre-commit"
+steps = ["lint *.sysml", "check *.sysml"]
+```
 
 ## report
 

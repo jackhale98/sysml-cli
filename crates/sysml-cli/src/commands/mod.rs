@@ -4,6 +4,7 @@ pub mod quality;
 pub mod check;
 pub mod lint;
 pub mod list;
+pub mod pipeline;
 pub mod show;
 pub mod trace;
 pub mod interfaces;
