@@ -635,7 +635,7 @@ fn walk_node_scoped(
                 let subsets = get_subsets(&node, source);
                 model.usages.push(Usage {
                     kind: usage_kind.to_string(),
-                    name,
+                    name: name.clone(),
                     type_ref,
                     span: Span::from_node(&node),
                     direction,
@@ -648,11 +648,29 @@ fn walk_node_scoped(
                     subsets,
                     qualified_name: None,
                 });
-            }
 
-            // Connection usages have connect clauses
-            if k == "connection_usage" {
-                extract_connect_clause(&node, source, model);
+                // Connection usages have connect clauses
+                if k == "connection_usage" {
+                    extract_connect_clause(&node, source, model);
+                }
+
+                // If this usage has a body, recurse with this usage as the
+                // parent scope so nested usages get the correct parent_def.
+                let has_body = node.children(&mut node.walk())
+                    .any(|c| c.kind().ends_with("_body") || c.kind() == "{");
+                if has_body {
+                    let mut cursor = node.walk();
+                    for child in node.children(&mut cursor) {
+                        walk_node_scoped(child, source, model,
+                            enclosing_verification, Some(&name));
+                    }
+                    return; // Already recursed with updated scope
+                }
+            } else {
+                // Connection usages without names (e.g. anonymous connections)
+                if k == "connection_usage" {
+                    extract_connect_clause(&node, source, model);
+                }
             }
         }
 
