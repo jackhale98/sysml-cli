@@ -39,6 +39,19 @@ pub(crate) fn run(_cli: &Cli, force: bool) -> ExitCode {
         config.project.library_paths.push(std::path::PathBuf::from("libraries/"));
     }
 
+    // Auto-detect SysML v2 standard library submodule
+    let stdlib_candidates = [
+        "sysml-v2-release/sysml.library",
+        "SysML-v2-Release/sysml.library",
+    ];
+    for candidate in &stdlib_candidates {
+        let stdlib_dir = cwd.join(candidate);
+        if stdlib_dir.is_dir() {
+            config.project.stdlib_path = Some(std::path::PathBuf::from(*candidate));
+            break;
+        }
+    }
+
     // Try to derive a project name from the directory name.
     if let Some(name) = cwd.file_name().and_then(|n| n.to_str()) {
         config.project.name = name.to_string();
@@ -66,6 +79,9 @@ pub(crate) fn run(_cli: &Cli, force: bool) -> ExitCode {
             "  model_root = \"{}\"",
             config.project.model_root.display()
         );
+    }
+    if let Some(ref stdlib) = config.project.stdlib_path {
+        println!("  stdlib_path = \"{}\"", stdlib.display());
     }
     if !config.project.library_paths.is_empty() {
         for lib in &config.project.library_paths {

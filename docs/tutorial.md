@@ -829,7 +829,7 @@ Dimensional      1            0       0      1
 
 ### 10.1 Add BOM attributes
 
-Add mass and cost properties to your parts using the BOM library types:
+Add identity and mass properties to your parts using the BOM library types:
 
 ```sh
 sysml add model.sysml import "SysMLBOM::*"
@@ -839,43 +839,84 @@ sysml add model.sysml attribute partNumber -t ScalarValues::String --inside Temp
 sysml add model.sysml attribute mass_kg -t ScalarValues::Real --inside TemperatureSensor
 ```
 
-Or use the interactive BOM wizard:
+### 10.2 Record supplier quotes
+
+Cost data lives in quote records (TOML files in `.sysml/records/`), not in the SysML model. This separates volatile commercial data from the engineering model.
 
 ```sh
-$ sysml bom add --file model.sysml
+$ sysml source quote
 ? Part name: TemperatureSensor
-? Part number (Enter to skip): TS-100
-? Category: > component
-? Mass (kg, Enter to skip): 0.15
-? Unit cost (Enter to skip): 45.00
+? Supplier name: SensorCorp
+? Currency code: USD
+? Lead time (days): 14
+? Minimum order quantity: 10
+? Quote valid until (YYYY-MM-DD): 2026-12-31
 
-Preview:
-  part def TemperatureSensor {
-      attribute partNumber = "TS-100";
-      attribute mass_kg = 0.15;
-      attribute unit_cost = 45.00;
-  }
+Add price breaks (at least one required):
+? Minimum quantity for this tier: 1
+? Unit price at this tier: 45.00
+  Added: qty >= 1 → 45.0000 USD
+? Add another price break? Yes
+? Minimum quantity for this tier: 100
+? Unit price at this tier: 38.00
+  Added: qty >= 100 → 38.0000 USD
+? Add another price break? No
+
+Quote: SensorCorp → TemperatureSensor (USD)
+  qty >=      1 → 45.0000 USD
+  qty >=    100 → 38.0000 USD
+  Lead time: 14 days, MOQ: 10
+
+Wrote quote record: .sysml/records/source-quote-20260311T...toml
 ```
 
-### 10.2 BOM rollup
+### 10.3 Costed BOM
+
+Once you have quotes recorded, run a costed BOM analysis at any production quantity:
 
 ```sh
-$ sysml bom rollup model.sysml --root WeatherStationUnit --include-mass --include-cost
-WeatherStationUnit : WeatherStationUnit  mass=0.000kg  cost=0.00
-  tempSensor : TemperatureSensor [TS-100]  mass=0.150kg  cost=45.00
-  humiditySensor : HumiditySensor [HS-200]  mass=0.120kg  cost=38.00
-  pressureSensor : PressureSensor [PS-300]  mass=0.180kg  cost=52.00
-  windSensor : WindSensor [WS-400]  mass=0.250kg  cost=65.00
-  controller : Controller [CT-500]  mass=0.350kg  cost=120.00
-  display : Display [DS-600]  mass=0.200kg  cost=85.00
-  power : PowerSupply [PW-700]  mass=1.200kg  cost=95.00
-  enclosure : Enclosure [EN-800]  mass=2.500kg  cost=180.00
+$ sysml bom cost model.sysml --root WeatherStationUnit --quantity 100
+
+Costed BOM — WeatherStationUnit × 100 (order qty 100)
+
+Level  Name                 Definition           BOM Qty  Total Qty   Unit Price       Extended Supplier
+-------------------------------------------------------------------------------------------------------------
+0      WeatherStationUnit   WeatherStationUnit         1        100            -              - -
+1        tempSensor         TemperatureSensor           1        100      38.0000        3800.00 SensorCorp
+1        controller         Controller                  1        100     120.0000       12000.00 ChipCo
+...
+-------------------------------------------------------------------------------------------------------------
+                                                                          TOTAL:       56800.00
+```
+
+Use `--apply` to write the resolved unit prices back into the model as `attribute unitCost = <price>;`:
+
+```sh
+$ sysml bom cost model.sysml --root WeatherStationUnit --quantity 100 --apply
+# ... costed BOM report ...
+Applied unitCost to 8 definitions.
+```
+
+This snapshots pricing into the model for the chosen production volume, making cost data available to `bom rollup --include-cost` and exports.
+
+### 10.4 BOM rollup
+
+```sh
+$ sysml bom rollup model.sysml --root WeatherStationUnit --include-mass
+WeatherStationUnit : WeatherStationUnit
+  tempSensor : TemperatureSensor [TS-100]  mass=0.150kg
+  humiditySensor : HumiditySensor [HS-200]  mass=0.120kg
+  pressureSensor : PressureSensor [PS-300]  mass=0.180kg
+  windSensor : WindSensor [WS-400]  mass=0.250kg
+  controller : Controller [CT-500]  mass=0.350kg
+  display : Display [DS-600]  mass=0.200kg
+  power : PowerSupply [PW-700]  mass=1.200kg
+  enclosure : Enclosure [EN-800]  mass=2.500kg
 BOM: 9 total parts, 9 unique, depth 2
 Total mass: 4.950 kg
-Total cost: 680.00 (recurring), 0.00 (tooling)
 ```
 
-### 10.3 Where-used and export
+### 10.5 Where-used and export
 
 ```sh
 $ sysml bom where-used model.sysml --part TemperatureSensor

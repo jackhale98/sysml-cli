@@ -92,16 +92,49 @@ pub struct Source {
     pub is_preferred: bool,
 }
 
-/// A supplier quote for a part.
+/// A price point at a minimum order quantity threshold.
+#[derive(Debug, Clone, Serialize)]
+pub struct PriceBreak {
+    /// Minimum quantity for this price tier.
+    pub min_qty: u32,
+    /// Unit price at this tier.
+    pub unit_price: f64,
+}
+
+/// A supplier quote for a part with quantity-based pricing.
 #[derive(Debug, Clone, Serialize)]
 pub struct Quote {
     pub part_name: String,
     pub supplier_name: String,
-    pub unit_price: f64,
+    /// ISO 4217 currency code.
+    pub currency: String,
     pub lead_time_days: u32,
     pub moq: u32,
     pub valid_until: String,
     pub notes: String,
+    /// Price breaks ordered by ascending min_qty.
+    pub price_breaks: Vec<PriceBreak>,
+}
+
+impl Quote {
+    /// Resolve the unit price at a given order quantity.
+    ///
+    /// Returns the price from the highest-threshold price break whose
+    /// `min_qty` is <= `qty`. Returns `None` if no price breaks exist.
+    pub fn unit_price_at(&self, qty: u32) -> Option<f64> {
+        let mut best: Option<&PriceBreak> = None;
+        for pb in &self.price_breaks {
+            if pb.min_qty <= qty {
+                best = Some(pb);
+            }
+        }
+        best.map(|pb| pb.unit_price)
+    }
+
+    /// The base (lowest quantity) unit price.
+    pub fn base_price(&self) -> f64 {
+        self.price_breaks.first().map(|pb| pb.unit_price).unwrap_or(0.0)
+    }
 }
 
 /// Side-by-side comparison entry for a quote.
@@ -273,8 +306,8 @@ pub fn create_quote_record(quote: &Quote, author: &str) -> RecordEnvelope {
 
     let mut data = BTreeMap::new();
     data.insert(
-        "unit_price".into(),
-        RecordValue::Float(quote.unit_price),
+        "currency".into(),
+        RecordValue::String(quote.currency.clone()),
     );
     data.insert(
         "lead_time_days".into(),
@@ -289,6 +322,19 @@ pub fn create_quote_record(quote: &Quote, author: &str) -> RecordEnvelope {
         data.insert("notes".into(), RecordValue::String(quote.notes.clone()));
     }
 
+    // Store price breaks as array of [min_qty, unit_price] pairs.
+    let breaks: Vec<RecordValue> = quote
+        .price_breaks
+        .iter()
+        .map(|pb| {
+            RecordValue::Array(vec![
+                RecordValue::Integer(pb.min_qty as i64),
+                RecordValue::Float(pb.unit_price),
+            ])
+        })
+        .collect();
+    data.insert("price_breaks".into(), RecordValue::Array(breaks));
+
     RecordEnvelope {
         meta: RecordMeta {
             id,
@@ -302,24 +348,177 @@ pub fn create_quote_record(quote: &Quote, author: &str) -> RecordEnvelope {
     }
 }
 
-/// Compare quotes side-by-side, sorted by ascending unit price.
+/// Load quotes from record envelopes (those with tool="source", record_type="quote").
+pub fn load_quotes_from_records(records: &[RecordEnvelope]) -> Vec<Quote> {
+    records
+        .iter()
+        .filter(|r| r.meta.tool == "source" && r.meta.record_type == "quote")
+        .filter_map(|r| {
+            let part_name = r.refs.get("part")?.first()?.clone();
+            let supplier_name = r.refs.get("supplier")?.first()?.clone();
+            let currency = match r.data.get("currency") {
+                Some(RecordValue::String(s)) => s.clone(),
+                _ => "USD".to_string(),
+            };
+            let lead_time_days = match r.data.get("lead_time_days") {
+                Some(RecordValue::Integer(n)) => *n as u32,
+                _ => 0,
+            };
+            let moq = match r.data.get("moq") {
+                Some(RecordValue::Integer(n)) => *n as u32,
+                _ => 1,
+            };
+            let valid_until = match r.data.get("valid_until") {
+                Some(RecordValue::String(s)) => s.clone(),
+                _ => String::new(),
+            };
+            let notes = match r.data.get("notes") {
+                Some(RecordValue::String(s)) => s.clone(),
+                _ => String::new(),
+            };
+
+            // Parse price breaks from [[min_qty, unit_price], ...]
+            let price_breaks = match r.data.get("price_breaks") {
+                Some(RecordValue::Array(arr)) => arr
+                    .iter()
+                    .filter_map(|item| {
+                        if let RecordValue::Array(pair) = item {
+                            let min_qty = match pair.first() {
+                                Some(RecordValue::Integer(n)) => *n as u32,
+                                _ => return None,
+                            };
+                            let unit_price = match pair.get(1) {
+                                Some(RecordValue::Float(f)) => *f,
+                                Some(RecordValue::Integer(n)) => *n as f64,
+                                _ => return None,
+                            };
+                            Some(PriceBreak { min_qty, unit_price })
+                        } else {
+                            None
+                        }
+                    })
+                    .collect(),
+                _ => Vec::new(),
+            };
+
+            Some(Quote {
+                part_name,
+                supplier_name,
+                currency,
+                lead_time_days,
+                moq,
+                valid_until,
+                notes,
+                price_breaks,
+            })
+        })
+        .collect()
+}
+
+/// Find the best quote for a part at a given quantity.
+///
+/// Returns the quote with the lowest unit price at the specified quantity.
+pub fn best_quote_for_part<'a>(quotes: &'a [Quote], part_name: &str, qty: u32) -> Option<&'a Quote> {
+    quotes
+        .iter()
+        .filter(|q| q.part_name == part_name)
+        .filter_map(|q| q.unit_price_at(qty).map(|price| (q, price)))
+        .min_by(|(_, a), (_, b)| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal))
+        .map(|(q, _)| q)
+}
+
+/// Build wizard steps for interactive quote creation.
+pub fn build_quote_wizard_steps() -> Vec<sysml_core::interactive::WizardStep> {
+    use sysml_core::interactive::*;
+
+    vec![
+        WizardStep::string("part_name", "Part name"),
+        WizardStep::string("supplier_name", "Supplier name"),
+        WizardStep::string("currency", "Currency code")
+            .with_default("USD"),
+        WizardStep::number("lead_time_days", "Lead time (days)")
+            .with_bounds(Some(0.0), None),
+        WizardStep::number("moq", "Minimum order quantity")
+            .with_bounds(Some(1.0), None)
+            .with_default("1"),
+        WizardStep::string("valid_until", "Quote valid until (YYYY-MM-DD)")
+            .optional(),
+    ]
+}
+
+/// Interpret quote wizard results into a Quote.
+///
+/// Price breaks are added separately after the initial wizard via `add_price_break_steps`.
+pub fn interpret_quote_wizard(result: &sysml_core::interactive::WizardResult) -> Option<Quote> {
+    let part_name = result.get_string("part_name")?.to_string();
+    let supplier_name = result.get_string("supplier_name")?.to_string();
+    let currency = result
+        .get_string("currency")
+        .unwrap_or("USD")
+        .to_string();
+    let lead_time_days = result.get_number("lead_time_days").unwrap_or(0.0) as u32;
+    let moq = result.get_number("moq").unwrap_or(1.0) as u32;
+    let valid_until = result
+        .get_string("valid_until")
+        .unwrap_or("")
+        .to_string();
+
+    Some(Quote {
+        part_name,
+        supplier_name,
+        currency,
+        lead_time_days,
+        moq,
+        valid_until,
+        notes: String::new(),
+        price_breaks: Vec::new(),
+    })
+}
+
+/// Build wizard steps for a single price break entry.
+pub fn build_price_break_steps() -> Vec<sysml_core::interactive::WizardStep> {
+    use sysml_core::interactive::*;
+
+    vec![
+        WizardStep::number("min_qty", "Minimum quantity for this tier")
+            .with_bounds(Some(1.0), None),
+        WizardStep::number("unit_price", "Unit price at this tier")
+            .with_bounds(Some(0.0), None),
+    ]
+}
+
+/// Interpret price break wizard results.
+pub fn interpret_price_break(result: &sysml_core::interactive::WizardResult) -> Option<PriceBreak> {
+    let min_qty = result.get_number("min_qty")? as u32;
+    let unit_price = result.get_number("unit_price")?;
+    Some(PriceBreak { min_qty, unit_price })
+}
+
+/// Compare quotes side-by-side at a given order quantity, sorted by ascending unit price.
 ///
 /// Each entry receives independent rank values for price and lead time,
-/// where rank 1 is the best (lowest) value.
-pub fn compare_quotes(quotes: &[Quote]) -> Vec<QuoteComparison> {
+/// where rank 1 is the best (lowest) value. Uses base price if `qty` is 0.
+pub fn compare_quotes(quotes: &[Quote], qty: u32) -> Vec<QuoteComparison> {
     if quotes.is_empty() {
         return Vec::new();
     }
 
     let mut comparisons: Vec<QuoteComparison> = quotes
         .iter()
-        .map(|q| QuoteComparison {
-            supplier_name: q.supplier_name.clone(),
-            unit_price: q.unit_price,
-            lead_time_days: q.lead_time_days,
-            moq: q.moq,
-            price_rank: 0,
-            lead_time_rank: 0,
+        .map(|q| {
+            let price = if qty > 0 {
+                q.unit_price_at(qty).unwrap_or(q.base_price())
+            } else {
+                q.base_price()
+            };
+            QuoteComparison {
+                supplier_name: q.supplier_name.clone(),
+                unit_price: price,
+                lead_time_days: q.lead_time_days,
+                moq: q.moq,
+                price_rank: 0,
+                lead_time_rank: 0,
+            }
         })
         .collect();
 
@@ -711,19 +910,87 @@ mod tests {
         assert!(sources.is_empty());
     }
 
+    // -- Quote methods --
+
+    fn make_quote(part: &str, supplier: &str, breaks: &[(u32, f64)]) -> Quote {
+        Quote {
+            part_name: part.into(),
+            supplier_name: supplier.into(),
+            currency: "USD".into(),
+            lead_time_days: 14,
+            moq: 1,
+            valid_until: "2026-12-31".into(),
+            notes: String::new(),
+            price_breaks: breaks
+                .iter()
+                .map(|&(min_qty, unit_price)| PriceBreak { min_qty, unit_price })
+                .collect(),
+        }
+    }
+
+    #[test]
+    fn unit_price_at_single_break() {
+        let q = make_quote("R1", "Acme", &[(1, 10.0)]);
+        assert_eq!(q.unit_price_at(1), Some(10.0));
+        assert_eq!(q.unit_price_at(1000), Some(10.0));
+    }
+
+    #[test]
+    fn unit_price_at_multiple_breaks() {
+        let q = make_quote("R1", "Acme", &[(1, 12.50), (100, 9.75), (1000, 7.20)]);
+        assert_eq!(q.unit_price_at(1), Some(12.50));
+        assert_eq!(q.unit_price_at(99), Some(12.50));
+        assert_eq!(q.unit_price_at(100), Some(9.75));
+        assert_eq!(q.unit_price_at(500), Some(9.75));
+        assert_eq!(q.unit_price_at(1000), Some(7.20));
+        assert_eq!(q.unit_price_at(5000), Some(7.20));
+    }
+
+    #[test]
+    fn unit_price_at_empty_breaks() {
+        let q = make_quote("R1", "Acme", &[]);
+        assert_eq!(q.unit_price_at(100), None);
+    }
+
+    #[test]
+    fn base_price_returns_first_break() {
+        let q = make_quote("R1", "Acme", &[(1, 12.50), (100, 9.75)]);
+        assert_eq!(q.base_price(), 12.50);
+    }
+
+    #[test]
+    fn base_price_empty() {
+        let q = make_quote("R1", "Acme", &[]);
+        assert_eq!(q.base_price(), 0.0);
+    }
+
+    // -- best_quote_for_part --
+
+    #[test]
+    fn best_quote_cheapest_at_quantity() {
+        let quotes = vec![
+            make_quote("R1", "Expensive", &[(1, 10.0)]),
+            make_quote("R1", "Cheap", &[(1, 15.0), (100, 3.0)]),
+        ];
+        let best = best_quote_for_part(&quotes, "R1", 100).unwrap();
+        assert_eq!(best.supplier_name, "Cheap");
+        // At qty 1, Expensive is cheaper
+        let best = best_quote_for_part(&quotes, "R1", 1).unwrap();
+        assert_eq!(best.supplier_name, "Expensive");
+    }
+
+    #[test]
+    fn best_quote_no_match() {
+        let quotes = vec![make_quote("R1", "Acme", &[(1, 10.0)])];
+        assert!(best_quote_for_part(&quotes, "R2", 100).is_none());
+    }
+
     // -- create_quote_record --
 
     #[test]
     fn create_quote_record_structure() {
-        let quote = Quote {
-            part_name: "Resistor".to_string(),
-            supplier_name: "Acme".to_string(),
-            unit_price: 0.05,
-            lead_time_days: 14,
-            moq: 100,
-            valid_until: "2026-06-01".to_string(),
-            notes: "Bulk discount available".to_string(),
-        };
+        let mut quote = make_quote("Resistor", "Acme", &[(1, 0.05), (1000, 0.03)]);
+        quote.notes = "Bulk discount available".to_string();
 
         let env = create_quote_record(&quote, "alice");
         assert!(env.meta.id.starts_with("source-quote-"));
@@ -732,13 +999,9 @@ mod tests {
         assert_eq!(env.meta.author, "alice");
         assert_eq!(env.refs.get("part"), Some(&vec!["Resistor".to_string()]));
         assert_eq!(env.refs.get("supplier"), Some(&vec!["Acme".to_string()]));
-        assert_eq!(env.data.get("unit_price"), Some(&RecordValue::Float(0.05)));
+        assert_eq!(env.data.get("currency"), Some(&RecordValue::String("USD".into())));
         assert_eq!(env.data.get("lead_time_days"), Some(&RecordValue::Integer(14)));
-        assert_eq!(env.data.get("moq"), Some(&RecordValue::Integer(100)));
-        assert_eq!(
-            env.data.get("valid_until"),
-            Some(&RecordValue::String("2026-06-01".to_string()))
-        );
+        assert!(env.data.contains_key("price_breaks"));
         assert_eq!(
             env.data.get("notes"),
             Some(&RecordValue::String("Bulk discount available".to_string()))
@@ -747,37 +1010,29 @@ mod tests {
 
     #[test]
     fn create_quote_record_omits_empty_notes() {
-        let quote = Quote {
-            part_name: "Cap".to_string(),
-            supplier_name: "BobCo".to_string(),
-            unit_price: 1.50,
-            lead_time_days: 7,
-            moq: 50,
-            valid_until: "2026-12-31".to_string(),
-            notes: String::new(),
-        };
-
+        let quote = make_quote("Cap", "BobCo", &[(1, 1.50)]);
         let env = create_quote_record(&quote, "bob");
         assert!(!env.data.contains_key("notes"));
     }
 
     #[test]
-    fn create_quote_record_toml_round_trip() {
-        let quote = Quote {
-            part_name: "Bolt".to_string(),
-            supplier_name: "FastenerCo".to_string(),
-            unit_price: 0.10,
-            lead_time_days: 5,
-            moq: 1000,
-            valid_until: "2026-09-30".to_string(),
-            notes: "Standard hex bolt".to_string(),
-        };
-
+    fn create_quote_record_round_trip() {
+        let quote = make_quote("Bolt", "FastenerCo", &[(1, 0.10), (500, 0.07)]);
         let env = create_quote_record(&quote, "carol");
         let toml_str = env.to_toml_string();
         let parsed = RecordEnvelope::from_toml_str(&toml_str).unwrap();
         assert_eq!(parsed.meta.tool, "source");
         assert_eq!(parsed.refs.get("part"), Some(&vec!["Bolt".to_string()]));
+
+        // Round-trip through load_quotes_from_records
+        let quotes = load_quotes_from_records(&[parsed]);
+        assert_eq!(quotes.len(), 1);
+        assert_eq!(quotes[0].part_name, "Bolt");
+        assert_eq!(quotes[0].supplier_name, "FastenerCo");
+        assert_eq!(quotes[0].price_breaks.len(), 2);
+        assert_eq!(quotes[0].price_breaks[0].min_qty, 1);
+        assert!((quotes[0].price_breaks[0].unit_price - 0.10).abs() < 0.001);
+        assert_eq!(quotes[0].price_breaks[1].min_qty, 500);
     }
 
     // -- compare_quotes --
@@ -785,36 +1040,17 @@ mod tests {
     #[test]
     fn compare_quotes_sorted_by_price() {
         let quotes = vec![
-            Quote {
-                part_name: "R1".into(),
-                supplier_name: "Expensive".into(),
-                unit_price: 10.0,
-                lead_time_days: 3,
-                moq: 10,
-                valid_until: "2026-12-31".into(),
-                notes: String::new(),
-            },
-            Quote {
-                part_name: "R1".into(),
-                supplier_name: "Cheap".into(),
-                unit_price: 2.0,
-                lead_time_days: 30,
-                moq: 500,
-                valid_until: "2026-12-31".into(),
-                notes: String::new(),
-            },
-            Quote {
-                part_name: "R1".into(),
-                supplier_name: "Mid".into(),
-                unit_price: 5.0,
-                lead_time_days: 10,
-                moq: 100,
-                valid_until: "2026-12-31".into(),
-                notes: String::new(),
-            },
+            make_quote("R1", "Expensive", &[(1, 10.0)]),
+            make_quote("R1", "Cheap", &[(1, 2.0)]),
+            make_quote("R1", "Mid", &[(1, 5.0)]),
         ];
+        // Set lead times for ranking
+        let mut quotes = quotes;
+        quotes[0].lead_time_days = 3;
+        quotes[1].lead_time_days = 30;
+        quotes[2].lead_time_days = 10;
 
-        let result = compare_quotes(&quotes);
+        let result = compare_quotes(&quotes, 1);
         assert_eq!(result.len(), 3);
 
         // Sorted by price ascending.
@@ -828,33 +1064,38 @@ mod tests {
         assert_eq!(result[2].price_rank, 3);
 
         // Lead time ranks: Expensive(3) < Mid(10) < Cheap(30).
-        assert_eq!(result[2].lead_time_rank, 1); // Expensive has shortest lead time
-        assert_eq!(result[1].lead_time_rank, 2); // Mid
-        assert_eq!(result[0].lead_time_rank, 3); // Cheap has longest lead time
+        assert_eq!(result[2].lead_time_rank, 1);
+        assert_eq!(result[1].lead_time_rank, 2);
+        assert_eq!(result[0].lead_time_rank, 3);
     }
 
     #[test]
     fn compare_quotes_empty() {
-        let result = compare_quotes(&[]);
+        let result = compare_quotes(&[], 1);
         assert!(result.is_empty());
     }
 
     #[test]
     fn compare_quotes_single() {
-        let quotes = vec![Quote {
-            part_name: "X".into(),
-            supplier_name: "Only".into(),
-            unit_price: 1.0,
-            lead_time_days: 5,
-            moq: 1,
-            valid_until: "2026-12-31".into(),
-            notes: String::new(),
-        }];
-
-        let result = compare_quotes(&quotes);
+        let quotes = vec![make_quote("X", "Only", &[(1, 1.0)])];
+        let result = compare_quotes(&quotes, 1);
         assert_eq!(result.len(), 1);
         assert_eq!(result[0].price_rank, 1);
         assert_eq!(result[0].lead_time_rank, 1);
+    }
+
+    #[test]
+    fn compare_quotes_uses_quantity_break() {
+        let quotes = vec![
+            make_quote("R1", "A", &[(1, 10.0), (100, 5.0)]),
+            make_quote("R1", "B", &[(1, 8.0)]),
+        ];
+        // At qty 1, B is cheaper (8 < 10)
+        let result = compare_quotes(&quotes, 1);
+        assert_eq!(result[0].supplier_name, "B");
+        // At qty 100, A is cheaper (5 < 8)
+        let result = compare_quotes(&quotes, 100);
+        assert_eq!(result[0].supplier_name, "A");
     }
 
     // -- compute_scorecard --

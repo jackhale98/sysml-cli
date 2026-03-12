@@ -1,0 +1,122 @@
+---
+title: bdd [simple-vehicle.sysml]
+---
+classDiagram
+    class VehicleModel {
+        <<package>>
+    }
+    class MassValue {
+        <<attribute def>>
+    }
+    class SpeedValue {
+        <<attribute def>>
+    }
+    class VolumeValue {
+        <<attribute def>>
+    }
+    class FuelPort {
+        <<port def>>
+        +item fuelIn : FuelType
+    }
+    class ElectricalPort {
+        <<port def>>
+        +item powerIn : ScalarValues::Real
+        +item powerOut : ScalarValues::Real
+    }
+    class PowerSource {
+        <<part def>>
+        +modifier abstract
+        +attribute maxPower : ScalarValues::Real
+    }
+    class Engine {
+        <<part def>>
+        +port fuelIn : FuelPort
+        +attribute displacement : VolumeValue
+        +attribute fuelType : FuelType
+    }
+    class ElectricMotor {
+        <<part def>>
+        +port electricIn : ElectricalPort
+        +attribute efficiency : ScalarValues::Real
+    }
+    class Transmission {
+        <<part def>>
+        +attribute gearCount : ScalarValues::Integer
+        +attribute isAutomatic : ScalarValues::Boolean
+    }
+    class Wheel {
+        <<part def>>
+        +attribute diameter : ISQ::LengthValue
+    }
+    class Chassis {
+        <<part def>>
+        +attribute mass : MassValue
+    }
+    class Vehicle {
+        <<part def>>
+        +attribute mass : MassValue
+        +attribute topSpeed : SpeedValue
+        +part engine : Engine
+        +part transmission : Transmission
+        +part wheel : Wheel [4]
+        +part chassis : Chassis
+        +connection engineToTrans : EngineConnection
+    }
+    class EngineConnection {
+        <<connection def>>
+    }
+    class StartEngine {
+        <<action def>>
+        +feature ignitionSignal : ScalarValues::Boolean
+        +feature engineRunning : ScalarValues::Boolean
+    }
+    class Accelerate {
+        <<action def>>
+        +feature throttle : ScalarValues::Real
+        +feature speed : SpeedValue
+    }
+    class Brake {
+        <<action def>>
+        +feature brakeForce : ScalarValues::Real
+        +feature speed : SpeedValue
+    }
+    class Drive {
+        <<action def>>
+        +action start : StartEngine
+        +action accelerate : Accelerate
+        +action brake : Brake
+    }
+    class EngineStates {
+        <<state def>>
+        +state off : ?
+        +state starting : ?
+        +state running : ?
+        +state stopping : ?
+    }
+    class VehicleMassReq {
+        <<requirement def>>
+    }
+    class TopSpeedReq {
+        <<requirement def>>
+    }
+    class MassConstraint {
+        <<constraint def>>
+        +feature massActual : MassValue
+        +feature massLimit : MassValue
+    }
+    class DriveVehicle {
+        <<use case def>>
+    }
+    class VehicleStructureView {
+        <<view def>>
+    }
+    MassValue <|-- MassValue
+    SpeedValue <|-- SpeedValue
+    VolumeValue <|-- VolumeValue
+    PowerSource <|-- Engine
+    PowerSource <|-- ElectricMotor
+    Engine *-- Vehicle : engine
+    Transmission *-- Vehicle : transmission
+    Wheel *-- Vehicle : wheel
+    Chassis *-- Vehicle : chassis
+

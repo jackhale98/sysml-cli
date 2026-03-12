@@ -1039,14 +1039,23 @@ pub(crate) enum BomCommand {
         #[arg(long, default_value = "csv")]
         format: String,
     },
-    /// Add a BOM part with identity/mass/cost to a SysML model (interactive wizard).
-    Add {
-        /// Target file to write the BOM part into.
+    /// Costed BOM: resolve quotes and show pricing at a production quantity.
+    ///
+    /// Reads quote records from .sysml/records/ and matches them to parts in
+    /// the BOM tree. Use --apply to write unitCost attributes back to the model.
+    Cost {
+        /// SysML v2 files to analyze.
+        #[arg(required = true)]
+        files: Vec<PathBuf>,
+        /// Root part definition name.
+        #[arg(long, required = true)]
+        root: String,
+        /// Production order quantity (number of top-level assemblies).
+        #[arg(long, required = true)]
+        quantity: u32,
+        /// Write resolved unitCost attributes back into model files.
         #[arg(long)]
-        file: Option<PathBuf>,
-        /// Insert inside this definition.
-        #[arg(long)]
-        inside: Option<String>,
+        apply: bool,
     },
 }
 
@@ -1075,6 +1084,15 @@ pub(crate) enum SourceCommand {
         /// Required quantity.
         #[arg(long, default_value = "1")]
         quantity: u32,
+    },
+    /// Record a supplier quote with quantity-based price breaks.
+    ///
+    /// Interactive wizard that creates a quote record in .sysml/records/.
+    /// Each quote links a supplier to a part with one or more price tiers.
+    Quote {
+        /// Author name for the record.
+        #[arg(long, default_value = "engineer")]
+        author: String,
     },
 }
 

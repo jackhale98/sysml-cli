@@ -8,4 +8,5 @@ repository = "https://github.com/jackhale98/sysml-cli"
 
 [dependencies]
 sysml-core = { path = "../sysml-core" }
+sysml-source = { path = "../sysml-source" }
 serde = { version = "1", features = ["derive"] }

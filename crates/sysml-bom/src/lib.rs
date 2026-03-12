@@ -633,91 +633,133 @@ fn csv_escape(s: &str) -> String {
 // SysML generation
 // ---------------------------------------------------------------------------
 
-/// Generate SysML text for a part with BOM attributes.
-pub fn part_with_bom_to_sysml(
-    name: &str,
-    part_number: Option<&str>,
-    category: Option<&str>,
-    mass: Option<f64>,
-    cost: Option<f64>,
-) -> String {
-    let mut out = format!("part def {} {{\n", name);
-    if let Some(pn) = part_number {
-        out.push_str(&format!("    attribute partNumber = \"{}\";\n", pn));
-    }
-    if let Some(cat) = category {
-        out.push_str(&format!("    attribute category = PartCategory::{};\n", cat));
-    }
-    if let Some(m) = mass {
-        out.push_str(&format!("    attribute mass : MassProperty = {};\n", m));
-    }
-    if let Some(c) = cost {
-        out.push_str(&format!("    attribute cost : CostProperty = {};\n", c));
-    }
-    out.push_str("}\n");
-    out
+/// A row in a costed BOM report.
+#[derive(Debug, Clone, Serialize)]
+pub struct CostedBomRow {
+    pub level: usize,
+    pub name: String,
+    pub definition: String,
+    /// Per-unit quantity in the BOM.
+    pub bom_qty: u32,
+    /// Cumulative quantity for the production order.
+    pub total_qty: u32,
+    /// Resolved unit price from quote (if available).
+    pub unit_price: Option<f64>,
+    /// Extended price = total_qty × unit_price.
+    pub extended_price: Option<f64>,
+    /// Supplier name from best quote.
+    pub supplier: Option<String>,
+    /// Currency code from quote.
+    pub currency: Option<String>,
 }
 
-/// Build wizard steps for interactive BOM part creation.
-pub fn build_bom_add_wizard(model: Option<&sysml_core::model::Model>) -> Vec<sysml_core::interactive::WizardStep> {
-    use sysml_core::interactive::*;
+/// Build a costed BOM by walking the BOM tree and resolving quotes at the given
+/// production quantity. Returns rows with pricing and a total cost.
+///
+/// `order_qty` is the number of top-level assemblies being produced. Each part's
+/// total demand is `bom_qty × order_qty`, and the quote price break is resolved
+/// at that demand level.
+pub fn costed_bom(
+    tree: &BomNode,
+    quotes: &[sysml_source::Quote],
+    order_qty: u32,
+) -> (Vec<CostedBomRow>, f64) {
+    let mut rows = Vec::new();
+    let mut total_cost = 0.0;
+    costed_bom_recursive(tree, quotes, order_qty, 0, 1, &mut rows, &mut total_cost);
+    (rows, total_cost)
+}
 
-    let category_choices = if let Some(m) = model {
-        let choices = sysml_core::query::get_enum_choices(m, "PartCategory");
-        if !choices.is_empty() {
-            choices.into_iter().map(|(v, _)| ChoiceOption::new(&v, &v)).collect()
-        } else {
-            default_category_choices()
-        }
+fn costed_bom_recursive(
+    node: &BomNode,
+    quotes: &[sysml_source::Quote],
+    order_qty: u32,
+    level: usize,
+    parent_qty: u32,
+    rows: &mut Vec<CostedBomRow>,
+    total_cost: &mut f64,
+) {
+    let bom_qty = parent_qty * node.quantity;
+    let total_qty = bom_qty * order_qty;
+
+    let best = sysml_source::best_quote_for_part(quotes, &node.definition, total_qty);
+    let unit_price = best.and_then(|q| q.unit_price_at(total_qty));
+    let extended = unit_price.map(|p| p * total_qty as f64);
+    if let Some(ext) = extended {
+        *total_cost += ext;
+    }
+
+    rows.push(CostedBomRow {
+        level,
+        name: node.name.clone(),
+        definition: node.definition.clone(),
+        bom_qty,
+        total_qty,
+        unit_price,
+        extended_price: extended,
+        supplier: best.map(|q| q.supplier_name.clone()),
+        currency: best.map(|q| q.currency.clone()),
+    });
+
+    for child in &node.children {
+        costed_bom_recursive(child, quotes, order_qty, level + 1, bom_qty, rows, total_cost);
+    }
+}
+
+/// Format a costed BOM as a text table.
+pub fn format_costed_bom(rows: &[CostedBomRow], total_cost: f64) -> String {
+    let mut buf = String::new();
+    buf.push_str(&format!(
+        "{:<6} {:<20} {:<20} {:>8} {:>10} {:>12} {:>14} {:<15}\n",
+        "Level", "Name", "Definition", "BOM Qty", "Total Qty", "Unit Price", "Extended", "Supplier",
+    ));
+    buf.push_str(&format!("{}\n", "-".repeat(109)));
+
+    for row in rows {
+        let indent = "  ".repeat(row.level);
+        let price_str = row.unit_price.map(|p| format!("{:.4}", p)).unwrap_or_else(|| "-".into());
+        let ext_str = row.extended_price.map(|p| format!("{:.2}", p)).unwrap_or_else(|| "-".into());
+        let supplier = row.supplier.as_deref().unwrap_or("-");
+        buf.push_str(&format!(
+            "{:<6} {:<20} {:<20} {:>8} {:>10} {:>12} {:>14} {:<15}\n",
+            row.level,
+            truncate_str(&format!("{}{}", indent, row.name), 19),
+            truncate_str(&row.definition, 19),
+            row.bom_qty,
+            row.total_qty,
+            price_str,
+            ext_str,
+            truncate_str(supplier, 14),
+        ));
+    }
+
+    buf.push_str(&format!("{}\n", "-".repeat(109)));
+    buf.push_str(&format!("{:>78} {:>14.2}\n", "TOTAL:", total_cost));
+    buf
+}
+
+fn truncate_str(s: &str, max: usize) -> String {
+    if s.len() > max {
+        format!("{}...", &s[..max.saturating_sub(3)])
     } else {
-        default_category_choices()
-    };
-
-    vec![
-        WizardStep::string("name", "Part definition name")
-            .with_explanation("Name for the new part in the bill of materials."),
-        WizardStep::string("part_number", "Part number")
-            .with_explanation("Manufacturing part number or identifier.")
-            .optional(),
-        WizardStep {
-            id: "category".into(),
-            prompt: "Part category".into(),
-            explanation: Some("Classification of this part.".into()),
-            kind: PromptKind::Choice(category_choices),
-            required: false,
-            default: None,
-        },
-        WizardStep::number("mass", "Mass (kg)")
-            .with_explanation("Part mass in kilograms.")
-            .with_bounds(Some(0.0), None)
-            .optional(),
-        WizardStep::number("cost", "Unit cost")
-            .with_explanation("Cost per unit.")
-            .with_bounds(Some(0.0), None)
-            .optional(),
-    ]
+        s.to_string()
+    }
 }
 
-/// Interpret wizard results into (element_name, sysml_text).
-pub fn interpret_bom_add_wizard(result: &sysml_core::interactive::WizardResult) -> Option<(String, String)> {
-    let name = result.get_string("name")?;
-    let part_number = result.get_string("part_number");
-    let category = result.get_string("category");
-    let mass = result.get_number("mass");
-    let cost = result.get_number("cost");
-    let sysml = part_with_bom_to_sysml(name, part_number, category, mass, cost);
-    Some((name.to_string(), sysml))
-}
-
-fn default_category_choices() -> Vec<sysml_core::interactive::ChoiceOption> {
-    use sysml_core::interactive::ChoiceOption;
-    vec![
-        ChoiceOption::new("mechanical", "mechanical"),
-        ChoiceOption::new("electrical", "electrical"),
-        ChoiceOption::new("software", "software"),
-        ChoiceOption::new("fastener", "fastener"),
-        ChoiceOption::new("raw_material", "raw material"),
-    ]
+/// Generate `attribute unitCost = <price>;` lines for each part definition
+/// in the BOM, suitable for insertion into model files.
+///
+/// Returns a vec of (definition_name, sysml_attribute_line) pairs.
+pub fn cost_attributes_from_costed_bom(rows: &[CostedBomRow]) -> Vec<(String, String)> {
+    rows.iter()
+        .filter_map(|row| {
+            let price = row.unit_price?;
+            Some((
+                row.definition.clone(),
+                format!("attribute unitCost = {:.4};", price),
+            ))
+        })
+        .collect()
 }
 
 // ---------------------------------------------------------------------------
@@ -1306,45 +1348,137 @@ mod tests {
         assert_eq!(parse_make_or_buy(None), MakeOrBuy::Tbd);
     }
 
-    // -- SysML generator tests ----------------------------------------------
+    // -- costed BOM tests -----------------------------------------------------
 
     #[test]
-    fn part_with_bom_basic() {
-        let sysml = part_with_bom_to_sysml(
-            "Resistor", Some("R-100"), Some("electrical"), Some(0.001), Some(0.05),
-        );
-        assert!(sysml.contains("part def Resistor {"));
-        assert!(sysml.contains("partNumber = \"R-100\""));
-        assert!(sysml.contains("PartCategory::electrical"));
-        assert!(sysml.contains("mass : MassProperty = 0.001"));
-        assert!(sysml.contains("cost : CostProperty = 0.05"));
+    fn costed_bom_with_quotes() {
+        let model = vehicle_model();
+        let tree = build_bom_tree(&model, "Vehicle").unwrap();
+        let quotes = vec![
+            sysml_source::Quote {
+                part_name: "Engine".into(),
+                supplier_name: "EngCo".into(),
+                currency: "USD".into(),
+                lead_time_days: 30,
+                moq: 1,
+                valid_until: "2026-12-31".into(),
+                notes: String::new(),
+                price_breaks: vec![
+                    sysml_source::PriceBreak { min_qty: 1, unit_price: 5000.0 },
+                    sysml_source::PriceBreak { min_qty: 100, unit_price: 4500.0 },
+                ],
+            },
+            sysml_source::Quote {
+                part_name: "Wheel".into(),
+                supplier_name: "WheelCo".into(),
+                currency: "USD".into(),
+                lead_time_days: 14,
+                moq: 4,
+                valid_until: "2026-12-31".into(),
+                notes: String::new(),
+                price_breaks: vec![
+                    sysml_source::PriceBreak { min_qty: 1, unit_price: 150.0 },
+                    sysml_source::PriceBreak { min_qty: 100, unit_price: 120.0 },
+                ],
+            },
+        ];
+
+        // Order qty 10: Engine needs 10, Wheel needs 40
+        let (rows, total) = costed_bom(&tree, &quotes, 10);
+        assert_eq!(rows.len(), 3);
+
+        // Vehicle has no quote
+        assert!(rows[0].unit_price.is_none());
+
+        // Engine: 1 × 10 = 10 total, price at 10 = 5000
+        let engine = rows.iter().find(|r| r.definition == "Engine").unwrap();
+        assert_eq!(engine.total_qty, 10);
+        assert_eq!(engine.unit_price, Some(5000.0));
+        assert!((engine.extended_price.unwrap() - 50000.0).abs() < 0.01);
+
+        // Wheel: 4 × 10 = 40 total, price at 40 = 150
+        let wheel = rows.iter().find(|r| r.definition == "Wheel").unwrap();
+        assert_eq!(wheel.total_qty, 40);
+        assert_eq!(wheel.unit_price, Some(150.0));
+        assert!((wheel.extended_price.unwrap() - 6000.0).abs() < 0.01);
+
+        assert!((total - 56000.0).abs() < 0.01);
     }
 
     #[test]
-    fn part_with_bom_minimal() {
-        let sysml = part_with_bom_to_sysml("Widget", None, None, None, None);
-        assert!(sysml.contains("part def Widget {"));
-        assert!(!sysml.contains("partNumber"));
+    fn costed_bom_price_breaks_at_volume() {
+        let model = vehicle_model();
+        let tree = build_bom_tree(&model, "Vehicle").unwrap();
+        let quotes = vec![
+            sysml_source::Quote {
+                part_name: "Wheel".into(),
+                supplier_name: "WheelCo".into(),
+                currency: "USD".into(),
+                lead_time_days: 14,
+                moq: 1,
+                valid_until: "2026-12-31".into(),
+                notes: String::new(),
+                price_breaks: vec![
+                    sysml_source::PriceBreak { min_qty: 1, unit_price: 150.0 },
+                    sysml_source::PriceBreak { min_qty: 100, unit_price: 120.0 },
+                ],
+            },
+        ];
+
+        // Order qty 25: 4 × 25 = 100 wheels → hits the 100-break
+        let (rows, _) = costed_bom(&tree, &quotes, 25);
+        let wheel = rows.iter().find(|r| r.definition == "Wheel").unwrap();
+        assert_eq!(wheel.total_qty, 100);
+        assert_eq!(wheel.unit_price, Some(120.0));
     }
 
     #[test]
-    fn build_bom_wizard_defaults() {
-        let steps = build_bom_add_wizard(None);
-        assert!(steps.len() >= 3);
-        assert_eq!(steps[0].id, "name");
+    fn costed_bom_no_quotes() {
+        let model = vehicle_model();
+        let tree = build_bom_tree(&model, "Vehicle").unwrap();
+        let (rows, total) = costed_bom(&tree, &[], 10);
+        assert_eq!(rows.len(), 3);
+        assert!(rows.iter().all(|r| r.unit_price.is_none()));
+        assert!(total.abs() < f64::EPSILON);
     }
 
     #[test]
-    fn interpret_bom_wizard() {
-        use sysml_core::interactive::*;
-        let mut result = WizardResult::new();
-        result.set("name", WizardAnswer::String("Bracket".into()));
-        result.set("part_number", WizardAnswer::String("BR-200".into()));
-        result.set("category", WizardAnswer::String("mechanical".into()));
-        result.set("mass", WizardAnswer::Number(0.5));
-        let (name, sysml) = interpret_bom_add_wizard(&result).unwrap();
-        assert_eq!(name, "Bracket");
-        assert!(sysml.contains("partNumber = \"BR-200\""));
-        assert!(sysml.contains("PartCategory::mechanical"));
+    fn cost_attributes_from_costed() {
+        let rows = vec![
+            CostedBomRow {
+                level: 0, name: "v".into(), definition: "Vehicle".into(),
+                bom_qty: 1, total_qty: 10, unit_price: None,
+                extended_price: None, supplier: None, currency: None,
+            },
+            CostedBomRow {
+                level: 1, name: "e".into(), definition: "Engine".into(),
+                bom_qty: 1, total_qty: 10, unit_price: Some(5000.0),
+                extended_price: Some(50000.0), supplier: Some("EngCo".into()), currency: Some("USD".into()),
+            },
+        ];
+        let attrs = cost_attributes_from_costed_bom(&rows);
+        assert_eq!(attrs.len(), 1);
+        assert_eq!(attrs[0].0, "Engine");
+        assert!(attrs[0].1.contains("unitCost = 5000.0000"));
+    }
+
+    #[test]
+    fn format_costed_bom_output() {
+        let rows = vec![
+            CostedBomRow {
+                level: 0, name: "v".into(), definition: "Vehicle".into(),
+                bom_qty: 1, total_qty: 10, unit_price: None,
+                extended_price: None, supplier: None, currency: None,
+            },
+            CostedBomRow {
+                level: 1, name: "engine".into(), definition: "Engine".into(),
+                bom_qty: 1, total_qty: 10, unit_price: Some(5000.0),
+                extended_price: Some(50000.0), supplier: Some("EngCo".into()), currency: Some("USD".into()),
+            },
+        ];
+        let text = format_costed_bom(&rows, 50000.0);
+        assert!(text.contains("TOTAL:"));
+        assert!(text.contains("50000.00"));
+        assert!(text.contains("EngCo"));
     }
 }

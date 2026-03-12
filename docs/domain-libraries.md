@@ -110,7 +110,7 @@ Types for dimensional tolerance analysis and GD&T.
 
 ### SysMLBOM (`sysml-bom.sysml`)
 
-Types for bill of materials, mass/cost properties, and supplier management.
+Types for bill of materials, mass properties, and supplier management. Cost data is managed through quote records (see `source quote` and `bom cost` commands), not embedded in the SysML model.
 
 | Type | Kind | Description |
 |------|------|-------------|
@@ -119,7 +119,7 @@ Types for bill of materials, mass/cost properties, and supplier management.
 | `MakeOrBuy` | enum def | `make`, `buy`, `makeAndBuy`, `tbd` |
 | `PartIdentity` | attribute def | Part number, revision, category, lifecycle state |
 | `MassProperty` | attribute def | Mass value, type (actual/estimated/calculated/allocated), margin |
-| `CostProperty` | attribute def | Unit cost, tooling cost, basis, effective date |
+| `CostProperty` | attribute def | Unit cost, tooling cost, basis (written by `bom cost --apply`) |
 | `SupplierDef` | part def | Company name, code, qualification status, certifications |
 | `QualificationStatus` | enum def | `pending`, `conditional`, `approved`, `preferred`, `probation`, `disqualified` |
 | `SourceDef` | part def | Links part to supplier with lead time, MOQ, source type |

@@ -14,6 +14,7 @@ pub fn run(cli: &crate::Cli, kind: &SourceCommand) -> ExitCode {
             description,
             quantity,
         } => run_rfq(cli, part, description, *quantity),
+        SourceCommand::Quote { author } => run_quote(cli, author),
     }
 }
 
@@ -118,6 +119,92 @@ fn run_rfq(cli: &crate::Cli, part: &str, description: &str, quantity: u32) -> Ex
     }
 
     ExitCode::SUCCESS
+}
+
+fn run_quote(_cli: &crate::Cli, author: &str) -> ExitCode {
+    use sysml_core::interactive::{run_wizard, WizardRunner};
+    use crate::wizard::CliWizardRunner;
+
+    let runner = CliWizardRunner::new();
+    if !runner.is_interactive() {
+        eprintln!("error: `source quote` requires an interactive terminal");
+        return ExitCode::FAILURE;
+    }
+
+    // Step 1: Quote header (part, supplier, currency, lead time, moq)
+    let steps = sysml_source::build_quote_wizard_steps();
+    let result = match run_wizard(&runner, &steps) {
+        Some(r) => r,
+        None => {
+            eprintln!("Cancelled.");
+            return ExitCode::FAILURE;
+        }
+    };
+
+    let mut quote = match sysml_source::interpret_quote_wizard(&result) {
+        Some(q) => q,
+        None => {
+            eprintln!("error: incomplete wizard answers");
+            return ExitCode::FAILURE;
+        }
+    };
+
+    // Step 2: Add price breaks interactively
+    eprintln!("\nAdd price breaks (at least one required):");
+    loop {
+        let break_steps = sysml_source::build_price_break_steps();
+        let break_result = match run_wizard(&runner, &break_steps) {
+            Some(r) => r,
+            None => {
+                if quote.price_breaks.is_empty() {
+                    eprintln!("error: at least one price break is required");
+                    return ExitCode::FAILURE;
+                }
+                break;
+            }
+        };
+
+        if let Some(pb) = sysml_source::interpret_price_break(&break_result) {
+            eprintln!("  Added: qty >= {} → {:.4} {}", pb.min_qty, pb.unit_price, quote.currency);
+            quote.price_breaks.push(pb);
+        }
+
+        // Ask if they want to add another
+        let confirm_steps = vec![sysml_core::interactive::WizardStep::confirm(
+            "more",
+            "Add another price break?",
+        )];
+        let more = run_wizard(&runner, &confirm_steps)
+            .and_then(|r| r.get_bool("more"))
+            .unwrap_or(false);
+        if !more {
+            break;
+        }
+    }
+
+    // Sort price breaks by min_qty
+    quote.price_breaks.sort_by_key(|pb| pb.min_qty);
+
+    // Preview
+    eprintln!("\nQuote: {} → {} ({})", quote.supplier_name, quote.part_name, quote.currency);
+    for pb in &quote.price_breaks {
+        eprintln!("  qty >= {:>6} → {:.4} {}", pb.min_qty, pb.unit_price, quote.currency);
+    }
+    eprintln!("  Lead time: {} days, MOQ: {}", quote.lead_time_days, quote.moq);
+
+    // Write record
+    let record = sysml_source::create_quote_record(&quote, author);
+    let records_dir = crate::records::resolve_records_dir();
+    match crate::records::write_record(&record, &records_dir) {
+        Ok(path) => {
+            eprintln!("\nWrote quote record: {}", path.display());
+            ExitCode::SUCCESS
+        }
+        Err(e) => {
+            eprintln!("error: failed to write record: {}", e);
+            ExitCode::FAILURE
+        }
+    }
 }
 
 fn truncate(s: &str, max: usize) -> String {

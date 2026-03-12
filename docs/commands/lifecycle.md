@@ -191,18 +191,27 @@ sysml bom export model.sysml --root Vehicle --format csv
 | `--root <DEF>` | Root part definition name (required) |
 | `--format <FORMAT>` | Output format (default: `csv`) |
 
-### bom add
+### bom cost
 
-Add a BOM part with identity, mass, and cost attributes using an interactive wizard.
+Show a costed BOM by resolving supplier quotes at a given production quantity. Reads quote records from `.sysml/records/` and matches them to parts in the BOM tree using quantity-based price breaks.
 
 ```sh
-sysml bom add --file model.sysml
-sysml bom add                           # prints to stdout
+sysml bom cost model.sysml --root Vehicle --quantity 100
+sysml bom cost model.sysml --root Vehicle --quantity 500 --apply
+sysml bom cost -f json model.sysml --root Vehicle --quantity 100
 ```
+
+| Option | Description |
+|--------|-------------|
+| `--root <DEF>` | Root part definition name (required) |
+| `--quantity <N>` | Production order quantity (required) |
+| `--apply` | Write resolved `unitCost` attributes back into part definitions |
+
+The `--apply` flag inserts `attribute unitCost = <price>;` into each part definition that has a matching quote. This lets you snapshot pricing into the model for a specific production quantity.
 
 ## source
 
-Supplier management: approved source lists, RFQ generation.
+Supplier management: approved source lists, quotes, and RFQ generation.
 
 ### source list
 
@@ -233,6 +242,21 @@ sysml source rfq --part BrakePad --quantity 1000 --description "Ceramic brake pa
 | `--part <PART>` | Part name (required) |
 | `--quantity <N>` | Required quantity (default: 1) |
 | `--description <TEXT>` | Part description |
+
+### source quote
+
+Record a supplier quote with quantity-based price breaks using an interactive wizard. Writes a TOML record to `.sysml/records/`.
+
+```sh
+sysml source quote
+sysml source quote --author "Jane Smith"
+```
+
+| Option | Description |
+|--------|-------------|
+| `--author <NAME>` | Author name for the record (default: `engineer`) |
+
+The wizard prompts for part name, supplier, currency, lead time, MOQ, and one or more price breaks (minimum quantity + unit price at that tier). Quote records are used by `sysml bom cost` to compute costed BOMs.
 
 ## mfg
 

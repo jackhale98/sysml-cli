@@ -15,7 +15,12 @@ pub fn run(cli: &crate::Cli, kind: &BomCommand) -> ExitCode {
         } => run_rollup(cli, files, root, *include_mass, *include_cost),
         BomCommand::WhereUsed { files, part } => run_where_used(cli, files, part),
         BomCommand::Export { files, root, format } => run_export(cli, files, root, format),
-        BomCommand::Add { file, inside } => run_add(file.as_ref(), inside.as_deref()),
+        BomCommand::Cost {
+            files,
+            root,
+            quantity,
+            apply,
+        } => run_cost(cli, files, root, *quantity, *apply),
     }
 }
 
@@ -125,65 +130,113 @@ fn run_export(
     ExitCode::SUCCESS
 }
 
-fn run_add(file: Option<&PathBuf>, inside: Option<&str>) -> ExitCode {
-    use sysml_core::interactive::{run_wizard, WizardRunner};
-    use crate::wizard::CliWizardRunner;
+fn run_cost(
+    cli: &crate::Cli,
+    files: &[PathBuf],
+    root: &str,
+    quantity: u32,
+    apply: bool,
+) -> ExitCode {
+    let models = match parse_files(files) {
+        Some(m) => m,
+        None => return ExitCode::FAILURE,
+    };
 
-    let runner = CliWizardRunner::new();
-    if !runner.is_interactive() {
-        eprintln!("error: `bom add` requires an interactive terminal");
-        return ExitCode::FAILURE;
-    }
+    let merged = merge_models(&models);
 
-    let steps = sysml_bom::build_bom_add_wizard(None);
-    let result = match run_wizard(&runner, &steps) {
-        Some(r) => r,
+    let tree = match sysml_bom::build_bom_tree(&merged, root) {
+        Some(t) => t,
         None => {
-            eprintln!("Cancelled.");
+            eprintln!("error: no part definition `{root}` found in model");
             return ExitCode::FAILURE;
         }
     };
 
-    let (name, sysml_text) = match sysml_bom::interpret_bom_add_wizard(&result) {
-        Some(pair) => pair,
-        None => {
-            eprintln!("error: incomplete wizard answers");
-            return ExitCode::FAILURE;
-        }
-    };
+    // Load quote records from .sysml/records/
+    let records_dir = crate::records::resolve_records_dir();
+    let records = crate::records::read_records(&records_dir);
+    let quotes = sysml_source::load_quotes_from_records(&records);
 
-    eprintln!("\nPreview:");
-    for line in sysml_text.lines() {
-        eprintln!("  {}", line);
+    if quotes.is_empty() {
+        eprintln!("warning: no quote records found in {}", records_dir.display());
+        eprintln!("  Create quotes with: sysml source quote");
     }
-    eprintln!();
 
-    let (target, parent) = if let Some(f) = file {
-        (f.clone(), inside.map(|s| s.to_string()))
+    let (rows, total_cost) = sysml_bom::costed_bom(&tree, &quotes, quantity);
+
+    if cli.format == "json" {
+        let output = serde_json::json!({
+            "order_quantity": quantity,
+            "rows": serde_json::to_value(&rows).unwrap_or_default(),
+            "total_cost": total_cost,
+        });
+        println!("{}", serde_json::to_string_pretty(&output).unwrap_or_default());
     } else {
-        let cwd = std::env::current_dir().unwrap_or_default();
-        match crate::model_writer::select_target_file(&cwd) {
-            Some(f) => {
-                let parent = crate::model_writer::select_parent_def(&f);
-                (f, parent)
-            }
-            None => {
-                println!("{}", sysml_text);
-                return ExitCode::SUCCESS;
-            }
-        }
-    };
+        println!("Costed BOM — {} × {} (order qty {})\n", root, quantity, quantity);
+        print!("{}", sysml_bom::format_costed_bom(&rows, total_cost));
+    }
 
-    match crate::model_writer::write_to_model(&target, &sysml_text, parent.as_deref()) {
-        Ok(()) => {
-            eprintln!("Wrote {} to {}", name, target.display());
-            ExitCode::SUCCESS
+    if apply {
+        let attrs = sysml_bom::cost_attributes_from_costed_bom(&rows);
+        if attrs.is_empty() {
+            eprintln!("\nNo prices to apply (no matching quotes found).");
+            return ExitCode::SUCCESS;
         }
-        Err(e) => {
-            eprintln!("error: {}", e);
-            ExitCode::FAILURE
+
+        let mut applied = 0;
+        for file in files {
+            let (path, source) = match crate::read_source(file) {
+                Ok(ps) => ps,
+                Err(_) => continue,
+            };
+            let model = sysml_core::parser::parse_file(&path, &source);
+            let mut current_source = source.clone();
+
+            // Apply in reverse order to preserve byte offsets
+            let mut edits_for_file: Vec<_> = attrs.iter()
+                .filter(|(def_name, _)| model.find_def(def_name).is_some())
+                .collect();
+            edits_for_file.reverse();
+
+            for (def_name, attr_line) in &edits_for_file {
+                // Re-parse after each edit to get fresh byte offsets
+                let fresh_model = sysml_core::parser::parse_file(&path, &current_source);
+                match sysml_core::codegen::edit::insert_member(
+                    &current_source,
+                    &fresh_model,
+                    def_name,
+                    attr_line,
+                ) {
+                    Ok(edit) => {
+                        match sysml_core::codegen::edit::apply_edits(
+                            &current_source,
+                            &sysml_core::codegen::edit::EditPlan { edits: vec![edit] },
+                        ) {
+                            Ok(new_source) => {
+                                current_source = new_source;
+                                applied += 1;
+                            }
+                            Err(e) => eprintln!("warning: failed to apply edit for {}: {}", def_name, e),
+                        }
+                    }
+                    Err(e) => eprintln!("warning: skipping {}: {}", def_name, e),
+                }
+            }
+
+            if applied > 0 {
+                if let Err(e) = std::fs::write(file, &current_source) {
+                    eprintln!("error: failed to write {}: {}", file.display(), e);
+                    return ExitCode::FAILURE;
+                }
+            }
+        }
+
+        if applied > 0 {
+            eprintln!("\nApplied unitCost to {} definitions.", applied);
         }
     }
+
+    ExitCode::SUCCESS
 }
 
 /// Merge multiple models into a single model for cross-file BOM lookups.
