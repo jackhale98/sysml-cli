@@ -699,6 +699,48 @@ fn walk_node_scoped(
             extract_flow(&node, source, model);
         }
 
+        // --- Transition statement: `transition [name] first Source [accept ...] [if guard] [do effect] then Target;` ---
+        "transition_statement" => {
+            let name = field_text(&node, "name", source);
+            let mut source_state: Option<String> = None;
+            let mut target_state: Option<String> = None;
+            let mut saw_first = false;
+            let mut saw_then = false;
+            let mut cursor = node.walk();
+            for child in node.children(&mut cursor) {
+                match child.kind() {
+                    "first" => { saw_first = true; }
+                    "then" => { saw_then = true; }
+                    "qualified_name" | "identifier" | "feature_chain" => {
+                        let text = node_text(&child, source).to_string();
+                        if saw_then {
+                            target_state = Some(text);
+                        } else if saw_first && source_state.is_none() {
+                            source_state = Some(text);
+                        }
+                    }
+                    _ => {}
+                }
+            }
+            if target_state.is_some() {
+                model.usages.push(Usage {
+                    kind: "transition".to_string(),
+                    name: name.unwrap_or_default(),
+                    type_ref: target_state,
+                    span: Span::from_node(&node),
+                    direction: None,
+                    is_conjugated: false,
+                    parent_def: parent_def_name.map(|s| s.to_string()),
+                    multiplicity: None,
+                    value_expr: source_state, // source state stored here
+                    short_name: None,
+                    redefinition: None,
+                    subsets: None,
+                    qualified_name: None,
+                });
+            }
+        }
+
         // --- Import statement ---
         "import_statement" => {
             let full_text = node_text(&node, source).to_string();
@@ -990,16 +1032,18 @@ fn get_body_braces(node: &Node) -> (Option<usize>, Option<usize>) {
 fn extract_view_body(node: &Node, source: &[u8], name: &str) -> ViewDef {
     let mut exposes = Vec::new();
     let mut kind_filters = Vec::new();
+    let mut render_as = None;
 
     let mut cursor = node.walk();
     for child in node.children(&mut cursor) {
-        visit_view_body_node(&child, source, &mut exposes, &mut kind_filters);
+        visit_view_body_node(&child, source, &mut exposes, &mut kind_filters, &mut render_as);
     }
 
     ViewDef {
         name: name.to_string(),
         exposes,
         kind_filters,
+        render_as,
         span: Span::from_node(node),
     }
 }
@@ -1009,6 +1053,7 @@ fn visit_view_body_node(
     source: &[u8],
     exposes: &mut Vec<String>,
     kind_filters: &mut Vec<String>,
+    render_as: &mut Option<String>,
 ) {
     match node.kind() {
         "expose_statement" => {
@@ -1043,10 +1088,22 @@ fn visit_view_body_node(
             }
         }
         _ => {
+            // Check for render clause: "render asInterconnectionDiagram;"
+            let text = node_text(node, source).trim().to_string();
+            if text.starts_with("render ") {
+                let val = text
+                    .strip_prefix("render ")
+                    .unwrap_or("")
+                    .trim_end_matches(';')
+                    .trim();
+                if !val.is_empty() {
+                    *render_as = Some(val.to_string());
+                }
+            }
             // Recurse into child nodes
             let mut cursor = node.walk();
             for child in node.children(&mut cursor) {
-                visit_view_body_node(&child, source, exposes, kind_filters);
+                visit_view_body_node(&child, source, exposes, kind_filters, render_as);
             }
         }
     }

@@ -114,6 +114,33 @@ fn extract_action_body(body: &Node, source: &[u8], steps: &mut Vec<ActionStep>) 
                     }
                 }
             }
+            // Check if this is a fork_node with empty branches — collect
+            // subsequent then_succession siblings as branches
+            if let ActionStep::Fork { name, branches, span } = &step {
+                if branches.is_empty() {
+                    let mut collected_branches = Vec::new();
+                    let mut j = i + 1;
+                    while j < children.len() {
+                        if children[j].kind() == "then_succession" {
+                            if let Some(branch_step) = extract_step(&children[j], source) {
+                                collected_branches.push(branch_step);
+                            }
+                            j += 1;
+                        } else {
+                            break;
+                        }
+                    }
+                    if !collected_branches.is_empty() {
+                        steps.push(ActionStep::Fork {
+                            name: name.clone(),
+                            branches: collected_branches,
+                            span: span.clone(),
+                        });
+                        i = j;
+                        continue;
+                    }
+                }
+            }
             steps.push(step);
         }
         i += 1;
@@ -869,5 +896,31 @@ mod tests {
         let source = "part def Vehicle;";
         let actions = extract_actions("test.sysml", source);
         assert!(actions.is_empty());
+    }
+
+    #[test]
+    fn extract_fork_with_then_branches() {
+        let source = r#"
+            action def BoardVehicle {
+                action driverGetIn;
+                action passengerGetIn;
+                fork node forkBoard;
+                then driverGetIn;
+                then passengerGetIn;
+                join node joinBoard;
+            }
+        "#;
+        let actions = extract_actions("test.sysml", source);
+        assert!(!actions.is_empty(), "should extract action");
+        let a = &actions[0];
+        // Should have a Fork step with 2 branches (from then_succession siblings)
+        let fork = a.steps.iter().find(|s| matches!(s, ActionStep::Fork { .. }));
+        assert!(fork.is_some(), "expected Fork step, got {:?}", a.steps);
+        if let Some(ActionStep::Fork { branches, .. }) = fork {
+            assert_eq!(branches.len(), 2, "fork should have 2 branches, got {:?}", branches);
+        }
+        // Should also have a Join step
+        let join = a.steps.iter().find(|s| matches!(s, ActionStep::Join { .. }));
+        assert!(join.is_some(), "expected Join step, got {:?}", a.steps);
     }
 }

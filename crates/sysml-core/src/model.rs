@@ -369,6 +369,8 @@ pub struct ViewDef {
     pub exposes: Vec<String>,
     /// Kind filters extracted from filter statements (e.g., "part", "port").
     pub kind_filters: Vec<String>,
+    /// Render clause value (e.g., "asInterconnectionDiagram", "asTableDiagram").
+    pub render_as: Option<String>,
     pub span: Span,
 }
 

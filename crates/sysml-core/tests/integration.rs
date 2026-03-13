@@ -589,3 +589,32 @@ fn parse_fork_join_nodes() {
     assert!(branches.len() >= 2, "Should find at least 2 then_succession branches; found: {:?}",
         branches.iter().map(|b| &b.name).collect::<Vec<_>>());
 }
+
+// --- Transition statement extraction ---
+
+#[test]
+fn parse_transition_statement() {
+    let model = parse(r#"
+        state def VehicleStates {
+            state off;
+            state starting;
+            state on;
+            transition first off then starting;
+            transition startComplete first starting then on;
+        }
+    "#);
+    let transitions: Vec<_> = model.usages.iter().filter(|u| u.kind == "transition").collect();
+    assert_eq!(transitions.len(), 2, "Should find 2 transitions; usages: {:?}",
+        model.usages.iter().map(|u| format!("{}:{}", u.kind, u.name)).collect::<Vec<_>>());
+
+    // First transition: unnamed, off → starting
+    let t1 = &transitions[0];
+    assert_eq!(t1.value_expr.as_deref(), Some("off"), "Source state should be 'off'");
+    assert_eq!(t1.type_ref.as_deref(), Some("starting"), "Target state should be 'starting'");
+
+    // Second transition: named startComplete, starting → on
+    let t2 = &transitions[1];
+    assert_eq!(t2.name, "startComplete");
+    assert_eq!(t2.value_expr.as_deref(), Some("starting"), "Source state should be 'starting'");
+    assert_eq!(t2.type_ref.as_deref(), Some("on"), "Target state should be 'on'");
+}
