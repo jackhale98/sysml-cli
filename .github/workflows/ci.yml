@@ -35,13 +35,13 @@ jobs:
         run: cargo test -p sysml-core && cargo test -p sysml-cli
 
       - name: Lint fixtures
-        run: cargo run -- lint --severity error --disable duplicates,syntax test/fixtures/*.sysml
+        run: cargo run -p sysml-cli -- lint --severity error --disable duplicates,syntax test/fixtures/*.sysml
 
       - name: Simulation smoke test
-        run: cargo run -- simulate list test/fixtures/simulation.sysml
+        run: cargo run -p sysml-cli -- simulate list test/fixtures/simulation.sysml
 
       - name: Export smoke test
-        run: cargo run -- export list test/fixtures/fmi-vehicle.sysml
+        run: cargo run -p sysml-cli -- export list test/fixtures/fmi-vehicle.sysml
 
       - name: Build LSP
         run: cargo build -p sysml-lsp
