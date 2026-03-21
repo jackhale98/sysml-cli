@@ -45,8 +45,8 @@ fn capture_to_token_type(capture_name: &str) -> Option<u32> {
     }
 }
 
-/// The embedded highlights query source.
-const HIGHLIGHTS_SCM: &str = include_str!("../../../tree-sitter-sysml/queries/highlights.scm");
+/// The embedded highlights query source (copied by build.rs).
+const HIGHLIGHTS_SCM: &str = include_str!(concat!(env!("OUT_DIR"), "/highlights.scm"));
 
 /// Compute semantic tokens for a source string.
 pub fn semantic_tokens(source: &str) -> Vec<SemanticToken> {
