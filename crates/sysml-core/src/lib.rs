@@ -33,3 +33,4 @@ pub mod resolver;
 pub mod sim;
 #[cfg(feature = "sqlite")]
 pub mod sqlite_cache;
+pub mod stdlib;

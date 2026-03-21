@@ -9,19 +9,30 @@ repository = "https://github.com/jackhale98/sysml-cli"
 [features]
 default = []
 sqlite = ["sysml-core/sqlite"]
+lifecycle = ["verify", "scaffold", "risk", "tol", "bom", "source", "mfg", "qc", "capa", "report"]
+verify = ["dep:sysml-verify"]
+scaffold = ["dep:sysml-scaffold"]
+risk = ["dep:sysml-risk"]
+tol = ["dep:sysml-tol"]
+bom = ["dep:sysml-bom", "source"]
+source = ["dep:sysml-source"]
+mfg = ["dep:sysml-mfg"]
+qc = ["dep:sysml-qc"]
+capa = ["dep:sysml-capa"]
+report = ["dep:sysml-report"]
 
 [dependencies]
 sysml-core = { path = "../sysml-core" }
-sysml-verify = { path = "../sysml-verify" }
-sysml-scaffold = { path = "../sysml-scaffold" }
-sysml-risk = { path = "../sysml-risk" }
-sysml-tol = { path = "../sysml-tol" }
-sysml-bom = { path = "../sysml-bom" }
-sysml-source = { path = "../sysml-source" }
-sysml-mfg = { path = "../sysml-mfg" }
-sysml-qc = { path = "../sysml-qc" }
-sysml-capa = { path = "../sysml-capa" }
-sysml-report = { path = "../sysml-report" }
+sysml-verify = { path = "../sysml-verify", optional = true }
+sysml-scaffold = { path = "../sysml-scaffold", optional = true }
+sysml-risk = { path = "../sysml-risk", optional = true }
+sysml-tol = { path = "../sysml-tol", optional = true }
+sysml-bom = { path = "../sysml-bom", optional = true }
+sysml-source = { path = "../sysml-source", optional = true }
+sysml-mfg = { path = "../sysml-mfg", optional = true }
+sysml-qc = { path = "../sysml-qc", optional = true }
+sysml-capa = { path = "../sysml-capa", optional = true }
+sysml-report = { path = "../sysml-report", optional = true }
 clap = { version = "4", features = ["derive", "env"] }
 serde_json = "1"
 dialoguer = { version = "0.11", features = ["fuzzy-select"] }

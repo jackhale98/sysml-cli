@@ -86,17 +86,27 @@ fn main() -> ExitCode {
         Command::Check { files, disable, severity, lint_only } => {
             commands::check::run(&cli, files, disable, severity, *lint_only)
         }
+        #[cfg(feature = "verify")]
         Command::Verify { kind } => commands::verify::run(&cli, kind),
+        #[cfg(feature = "scaffold")]
         Command::Example { name, output, list } => {
             commands::scaffold::run_example_command(name.as_deref(), output.as_ref(), *list)
         }
+        #[cfg(feature = "risk")]
         Command::Risk { kind } => commands::risk::run(&cli, kind),
+        #[cfg(feature = "tol")]
         Command::Tol { kind } => commands::tol::run(&cli, kind),
+        #[cfg(feature = "bom")]
         Command::Bom { kind } => commands::bom::run(&cli, kind),
+        #[cfg(feature = "source")]
         Command::Source { kind } => commands::source::run(&cli, kind),
+        #[cfg(feature = "mfg")]
         Command::Mfg { kind } => commands::mfg::run(&cli, kind),
+        #[cfg(feature = "qc")]
         Command::Qc { kind } => commands::qc::run(&cli, kind),
+        #[cfg(feature = "capa")]
         Command::Quality { kind } => commands::quality::run(&cli, kind),
+        #[cfg(feature = "report")]
         Command::Report { kind } => commands::report::run(&cli, kind),
         Command::Guide { topic } => commands::help_topics::run(topic.as_deref()),
         Command::Pipeline { ref kind } => commands::pipeline::run(kind, &cli.format, cli.quiet),

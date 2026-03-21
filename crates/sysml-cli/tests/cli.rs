@@ -152,6 +152,7 @@ fn show_raw_missing_element() {
 // verify run (non-interactive — should fail without TTY)
 // ========================================================================
 
+#[cfg(feature = "verify")]
 #[test]
 fn verify_run_no_tty() {
     // verify run requires an interactive terminal; should fail gracefully in CI
@@ -166,6 +167,7 @@ fn verify_run_no_tty() {
 // mfg start-lot (non-interactive — should fail without TTY)
 // ========================================================================
 
+#[cfg(feature = "mfg")]
 #[test]
 fn mfg_start_lot_no_tty() {
     cmd()
@@ -175,6 +177,7 @@ fn mfg_start_lot_no_tty() {
         .stderr(predicate::str::contains("interactive terminal"));
 }
 
+#[cfg(feature = "mfg")]
 #[test]
 fn mfg_step_missing_lot() {
     cmd()
@@ -641,6 +644,7 @@ fn lint_suggests_closest_match() {
 // quality
 // ========================================================================
 
+#[cfg(feature = "capa")]
 #[test]
 fn quality_list() {
     cmd()
@@ -652,6 +656,7 @@ fn quality_list() {
         .stdout(predicate::str::contains("Process Deviation"));
 }
 
+#[cfg(feature = "capa")]
 #[test]
 fn quality_trend_no_files() {
     cmd()
@@ -661,6 +666,7 @@ fn quality_trend_no_files() {
         .stdout(predicate::str::contains("Trend Analysis"));
 }
 
+#[cfg(feature = "capa")]
 #[test]
 fn quality_create_requires_terminal() {
     // Non-interactive invocation should fail gracefully
@@ -671,6 +677,7 @@ fn quality_create_requires_terminal() {
         .stderr(predicate::str::contains("interactive terminal"));
 }
 
+#[cfg(feature = "capa")]
 #[test]
 fn quality_rca_requires_terminal() {
     cmd()
@@ -680,6 +687,7 @@ fn quality_rca_requires_terminal() {
         .stderr(predicate::str::contains("interactive terminal"));
 }
 
+#[cfg(feature = "capa")]
 #[test]
 fn quality_action_requires_terminal() {
     cmd()

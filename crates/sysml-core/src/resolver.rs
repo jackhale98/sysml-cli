@@ -89,6 +89,15 @@ impl Project {
                 }
             }
         }
+
+        // Merge the embedded standard library packages so that
+        // `import ISQ::*;` etc. resolve against real definitions.
+        for (pkg, defs) in crate::stdlib::stdlib_package_defs() {
+            self.package_defs
+                .entry(pkg.clone())
+                .or_default()
+                .extend(defs.iter().cloned());
+        }
     }
 
     /// Resolve imports for a specific model, returning all externally

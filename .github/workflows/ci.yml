@@ -7,7 +7,8 @@ on:
     branches: [main]
 
 jobs:
-  test:
+  test-core:
+    name: Core (no lifecycle features)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -25,13 +26,13 @@ jobs:
             ~/.cargo/registry
             ~/.cargo/git
             target
-          key: ${{ runner.os }}-cargo-${{ hashFiles('Cargo.lock') }}
+          key: ${{ runner.os }}-cargo-core-${{ hashFiles('Cargo.lock') }}
 
-      - name: Build
-        run: cargo build
+      - name: Build (core)
+        run: cargo build -p sysml-cli
 
-      - name: Test
-        run: cargo test
+      - name: Test (core)
+        run: cargo test -p sysml-core && cargo test -p sysml-cli
 
       - name: Lint fixtures
         run: cargo run -- lint --severity error --disable duplicates,syntax test/fixtures/*.sysml
@@ -41,3 +42,30 @@ jobs:
 
       - name: Export smoke test
         run: cargo run -- export list test/fixtures/fmi-vehicle.sysml
+
+  test-lifecycle:
+    name: Full (lifecycle features)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Clone tree-sitter-sysml grammar
+        run: git clone https://github.com/jackhale98/tree-sitter-sysml.git ../tree-sitter-sysml
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache cargo
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: ${{ runner.os }}-cargo-lifecycle-${{ hashFiles('Cargo.lock') }}
+
+      - name: Build (lifecycle)
+        run: cargo build --features lifecycle
+
+      - name: Test (lifecycle)
+        run: cargo test --workspace --features lifecycle

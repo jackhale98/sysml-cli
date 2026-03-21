@@ -59,30 +59,53 @@ jobs:
             target
           key: ${{ runner.os }}-${{ matrix.target }}-cargo-${{ hashFiles('Cargo.lock') }}
 
-      - name: Build release
-        run: cargo build --release --target ${{ matrix.target }}
+      # -- Core binary (sysml) --
+      - name: Build core release
+        run: cargo build --release --target ${{ matrix.target }} -p sysml-cli
 
-      - name: Package (Unix)
+      - name: Package core (Unix)
         if: runner.os != 'Windows'
         run: |
           cd target/${{ matrix.target }}/release
           tar czf ../../../${{ matrix.artifact }}.tar.gz sysml
           cd ../../..
 
-      - name: Package (Windows)
+      - name: Package core (Windows)
         if: runner.os == 'Windows'
         run: |
           cd target/${{ matrix.target }}/release
           7z a ../../../${{ matrix.artifact }}.zip sysml.exe
           cd ../../..
 
-      - name: Upload artifact
+      # -- Lifecycle binary (sysml-lifecycle) --
+      - name: Build lifecycle release
+        run: cargo build --release --target ${{ matrix.target }} -p sysml-cli --features lifecycle
+
+      - name: Package lifecycle (Unix)
+        if: runner.os != 'Windows'
+        run: |
+          cp target/${{ matrix.target }}/release/sysml target/${{ matrix.target }}/release/sysml-lifecycle
+          cd target/${{ matrix.target }}/release
+          tar czf ../../../${{ matrix.artifact }}-lifecycle.tar.gz sysml-lifecycle
+          cd ../../..
+
+      - name: Package lifecycle (Windows)
+        if: runner.os == 'Windows'
+        run: |
+          copy target\${{ matrix.target }}\release\sysml.exe target\${{ matrix.target }}\release\sysml-lifecycle.exe
+          cd target/${{ matrix.target }}/release
+          7z a ../../../${{ matrix.artifact }}-lifecycle.zip sysml-lifecycle.exe
+          cd ../../..
+
+      - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
           name: ${{ matrix.artifact }}
           path: |
             ${{ matrix.artifact }}.tar.gz
             ${{ matrix.artifact }}.zip
+            ${{ matrix.artifact }}-lifecycle.tar.gz
+            ${{ matrix.artifact }}-lifecycle.zip
 
   release:
     needs: build

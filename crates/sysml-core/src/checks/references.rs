@@ -137,6 +137,10 @@ impl Check for UnresolvedTypeCheck {
         for &b in BUILTIN_TYPES {
             known.insert(b);
         }
+        // Add definitions from the embedded standard library
+        for name in crate::stdlib::stdlib_definitions() {
+            known.insert(name.as_str());
+        }
         // Add names resolved from imports
         for name in &model.resolved_imports {
             known.insert(name.as_str());

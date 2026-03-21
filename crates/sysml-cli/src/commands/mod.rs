@@ -1,5 +1,7 @@
 pub mod add;
+#[cfg(feature = "bom")]
 pub mod bom;
+#[cfg(feature = "capa")]
 pub mod quality;
 pub mod check;
 pub mod lint;
@@ -12,11 +14,15 @@ pub mod diagram;
 pub mod simulate;
 pub mod export;
 pub mod fmt;
+#[cfg(feature = "mfg")]
 pub mod mfg;
+#[cfg(feature = "qc")]
 pub mod qc;
 pub mod remove;
 pub mod rename;
+#[cfg(feature = "report")]
 pub mod report;
+#[cfg(feature = "source")]
 pub mod source;
 pub mod stats;
 pub mod deps;
@@ -26,7 +32,11 @@ pub mod coverage;
 pub mod help_topics;
 pub mod index;
 pub mod init;
+#[cfg(feature = "risk")]
 pub mod risk;
+#[cfg(feature = "scaffold")]
 pub mod scaffold;
+#[cfg(feature = "tol")]
 pub mod tol;
+#[cfg(feature = "verify")]
 pub mod verify;

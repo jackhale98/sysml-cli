@@ -196,21 +196,29 @@ fn run_stdout(
 ) -> ExitCode {
     // For teach mode, delegate to scaffold
     if teach {
-        let options = sysml_scaffold::ScaffoldOptions {
-            extends: extends.map(|s| s.to_string()),
-            doc: doc.map(|s| s.to_string()),
-            members: Vec::new(),
-            with_teaching_comments: true,
-        };
-        match sysml_scaffold::scaffold_element(kind, name, &options) {
-            Ok(text) => {
-                print!("{}", text);
-                return ExitCode::SUCCESS;
+        #[cfg(feature = "scaffold")]
+        {
+            let options = sysml_scaffold::ScaffoldOptions {
+                extends: extends.map(|s| s.to_string()),
+                doc: doc.map(|s| s.to_string()),
+                members: Vec::new(),
+                with_teaching_comments: true,
+            };
+            match sysml_scaffold::scaffold_element(kind, name, &options) {
+                Ok(text) => {
+                    print!("{}", text);
+                    return ExitCode::SUCCESS;
+                }
+                Err(e) => {
+                    eprintln!("error: {}", e);
+                    return ExitCode::FAILURE;
+                }
             }
-            Err(e) => {
-                eprintln!("error: {}", e);
-                return ExitCode::FAILURE;
-            }
+        }
+        #[cfg(not(feature = "scaffold"))]
+        {
+            eprintln!("error: --teach requires the 'scaffold' feature (install with --features scaffold)");
+            return ExitCode::FAILURE;
         }
     }
 

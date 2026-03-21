@@ -567,6 +567,7 @@ pub(crate) enum Command {
     /// EXAMPLES:
     ///   sysml verify coverage model.sysml
     ///   sysml verify list model.sysml
+    #[cfg(feature = "verify")]
     Verify {
         #[command(subcommand)]
         kind: VerifyCommand,
@@ -580,6 +581,7 @@ pub(crate) enum Command {
     ///   sysml example brake-system
     ///   sysml example sensor-module -o ./myproject
     ///   sysml example --list
+    #[cfg(feature = "scaffold")]
     Example {
         /// Example name (omit with --list to see available examples).
         name: Option<String>,
@@ -601,6 +603,7 @@ pub(crate) enum Command {
     ///   sysml risk list model.sysml
     ///   sysml risk matrix model.sysml
     ///   sysml risk fmea model.sysml
+    #[cfg(feature = "risk")]
     Risk {
         #[command(subcommand)]
         kind: RiskCommand,
@@ -613,6 +616,7 @@ pub(crate) enum Command {
     /// EXAMPLES:
     ///   sysml tol analyze model.sysml
     ///   sysml tol sensitivity model.sysml
+    #[cfg(feature = "tol")]
     Tol {
         #[command(subcommand)]
         kind: TolCommand,
@@ -626,6 +630,7 @@ pub(crate) enum Command {
     ///   sysml bom rollup model.sysml --root Vehicle
     ///   sysml bom where-used model.sysml --part Engine
     ///   sysml bom export model.sysml --root Vehicle
+    #[cfg(feature = "bom")]
     Bom {
         #[command(subcommand)]
         kind: BomCommand,
@@ -639,6 +644,7 @@ pub(crate) enum Command {
     ///   sysml source list model.sysml
     ///   sysml source asl model.sysml
     ///   sysml source rfq --part Resistor --quantity 5000
+    #[cfg(feature = "source")]
     Source {
         #[command(subcommand)]
         kind: SourceCommand,
@@ -651,6 +657,7 @@ pub(crate) enum Command {
     /// EXAMPLES:
     ///   sysml mfg list model.sysml
     ///   sysml mfg spc --parameter Diameter --values 10.01,10.02,9.99,10.00
+    #[cfg(feature = "mfg")]
     Mfg {
         #[command(subcommand)]
         kind: MfgCommand,
@@ -663,6 +670,7 @@ pub(crate) enum Command {
     /// EXAMPLES:
     ///   sysml qc sample-size --lot-size 500
     ///   sysml qc capability --usl 10.05 --lsl 9.95 --values 10.01,10.02,9.99
+    #[cfg(feature = "qc")]
     Qc {
         #[command(subcommand)]
         kind: QcCommand,
@@ -676,6 +684,7 @@ pub(crate) enum Command {
     /// EXAMPLES:
     ///   sysml quality trend model.sysml
     ///   sysml quality list
+    #[cfg(feature = "capa")]
     Quality {
         #[command(subcommand)]
         kind: QualityCommand,
@@ -689,6 +698,7 @@ pub(crate) enum Command {
     ///   sysml report dashboard model.sysml
     ///   sysml report traceability model.sysml --requirement BrakeReq
     ///   sysml report gate model.sysml --gate-name CDR
+    #[cfg(feature = "report")]
     Report {
         #[command(subcommand)]
         kind: ReportCommand,
@@ -881,6 +891,7 @@ pub(crate) enum ExportCommand {
     },
 }
 
+#[cfg(feature = "verify")]
 #[derive(Subcommand)]
 pub(crate) enum VerifyCommand {
     /// Show verification coverage for requirements.
@@ -931,6 +942,7 @@ pub(crate) enum VerifyCommand {
     },
 }
 
+#[cfg(feature = "risk")]
 #[derive(Subcommand)]
 pub(crate) enum RiskCommand {
     /// List risks found in model files.
@@ -968,6 +980,7 @@ pub(crate) enum RiskCommand {
     },
 }
 
+#[cfg(feature = "tol")]
 #[derive(Subcommand)]
 pub(crate) enum TolCommand {
     /// Run tolerance stack-up analysis on dimension chains.
@@ -1001,6 +1014,7 @@ pub(crate) enum TolCommand {
     },
 }
 
+#[cfg(feature = "bom")]
 #[derive(Subcommand)]
 pub(crate) enum BomCommand {
     /// Build a hierarchical BOM tree with optional mass/cost rollup.
@@ -1059,6 +1073,7 @@ pub(crate) enum BomCommand {
     },
 }
 
+#[cfg(feature = "source")]
 #[derive(Subcommand)]
 pub(crate) enum SourceCommand {
     /// List suppliers extracted from model files.
@@ -1096,6 +1111,7 @@ pub(crate) enum SourceCommand {
     },
 }
 
+#[cfg(feature = "mfg")]
 #[derive(Subcommand)]
 pub(crate) enum MfgCommand {
     /// List manufacturing routings (action definitions) in model files.
@@ -1148,6 +1164,7 @@ pub(crate) enum MfgCommand {
     },
 }
 
+#[cfg(feature = "qc")]
 #[derive(Subcommand)]
 pub(crate) enum QcCommand {
     /// Look up ANSI Z1.4 sample size for a given lot.
@@ -1176,6 +1193,7 @@ pub(crate) enum QcCommand {
     },
 }
 
+#[cfg(feature = "capa")]
 #[derive(Subcommand)]
 pub(crate) enum QualityCommand {
     /// Analyze NCR trends grouped by category or severity.
@@ -1240,6 +1258,7 @@ pub(crate) enum PipelineCommand {
     },
 }
 
+#[cfg(feature = "report")]
 #[derive(Subcommand)]
 pub(crate) enum ReportCommand {
     /// Generate a project dashboard from model files.
