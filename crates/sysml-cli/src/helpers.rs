@@ -199,6 +199,68 @@ pub(crate) fn resolve_project_includes() -> Vec<PathBuf> {
     paths
 }
 
+/// Resolve file arguments: if files are provided use them, otherwise
+/// discover project files automatically.
+///
+/// Discovery order:
+/// 1. Explicit file arguments (use as-is)
+/// 2. `SYSML_PROJECT_ROOT` environment variable
+/// 3. `.sysml/config.toml` discovery (walk up from cwd)
+/// 4. Current directory scan (fallback)
+///
+/// Returns the file list and whether discovery was used (for messaging).
+pub(crate) fn files_or_project(files: &[PathBuf]) -> (Vec<PathBuf>, bool) {
+    if !files.is_empty() {
+        return (files.to_vec(), false);
+    }
+
+    // Check environment variable
+    if let Ok(root) = std::env::var("SYSML_PROJECT_ROOT") {
+        let root_path = PathBuf::from(&root);
+        if root_path.is_dir() {
+            let mut found = Vec::new();
+            collect_files_recursive(&root_path, &mut found);
+            if !found.is_empty() {
+                eprintln!("info: using project root from SYSML_PROJECT_ROOT={}", root);
+                return (found, true);
+            }
+        }
+    }
+
+    // Discover project via .sysml/config.toml
+    let cwd = std::env::current_dir().unwrap_or_default();
+    if let Some((project_root, config)) = sysml_core::project::discover_project(&cwd) {
+        // Use model_root from config if set, otherwise project root
+        let model_dir = if config.project.model_root.as_os_str().is_empty() {
+            project_root.clone()
+        } else if config.project.model_root.is_absolute() {
+            config.project.model_root.clone()
+        } else {
+            project_root.join(&config.project.model_root)
+        };
+        let mut found = Vec::new();
+        collect_files_recursive(&model_dir.to_path_buf(), &mut found);
+        if !found.is_empty() {
+            eprintln!(
+                "info: discovered project at {} ({} files)",
+                project_root.display(),
+                found.len()
+            );
+            return (found, true);
+        }
+    }
+
+    // Fallback: scan current directory
+    let mut found = Vec::new();
+    collect_files_recursive(&cwd.to_path_buf(), &mut found);
+    if !found.is_empty() {
+        eprintln!("info: scanning current directory ({} files)", found.len());
+        return (found, true);
+    }
+
+    (Vec::new(), false)
+}
+
 /// Generate shell completions for the given shell.
 pub(crate) fn generate_completions(shell: &str) {
     use clap::CommandFactory;

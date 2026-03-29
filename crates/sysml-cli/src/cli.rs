@@ -82,8 +82,7 @@ pub(crate) enum Command {
     /// part def, port def) or 'usages' (instances like part, port).
     #[command(visible_alias = "ls")]
     List {
-        /// SysML v2 files to inspect.
-        #[arg(required = true)]
+        /// SysML v2 files to inspect (omit to scan project).
         files: Vec<PathBuf>,
 
         /// Filter by element kind.
@@ -142,8 +141,7 @@ pub(crate) enum Command {
     /// and verification status. In SysML v2, requirements are traced via
     /// 'satisfy' and 'verify' relationships.
     Trace {
-        /// SysML v2 files to analyze.
-        #[arg(required = true)]
+        /// SysML v2 files to analyze (omit to scan project).
         files: Vec<PathBuf>,
 
         /// Exit with error if any requirement lacks satisfaction or verification.
@@ -442,8 +440,7 @@ pub(crate) enum Command {
     /// Displays aggregate metrics: element counts by kind, documentation
     /// coverage, nesting depth, relationship counts, and more.
     Stats {
-        /// SysML v2 files to analyze.
-        #[arg(required = true)]
+        /// SysML v2 files to analyze (omit to scan project).
         files: Vec<PathBuf>,
     },
     /// Analyze dependencies and impact of a model element.
@@ -492,8 +489,7 @@ pub(crate) enum Command {
     /// to parts (logical to physical architecture).
     #[command(visible_alias = "alloc")]
     Allocation {
-        /// SysML v2 files to analyze.
-        #[arg(required = true)]
+        /// SysML v2 files to analyze (omit to scan project).
         files: Vec<PathBuf>,
         /// Exit with error if unallocated elements exist (CI gate).
         #[arg(long)]
@@ -544,8 +540,7 @@ pub(crate) enum Command {
     ///   sysml check --severity error model.sysml
     ///   sysml check --lint-only model.sysml
     Check {
-        /// SysML v2 files to validate.
-        #[arg(required = true)]
+        /// SysML v2 files to validate (omit to scan project).
         files: Vec<PathBuf>,
 
         /// Disable specific checks (comma-separated).
@@ -570,8 +565,7 @@ pub(crate) enum Command {
     ///   sysml coverage model.sysml
     ///   sysml coverage --check --min-score 80 model.sysml
     Coverage {
-        /// SysML v2 files to analyze.
-        #[arg(required = true)]
+        /// SysML v2 files to analyze (omit to scan project).
         files: Vec<PathBuf>,
         /// Exit with error if score is below minimum (CI gate).
         #[arg(long)]

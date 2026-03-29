@@ -4,9 +4,15 @@ use sysml_core::parser as sysml_parser;
 use crate::{Cli, read_source};
 
 pub(crate) fn run(cli: &Cli, files: &[PathBuf], check: bool, min_score: f64) -> ExitCode {
+    let (files, _) = crate::files_or_project(files);
+    if files.is_empty() {
+        eprintln!("error: no SysML files found.");
+        return ExitCode::FAILURE;
+    }
+
     use sysml_core::query;
     let mut merged = sysml_core::model::Model::new("(merged)".to_string());
-    for file_path in files {
+    for file_path in &files {
         let (path_str, source) = match read_source(file_path) {
             Ok(v) => v,
             Err(code) => return code,

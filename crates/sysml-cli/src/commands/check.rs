@@ -21,6 +21,13 @@ pub fn run(
     severity: &str,
     _lint_only: bool,
 ) -> ExitCode {
+    let (files, _discovered) = crate::files_or_project(files);
+    if files.is_empty() {
+        eprintln!("error: no SysML files found. Provide file arguments or run inside a project.");
+        return ExitCode::FAILURE;
+    }
+    let files = &files;
+
     let disabled: HashSet<&str> = disable.iter().map(|s| s.as_str()).collect();
     let min_severity = match severity {
         "error" => Severity::Error,

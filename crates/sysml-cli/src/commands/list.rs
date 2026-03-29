@@ -17,6 +17,13 @@ pub(crate) fn run(
     visibility: Option<&str>,
     view: Option<&str>,
 ) -> ExitCode {
+    let (files, _) = crate::files_or_project(files);
+    if files.is_empty() {
+        eprintln!("error: no SysML files found.");
+        return ExitCode::FAILURE;
+    }
+    let files = &files[..];
+
     use sysml_core::model::{DefKind, Visibility};
     use sysml_core::query::{self, KindFilter, ListFilter, parse_kind_filter};
 
