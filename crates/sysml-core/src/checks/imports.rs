@@ -4,7 +4,7 @@ use std::collections::{HashMap, HashSet};
 
 use crate::checks::Check;
 use crate::diagnostic::{codes, Diagnostic};
-use crate::model::{simple_name, Model};
+use crate::model::{simple_name, DefKind, Model};
 
 pub struct ImportCycleCheck;
 
@@ -14,73 +14,123 @@ impl Check for ImportCycleCheck {
     }
 
     fn run(&self, model: &Model) -> Vec<Diagnostic> {
-        // Build a graph: package → set of imported package names
-        let mut package_imports: HashMap<String, Vec<String>> = HashMap::new();
-        let mut current_package = String::new();
-
-        for def in &model.definitions {
-            if def.kind == crate::model::DefKind::Package {
-                current_package = def.name.clone();
-            }
-        }
-
-        // Map imports to their source package context
-        for import in &model.imports {
-            // The imported path's first segment is the target package
-            let target_pkg = simple_name(&import.path);
-            if !target_pkg.is_empty() && target_pkg != current_package {
-                package_imports
-                    .entry(current_package.clone())
-                    .or_default()
-                    .push(target_pkg.to_string());
-            }
-        }
-
         let mut diagnostics = Vec::new();
 
-        // Check for self-imports: a package importing its own namespace
+        // Build package containment: which packages are defined in this file
+        let packages: HashSet<&str> = model
+            .definitions
+            .iter()
+            .filter(|d| d.kind == DefKind::Package)
+            .map(|d| d.name.as_str())
+            .collect();
+
+        // Build import graph: package → imported package names
+        let mut package_imports: HashMap<&str, Vec<&str>> = HashMap::new();
+
         for import in &model.imports {
             let target = import.path.split("::").next().unwrap_or("");
-            // Find the enclosing package of this import (by span containment)
-            for def in &model.definitions {
-                if def.kind == crate::model::DefKind::Package
-                    && def.span.contains(&import.span)
-                    && def.name == target
-                {
-                    diagnostics.push(Diagnostic::warning(
-                        &model.file,
-                        import.span.clone(),
-                        codes::IMPORT_CYCLE,
-                        format!(
-                            "package `{}` imports itself (via `{}`)",
-                            target, import.path
-                        ),
-                    ));
+            if target.is_empty() {
+                continue;
+            }
+
+            // Find the enclosing package of this import
+            let enclosing = model
+                .definitions
+                .iter()
+                .filter(|d| d.kind == DefKind::Package && d.span.contains(&import.span))
+                .last()
+                .map(|d| d.name.as_str())
+                .unwrap_or("");
+
+            // Self-import: package imports itself
+            if !enclosing.is_empty() && enclosing == target {
+                diagnostics.push(Diagnostic::warning(
+                    &model.file,
+                    import.span.clone(),
+                    codes::IMPORT_CYCLE,
+                    format!(
+                        "package `{}` imports itself (via `{}`)",
+                        target, import.path
+                    ),
+                ));
+            }
+
+            if !enclosing.is_empty() {
+                package_imports
+                    .entry(enclosing)
+                    .or_default()
+                    .push(target);
+            }
+        }
+
+        // Check for A→B→A cycles within the file
+        for (&pkg, targets) in &package_imports {
+            for &target in targets {
+                if target == pkg {
+                    continue; // self-import already reported
+                }
+                // Check if target imports pkg back
+                if let Some(back) = package_imports.get(target) {
+                    if back.contains(&pkg) {
+                        // Only report once (alphabetical order)
+                        if pkg < target {
+                            diagnostics.push(Diagnostic::warning(
+                                &model.file,
+                                crate::model::Span::default(),
+                                codes::IMPORT_CYCLE,
+                                format!(
+                                    "circular import between `{}` and `{}`",
+                                    pkg, target
+                                ),
+                            ));
+                        }
+                    }
                 }
             }
         }
 
-        // Check for A→B→A cycles within the same file
-        for (pkg, targets) in &package_imports {
-            for target in targets {
-                if let Some(back_imports) = package_imports.get(target) {
-                    if back_imports.contains(pkg) {
-                        diagnostics.push(Diagnostic::warning(
-                            &model.file,
-                            crate::model::Span::default(),
-                            codes::IMPORT_CYCLE,
-                            format!(
-                                "circular import: `{}` imports `{}` which imports `{}`",
-                                pkg, target, pkg
-                            ),
-                        ));
-                    }
+        // Check for longer cycles (A→B→C→A) using DFS
+        for &start in packages.iter() {
+            if has_cycle(&package_imports, start) {
+                // Only report if not already reported as a 2-cycle
+                let already = diagnostics.iter().any(|d| {
+                    d.code == codes::IMPORT_CYCLE && d.message.contains(start)
+                });
+                if !already {
+                    diagnostics.push(Diagnostic::warning(
+                        &model.file,
+                        crate::model::Span::default(),
+                        codes::IMPORT_CYCLE,
+                        format!("package `{}` is part of a circular import chain", start),
+                    ));
                 }
             }
         }
 
         diagnostics
     }
+}
+
+/// DFS cycle detection: does `start` eventually reach itself?
+fn has_cycle(graph: &HashMap<&str, Vec<&str>>, start: &str) -> bool {
+    let mut visited = HashSet::new();
+    let mut stack = vec![start];
+    visited.insert(start);
+
+    while let Some(current) = stack.pop() {
+        if let Some(targets) = graph.get(current) {
+            for &target in targets {
+                if target == start && current != start {
+                    return true;
+                }
+                if visited.insert(target) {
+                    stack.push(target);
+                }
+            }
+        }
+    }
+
+    false
 }
 
 #[cfg(test)]
@@ -98,7 +148,7 @@ mod tests {
         let check = ImportCycleCheck;
         let diags = check.run(&model);
         let cycles: Vec<_> = diags.iter().filter(|d| d.code == codes::IMPORT_CYCLE).collect();
-        assert!(cycles.is_empty());
+        assert!(cycles.is_empty(), "got: {:?}", cycles.iter().map(|d| &d.message).collect::<Vec<_>>());
     }
 
     #[test]
@@ -113,5 +163,22 @@ mod tests {
         let diags = check.run(&model);
         let cycles: Vec<_> = diags.iter().filter(|d| d.code == codes::IMPORT_CYCLE).collect();
         assert!(!cycles.is_empty(), "should detect self-import");
+    }
+
+    #[test]
+    fn detects_bidirectional_cycle() {
+        let source = r#"
+            package A {
+                import B::*;
+            }
+            package B {
+                import A::*;
+            }
+        "#;
+        let model = parse_file("test.sysml", source);
+        let check = ImportCycleCheck;
+        let diags = check.run(&model);
+        let cycles: Vec<_> = diags.iter().filter(|d| d.code == codes::IMPORT_CYCLE).collect();
+        assert!(!cycles.is_empty(), "should detect A→B→A cycle");
     }
 }
