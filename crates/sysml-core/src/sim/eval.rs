@@ -222,6 +222,19 @@ fn eval_function(name: &str, args: &[Value]) -> Result<Value, EvalError> {
             let hi = require_number(name, &args[2])?;
             Ok(Value::Number(v.max(lo).min(hi)))
         }
+        "convert" => {
+            require_args(name, args, 3)?;
+            let value = require_number(name, &args[0])?;
+            let from = match &args[1] {
+                Value::String(s) => s.clone(),
+                _ => return Err(EvalError::new("convert: second argument must be a unit string")),
+            };
+            let to = match &args[2] {
+                Value::String(s) => s.clone(),
+                _ => return Err(EvalError::new("convert: third argument must be a unit string")),
+            };
+            crate::sim::units::convert(value, &from, &to).map(Value::Number)
+        }
         _ => Err(EvalError::new(format!("unknown function `{}`", name))),
     }
 }

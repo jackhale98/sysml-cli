@@ -50,6 +50,9 @@ src/
     expr.rs               Expression types and environment
     resolve.rs            Attribute resolution across part hierarchy
     rollup.rs             Generic rollup engine (sum, RSS, product, min, max)
+    what_if.rs            What-if scenarios and parametric sweeps
+    units.rs              Unit conversion system (mass, length, power, etc.)
+    analysis.rs           Analysis case extraction and evaluation
   codegen/                Code generation and editing
     template.rs           SysML definition template generation
     edit.rs               Byte-accurate surgical text edits

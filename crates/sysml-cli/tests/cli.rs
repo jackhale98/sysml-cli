@@ -1058,3 +1058,54 @@ fn find_json() {
         .success()
         .stdout(predicate::str::contains("\"name\": \"Vehicle\""));
 }
+
+// ========================================================================
+// rollup sweep and what-if
+// ========================================================================
+
+#[test]
+fn rollup_sweep() {
+    cmd()
+        .args(["rollup", "sweep", &fixture("rollup-vehicle.sysml"),
+               "--root", "Vehicle", "--attr", "mass",
+               "--param", "engine", "--from", "100", "--to", "300", "--steps", "3"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("Sweep"))
+        .stdout(predicate::str::contains("Sensitivity"));
+}
+
+#[test]
+fn rollup_sweep_json() {
+    cmd()
+        .args(["-f", "json", "rollup", "sweep", &fixture("rollup-vehicle.sysml"),
+               "--root", "Vehicle", "--attr", "mass",
+               "--param", "engine", "--from", "100", "--to", "200", "--steps", "2"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("\"sensitivity\""));
+}
+
+#[test]
+fn rollup_what_if() {
+    cmd()
+        .args(["rollup", "what-if", &fixture("rollup-vehicle.sysml"),
+               "--root", "Vehicle", "--attr", "mass",
+               "-s", "light:engine=100", "-s", "heavy:engine=300"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("What-if"))
+        .stdout(predicate::str::contains("light"))
+        .stdout(predicate::str::contains("heavy"));
+}
+
+#[test]
+fn rollup_what_if_json() {
+    cmd()
+        .args(["-f", "json", "rollup", "what-if", &fixture("rollup-vehicle.sysml"),
+               "--root", "Vehicle", "--attr", "mass",
+               "-s", "test:engine=150"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("\"baseline\""));
+}

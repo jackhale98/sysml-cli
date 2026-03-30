@@ -240,6 +240,13 @@ Budget: mass for Vehicle
 
 Aggregation methods: `sum` (default), `rss` (tolerance stackups), `product`, `min`, `max`. Use `--format json` for CI integration.
 
+Parametric sweeps and what-if scenarios:
+
+```sh
+$ sysml rollup sweep model.sysml --root Vehicle --attr mass --param engine --from 100 --to 300 --steps 5
+$ sysml rollup what-if model.sysml --root Vehicle --attr mass -s "light:engine=100" -s "heavy:engine=300"
+```
+
 ### Semantic diff — compare models, not text
 
 ```sh
@@ -298,6 +305,8 @@ sysml pipeline run ci
 | `rollup compute` | Aggregate any attribute over the part hierarchy (sum, RSS, min, max) | |
 | `rollup budget` | Check a rollup total against a limit (CI gate) | |
 | `rollup sensitivity` | Rank children by contribution to a rollup | |
+| `rollup sweep` | Parametric sweep: evaluate rollup across a range of values | |
+| `rollup what-if` | Compare rollup under different override scenarios | |
 | `rollup query` | Find all instances of an attribute across the model | |
 | **Diagrams** | | [diagrams](docs/commands/diagrams.md) |
 | `diagram` | Generate diagrams (bdd, ibd, stm, act, req, pkg, par, trace, alloc, ucd) | |

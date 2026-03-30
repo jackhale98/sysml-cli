@@ -875,6 +875,51 @@ pub(crate) enum RollupCommand {
         #[arg(long, required = true)]
         attr: String,
     },
+    /// Parametric sweep: evaluate rollup across a range of values.
+    ///
+    /// EXAMPLES:
+    ///   sysml rollup sweep model.sysml --root Vehicle --attr mass --param engine --from 100 --to 300 --steps 5
+    Sweep {
+        /// SysML v2 files to analyze.
+        #[arg(required = true)]
+        files: Vec<PathBuf>,
+        /// Root part definition.
+        #[arg(long, required = true)]
+        root: String,
+        /// Attribute name.
+        #[arg(long, required = true)]
+        attr: String,
+        /// Parameter to sweep (dotted path, e.g., "engine" or "engine.mass").
+        #[arg(long, required = true)]
+        param: String,
+        /// Start value for sweep.
+        #[arg(long, required = true)]
+        from: f64,
+        /// End value for sweep.
+        #[arg(long, required = true)]
+        to: f64,
+        /// Number of steps.
+        #[arg(long, default_value = "10")]
+        steps: usize,
+    },
+    /// What-if analysis: compare rollup under different scenarios.
+    ///
+    /// EXAMPLES:
+    ///   sysml rollup what-if model.sysml --root Vehicle --attr mass --scenario "light:engine=100" --scenario "heavy:engine=300"
+    WhatIf {
+        /// SysML v2 files to analyze.
+        #[arg(required = true)]
+        files: Vec<PathBuf>,
+        /// Root part definition.
+        #[arg(long, required = true)]
+        root: String,
+        /// Attribute name.
+        #[arg(long, required = true)]
+        attr: String,
+        /// Scenarios as "name:path=value,path=value" (repeatable).
+        #[arg(long = "scenario", short = 's')]
+        scenarios: Vec<String>,
+    },
     /// Find all occurrences of an attribute across the model.
     ///
     /// EXAMPLES:

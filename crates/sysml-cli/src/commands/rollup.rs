@@ -32,6 +32,12 @@ pub fn run(cli: &Cli, kind: &RollupCommand) -> ExitCode {
             root,
             attr,
         } => run_sensitivity(cli, files, root, attr),
+        RollupCommand::Sweep {
+            files, root, attr, param, from, to, steps,
+        } => run_sweep(cli, files, root, attr, param, *from, *to, *steps),
+        RollupCommand::WhatIf {
+            files, root, attr, scenarios,
+        } => run_what_if(cli, files, root, attr, scenarios),
         RollupCommand::Query { files, attr } => run_query(cli, files, attr),
     }
 }
@@ -296,4 +302,137 @@ fn contribution_to_json(c: &sysml_core::sim::rollup::Contribution) -> serde_json
         "percentage": c.percentage,
         "children": c.children.iter().map(contribution_to_json).collect::<Vec<_>>(),
     })
+}
+
+fn run_sweep(
+    cli: &Cli,
+    files: &[PathBuf],
+    root: &str,
+    attr: &str,
+    param: &str,
+    from: f64,
+    to: f64,
+    steps: usize,
+) -> ExitCode {
+    let Some(model) = parse_and_merge(files) else {
+        return ExitCode::FAILURE;
+    };
+    if model.find_def(root).is_none() {
+        eprintln!("error: definition `{}` not found", root);
+        return ExitCode::FAILURE;
+    }
+
+    use sysml_core::sim::what_if::{evaluate_sweep, SweepConfig};
+    let config = SweepConfig {
+        parameter: param.to_string(),
+        start: from,
+        end: to,
+        steps,
+    };
+    let result = evaluate_sweep(&model, root, attr, AggregationMethod::Sum, &config);
+
+    match cli.format.as_str() {
+        "json" => {
+            let json = serde_json::json!({
+                "root": result.root,
+                "attribute": result.attribute,
+                "parameter": result.parameter,
+                "sensitivity": result.sensitivity,
+                "points": result.points.iter().map(|(p, t)| {
+                    serde_json::json!({"param": p, "total": t})
+                }).collect::<Vec<_>>(),
+            });
+            println!("{}", serde_json::to_string_pretty(&json).unwrap());
+        }
+        _ => {
+            println!("Sweep: {} for {} (varying {})", attr, root, param);
+            println!("  Sensitivity: {:.4} (d_total / d_param)", result.sensitivity);
+            println!();
+            println!("{:>12} {:>12}", param, format!("total_{}", attr));
+            println!("{}", "-".repeat(26));
+            for (p, t) in &result.points {
+                println!("{:>12.4} {:>12.4}", p, t);
+            }
+        }
+    }
+
+    ExitCode::SUCCESS
+}
+
+fn run_what_if(
+    cli: &Cli,
+    files: &[PathBuf],
+    root: &str,
+    attr: &str,
+    scenario_strs: &[String],
+) -> ExitCode {
+    let Some(model) = parse_and_merge(files) else {
+        return ExitCode::FAILURE;
+    };
+    if model.find_def(root).is_none() {
+        eprintln!("error: definition `{}` not found", root);
+        return ExitCode::FAILURE;
+    }
+
+    use sysml_core::sim::what_if::{evaluate_what_if, Scenario};
+
+    // Parse scenario strings: "name:path=value,path=value"
+    let scenarios: Vec<Scenario> = scenario_strs
+        .iter()
+        .filter_map(|s| {
+            let (name, overrides_str) = s.split_once(':')?;
+            let overrides: Vec<(String, f64)> = overrides_str
+                .split(',')
+                .filter_map(|o| {
+                    let (path, val) = o.split_once('=')?;
+                    Some((path.trim().to_string(), val.trim().parse().ok()?))
+                })
+                .collect();
+            Some(Scenario {
+                name: name.trim().to_string(),
+                overrides,
+            })
+        })
+        .collect();
+
+    if scenarios.is_empty() {
+        eprintln!("error: no valid scenarios. Format: --scenario 'name:path=value'");
+        return ExitCode::FAILURE;
+    }
+
+    let result = evaluate_what_if(&model, root, attr, AggregationMethod::Sum, &scenarios);
+
+    match cli.format.as_str() {
+        "json" => {
+            let json = serde_json::json!({
+                "root": result.root,
+                "attribute": result.attribute,
+                "baseline": result.baseline,
+                "scenarios": result.scenarios.iter().map(|s| {
+                    serde_json::json!({
+                        "name": s.name,
+                        "total": s.total,
+                        "delta": s.delta,
+                        "delta_pct": s.delta_pct,
+                    })
+                }).collect::<Vec<_>>(),
+            });
+            println!("{}", serde_json::to_string_pretty(&json).unwrap());
+        }
+        _ => {
+            println!("What-if: {} for {} (baseline: {:.4})", attr, root, result.baseline);
+            println!();
+            println!("{:20} {:>12} {:>12} {:>8}", "Scenario", "Total", "Delta", "%");
+            println!("{}", "-".repeat(54));
+            println!("{:20} {:>12.4} {:>12} {:>8}", "(baseline)", result.baseline, "-", "-");
+            for s in &result.scenarios {
+                println!(
+                    "{:20} {:>12.4} {:>+12.4} {:>+7.1}%",
+                    s.name, s.total, s.delta, s.delta_pct
+                );
+            }
+        }
+    }
+
+    ExitCode::SUCCESS
 }
