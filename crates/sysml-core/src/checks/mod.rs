@@ -6,6 +6,8 @@
 pub mod calculations;
 pub mod constraints;
 pub mod duplicates;
+pub mod imports;
+pub mod multiplicity;
 pub mod ports;
 pub mod references;
 pub mod requirements;
@@ -35,5 +37,7 @@ pub fn all_checks() -> Vec<Box<dyn Check>> {
         Box::new(ports::PortConnectionCheck),
         Box::new(constraints::ConstraintCheck),
         Box::new(calculations::CalcReturnCheck),
+        Box::new(imports::ImportCycleCheck),
+        Box::new(multiplicity::MultiplicityCheck),
     ]
 }
