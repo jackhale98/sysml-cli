@@ -52,7 +52,7 @@ jobs:
 
 ### Language Server (`sysml-lsp`)
 
-`sysml-lsp` is a full-featured language server for SysML v2 files with 13 capabilities. Install from source or download a prebuilt binary from [GitHub Releases](https://github.com/jackhale98/sysml-cli/releases).
+`sysml-lsp` is a full-featured language server for SysML v2 files with 17 capabilities. Install from source or download a prebuilt binary from [GitHub Releases](https://github.com/jackhale98/sysml-cli/releases).
 
 ```sh
 cargo install --path crates/sysml-lsp
@@ -144,19 +144,21 @@ Add to Zed settings (`settings.json`):
 
 | Feature | Description |
 |---------|-------------|
-| Diagnostics | 9 lint checks with error codes, severity, suggestions — published on open/change |
+| Diagnostics | 12 lint checks with error codes, severity, suggestions — published on open/change |
 | Document symbols | Hierarchical outline (definitions as containers, usages as children) |
 | Go-to-definition | In-file and cross-file navigation via workspace definition index |
 | Find references | All references to a name across open files (type refs, supertypes, connections, flows) |
-| Hover | Markdown with kind, name, supertype, doc comment, member list |
-| Completions | Current file defs + workspace defs + standard library names |
+| Hover | Markdown with kind, name, supertype, doc comment, member list, computed rollup values |
+| Completions | Context-aware: type defs after `:`, members after `.`, all defs + stdlib otherwise |
 | Workspace symbols | Filter all workspace definitions by query (Ctrl+T / `#` in VS Code) |
 | Semantic tokens | Full syntax highlighting via tree-sitter queries (keywords, types, variables, comments, operators) |
-| Code actions | Quick-fix for typo suggestions and remove unused definitions (lightbulb / Ctrl+.) |
+| Code actions | Quick-fix typos, remove unused definitions, add missing imports |
 | Formatting | CST-aware document formatting respecting editor tab size (preserves comments) |
 | Document highlight | Highlight all occurrences of the symbol under cursor |
 | Folding ranges | Fold definition blocks and multi-line doc comments |
 | Rename | Cross-file symbol rename with word-boundary matching (F2) |
+| Type hierarchy | Navigate supertype/subtype chains across files |
+| Inlay hints | Show multiplicity annotations and inferred types inline |
 
 ### Emacs (sysml2-mode)
 

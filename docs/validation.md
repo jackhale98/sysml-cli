@@ -2,7 +2,7 @@
 
 ## Validation Checks
 
-`sysml` ships with 9 validation checks. Each can be individually disabled with `--disable <name>`.
+`sysml` ships with 12 validation checks. Each can be individually disabled with `--disable <name>`.
 
 | Check | Name | Severity | Description |
 |-------|------|----------|-------------|
@@ -13,8 +13,11 @@
 | Unsatisfied | `unsatisfied` | Warning | Requirements with no `satisfy` statement |
 | Unverified | `unverified` | Warning | Requirements with no `verify` statement |
 | Port Types | `port-types` | Warning | Connected ports with incompatible types |
+| Port Directions | `port-types` | Warning | Connected ports with incompatible directions (in/out) |
 | Constraints | `constraints` | Warning | Constraint defs with a body but no constraint expression |
 | Calculations | `calculations` | Warning | Calc defs with a body but no return statement |
+| Import Cycles | `import-cycles` | Warning | Self-imports, bidirectional, and transitive import cycles |
+| Multiplicity | `multiplicity` | Warning | Invalid multiplicity bounds (lower > upper, zero upper, negative) |
 
 ## Diagnostic Codes
 
@@ -37,6 +40,9 @@
 | W006 | port-types | `connected ports have different types` |
 | W007 | constraints | `constraint def '<name>' has a body but no constraint expression` |
 | W008 | calculations | `calc def '<name>' has a body but no return statement` |
+| W009 | port-types | `connected ports have incompatible directions` |
+| W010 | import-cycles | `package '<name>' imports itself` / `circular import` |
+| W011 | multiplicity | `multiplicity lower bound exceeds upper bound` |
 
 ## Output Formats
 

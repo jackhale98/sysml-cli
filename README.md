@@ -9,7 +9,7 @@ Built on [tree-sitter](https://tree-sitter.github.io/) for reliable parsing of S
 | | |
 |---|---|
 | [Tutorial](docs/tutorial.md) | Build a weather station model from scratch using the CLI |
-| [Validation & Diagnostics](docs/validation.md) | 9 lint checks, diagnostic codes, output formats |
+| [Validation & Diagnostics](docs/validation.md) | 12 lint checks, diagnostic codes, output formats |
 | [Architecture](docs/architecture.md) | Crate structure, design decisions, 3-crate workspace |
 | [CI & Editor Integration](docs/ci-integration.md) | GitHub Actions workflow, LSP setup, Emacs sysml2-mode, JSON output |
 | **Command references** | [Analysis](docs/commands/analysis.md) &#183; [Diagrams](docs/commands/diagrams.md) &#183; [Editing](docs/commands/editing.md) &#183; [Simulation](docs/commands/simulation.md) &#183; [Project](docs/commands/project.md) |
@@ -35,7 +35,7 @@ The build compiles the [tree-sitter-sysml](https://github.com/jackhale98/tree-si
 
 ### Language server (LSP)
 
-The `sysml-lsp` binary is a full-featured language server for SysML v2. It provides diagnostics, go-to-definition, find references, hover, completions, document outline, workspace symbols, semantic highlighting, quick-fix code actions, formatting, document highlight, folding, and rename for any LSP-compatible editor.
+The `sysml-lsp` binary is a full-featured language server for SysML v2 with 17 capabilities: diagnostics, go-to-definition, find references, hover (with rollup values), contextual completions, document outline, workspace symbols, semantic highlighting, code actions (quick-fix + add import), formatting, document highlight, folding, rename, type hierarchy, and inlay hints.
 
 ```sh
 cargo install --path crates/sysml-lsp
@@ -247,6 +247,33 @@ $ sysml rollup sweep model.sysml --root Vehicle --attr mass --param engine --fro
 $ sysml rollup what-if model.sysml --root Vehicle --attr mass -s "light:engine=100" -s "heavy:engine=300"
 ```
 
+### Interactive REPL — explore models conversationally
+
+`sysml repl` loads your project and lets you navigate, query, and analyze interactively:
+
+```
+sysml> cd Vehicle                          # Focus on Vehicle
+sysml [Vehicle]> list                      # Show Vehicle's children
+sysml [Vehicle]> usages type:Engine        # Find all Engine usages
+sysml [Vehicle]> rollup mass               # Mass rollup from focused root
+sysml [Vehicle]> typeof Wheel              # Where is Wheel used?
+sysml [Vehicle]> subtypes                  # What specializes Vehicle?
+sysml [Vehicle]> connections               # Connections involving Vehicle
+sysml [Vehicle]> trace                     # Requirements traceability
+sysml> usages in:Engine kind:port          # Combined filter
+sysml> supertypes Sedan                    # Walk inheritance chain
+```
+
+### Analysis cases and trade studies
+
+Execute SysML v2 analysis cases and compare alternatives:
+
+```sh
+sysml analyze list model.sysml
+sysml analyze run model.sysml -n FuelEconomyAnalysis
+sysml analyze trade model.sysml -n EngineTradeOff
+```
+
 ### Semantic diff — compare models, not text
 
 ```sh
@@ -288,15 +315,16 @@ sysml pipeline run ci
 | **Editing** | | [editing](docs/commands/editing.md) |
 | `add` | Add elements interactively, to a file, or to stdout | |
 | `remove` (`rm`) | Remove an element from a SysML file | |
-| `rename` | Rename an element and update all references | |
+| `rename` | Rename an element and update all references (`--project` for cross-file) | |
 | `fmt` | Format SysML v2 source files | |
 | **Analysis** | | [analysis](docs/commands/analysis.md) |
-| `check` | Validate models against structural rules (also: `lint`) | |
+| `check` | Validate models against 12 structural rules (also: `lint`) | |
 | `list` (`ls`) | List model elements with filters | |
 | `show` | Show detailed element information | |
 | `trace` | Requirements traceability matrix | |
 | `interfaces` | Analyze port interfaces and connections | |
-| `deps` | Dependency analysis for an element | |
+| `find` | Search model elements by name pattern across project | |
+| `deps` | Dependency analysis for an element (`--transitive` for chains) | |
 | `diff` | Semantic diff between two SysML files | |
 | `allocation` (`alloc`) | Logical-to-physical allocation matrix | |
 | `coverage` | Model quality and completeness report | |
@@ -308,6 +336,10 @@ sysml pipeline run ci
 | `rollup sweep` | Parametric sweep: evaluate rollup across a range of values | |
 | `rollup what-if` | Compare rollup under different override scenarios | |
 | `rollup query` | Find all instances of an attribute across the model | |
+| **Analysis** | | |
+| `analyze list` | List analysis cases in model files | |
+| `analyze run` | Execute an analysis case with subject binding | |
+| `analyze trade` | Compare alternatives in a trade study | |
 | **Diagrams** | | [diagrams](docs/commands/diagrams.md) |
 | `diagram` | Generate diagrams (bdd, ibd, stm, act, req, pkg, par, trace, alloc, ucd) | |
 | **Simulation & Export** | | [simulation](docs/commands/simulation.md) |
@@ -317,11 +349,11 @@ sysml pipeline run ci
 | `init` | Initialize a `.sysml/` project | |
 | `index` | Build or rebuild project index | |
 | `pipeline` | Run named validation pipelines from config | |
-| `repl` | Interactive REPL for model exploration (list, show, find, rollup, trace) | |
+| `repl` | Interactive REPL with stateful navigation, relationship queries, and filtering | |
 | `doc` | Generate Markdown documentation from model structure and comments | |
 | `completions` | Generate shell completion scripts | |
 | **Language Server** | | [editor setup](docs/ci-integration.md#language-server-sysml-lsp) |
-| `sysml-lsp` | LSP server with 13 capabilities: diagnostics, go-to-def, references, hover, completions, outline, workspace symbols, semantic highlighting, code actions, formatting, document highlight, folding, rename | |
+| `sysml-lsp` | LSP server with 17 capabilities: diagnostics, go-to-def, references, hover (with rollups), contextual completions, outline, workspace symbols, semantic tokens, code actions, formatting, document highlight, folding, rename, type hierarchy, inlay hints | |
 
 ## License
 
