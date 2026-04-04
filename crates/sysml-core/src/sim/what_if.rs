@@ -5,7 +5,6 @@
 /// parametric sweeps across a range of values.
 
 use crate::model::Model;
-use crate::sim::expr::Env;
 use crate::sim::resolve::{resolve_attribute_tree, AttributeNode};
 use crate::sim::rollup::{evaluate_rollup, AggregationMethod};
 

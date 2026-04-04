@@ -7,7 +7,7 @@
 use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
 
-use crate::model::{simple_name, DefKind, Definition, Model, Span};
+use crate::model::{simple_name, DefKind, Model, Span};
 use crate::parser;
 
 /// A definition located in a specific file.

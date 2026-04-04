@@ -4,7 +4,7 @@
 /// configurable methods: sum, RSS, product, min, max.
 
 use crate::model::Model;
-use crate::sim::resolve::{resolve_attribute_tree, AttributeNode, AttributeTree};
+use crate::sim::resolve::{resolve_attribute_tree, AttributeNode};
 
 /// Aggregation method for rollup computation.
 #[derive(Debug, Clone, Copy, PartialEq)]

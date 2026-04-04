@@ -1151,3 +1151,118 @@ fn doc_includes_definitions() {
         .stdout(predicate::str::contains("Engine"))
         .stdout(predicate::str::contains("Vehicle"));
 }
+
+// ========================================================================
+// Standard view diagram types (new names)
+// ========================================================================
+
+#[test]
+fn diagram_gv_mermaid() {
+    cmd()
+        .args(["diagram", "-t", "gv", &fixture("simple-vehicle.sysml")])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("classDiagram"));
+}
+
+#[test]
+fn diagram_stv_alias() {
+    cmd()
+        .args(["diagram", "-t", "stv", &fixture("simulation.sysml")])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("stateDiagram"));
+}
+
+#[test]
+fn diagram_afv_alias() {
+    cmd()
+        .args(["diagram", "-t", "afv", &fixture("simulation.sysml")])
+        .assert()
+        .success();
+}
+
+#[test]
+fn diagram_bv_alias() {
+    cmd()
+        .args(["diagram", "-t", "bv", &fixture("simple-vehicle.sysml")])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("classDiagram"));
+}
+
+#[test]
+fn diagram_sv_sequence() {
+    cmd()
+        .args(["diagram", "-t", "sv", &fixture("annex-a-simple-vehicle-model.sysml")])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("sequenceDiagram"));
+}
+
+#[test]
+fn diagram_legacy_bdd_still_works() {
+    cmd()
+        .args(["diagram", "-t", "bdd", &fixture("simple-vehicle.sysml")])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("classDiagram"));
+}
+
+// ========================================================================
+// check command (direct, not via lint alias)
+// ========================================================================
+
+#[test]
+fn check_direct() {
+    cmd()
+        .args(["check", &fixture("simple-vehicle.sysml")])
+        .assert()
+        .success();
+}
+
+#[test]
+fn check_severity_error() {
+    cmd()
+        .args(["check", "--severity", "error", &fixture("simple-vehicle.sysml")])
+        .assert()
+        .success();
+}
+
+// ========================================================================
+// interfaces command
+// ========================================================================
+
+#[test]
+fn interfaces_basic() {
+    cmd()
+        .args(["interfaces", &fixture("simple-vehicle.sysml")])
+        .assert()
+        .success();
+}
+
+// ========================================================================
+// rename --project
+// ========================================================================
+
+#[test]
+fn rename_project_dry_run() {
+    cmd()
+        .args(["rename", &fixture("rollup-vehicle.sysml"),
+               "Engine", "Motor", "--dry-run", "--project"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("Engine").or(predicate::str::contains("Motor")));
+}
+
+// ========================================================================
+// deps --transitive
+// ========================================================================
+
+#[test]
+fn deps_transitive() {
+    cmd()
+        .args(["deps", &fixture("simple-vehicle.sysml"), "Engine", "--transitive"])
+        .assert()
+        .success();
+}

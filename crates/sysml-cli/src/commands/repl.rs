@@ -17,12 +17,9 @@ pub fn run(files: &[PathBuf]) -> ExitCode {
         return ExitCode::FAILURE;
     }
 
-    let model = load_model(&files);
-    let def_count = model.definitions.len();
-    let usage_count = model.usages.len();
-
-    println!("sysml repl — {} definitions, {} usages loaded from {} file(s)",
-        def_count, usage_count, files.len());
+    let mut model = load_model(&files);
+    println!("sysml repl v{} — {} definitions, {} usages loaded from {} file(s)",
+        env!("CARGO_PKG_VERSION"), model.definitions.len(), model.usages.len(), files.len());
     println!("Type 'help' for commands, 'quit' to exit.\n");
 
     let mut rl = match DefaultEditor::new() {
@@ -48,6 +45,12 @@ pub fn run(files: &[PathBuf]) -> ExitCode {
                     continue;
                 }
                 let _ = rl.add_history_entry(line);
+                if line == "reload" {
+                    model = load_model(&files);
+                    println!("Reloaded: {} definitions, {} usages from {} file(s)",
+                        model.definitions.len(), model.usages.len(), files.len());
+                    continue;
+                }
                 if !dispatch(&model, line, &mut context) {
                     break;
                 }
@@ -445,6 +448,7 @@ fn print_help() {
     println!("  rollup <root> <attr> Compute attribute rollup (sum)");
     println!("  stats                Model statistics");
     println!();
+    println!("  reload               Reload model files from disk");
     println!("  help                 Show this help");
     println!("  quit                 Exit");
 }

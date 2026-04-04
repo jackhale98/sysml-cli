@@ -334,7 +334,7 @@ pub fn evaluate_analysis(
     case: &AnalysisCaseModel,
     extra_bindings: &crate::sim::expr::Env,
 ) -> AnalysisResult {
-    use crate::sim::expr::{Env, Value};
+    use crate::sim::expr::Value;
     use crate::sim::resolve::find_attribute_value;
 
     let mut env = extra_bindings.clone();

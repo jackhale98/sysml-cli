@@ -55,20 +55,26 @@ fn generate_markdown(model: &Model, root: Option<&str>) -> String {
 
     // Find definitions to document
     let defs: Vec<_> = if let Some(root_name) = root {
-        // Document from root and its children
+        // Document from root and all descendants
         let mut result = Vec::new();
+        let mut queue = vec![root_name.to_string()];
+        // Add the root itself
         if let Some(def) = model.find_def(root_name) {
             result.push(def);
         }
-        for def in &model.definitions {
-            if def.parent_def.as_deref() == Some(root_name) {
-                result.push(def);
+        // BFS for descendants
+        while let Some(parent) = queue.pop() {
+            for def in &model.definitions {
+                if def.parent_def.as_deref() == Some(parent.as_str()) {
+                    result.push(def);
+                    queue.push(def.name.clone());
+                }
             }
         }
         result
     } else {
-        // Document all top-level definitions
-        model.definitions.iter().filter(|d| d.parent_def.is_none()).collect()
+        // Document all definitions (not just top-level)
+        model.definitions.iter().collect()
     };
 
     // Group by kind

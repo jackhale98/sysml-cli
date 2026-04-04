@@ -4,7 +4,7 @@ use std::collections::{HashMap, HashSet};
 
 use crate::checks::Check;
 use crate::diagnostic::{codes, Diagnostic};
-use crate::model::{simple_name, DefKind, Model};
+use crate::model::{DefKind, Model};
 
 pub struct ImportCycleCheck;
 

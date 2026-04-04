@@ -16,8 +16,8 @@ fn root_name(name: &str) -> &str {
 /// Shows: definitions as blocks, specialization arrows, composition (part usages).
 pub fn build_bdd(model: &Model, scope: Option<&str>) -> DiagramGraph {
     let title = scope
-        .map(|s| format!("bdd [{}]", s))
-        .unwrap_or_else(|| format!("bdd [{}]", model.file));
+        .map(|s| format!("gv [{}]", s))
+        .unwrap_or_else(|| format!("gv [{}]", model.file));
     let mut graph = DiagramGraph::new(title, DiagramKind::GeneralView(GeneralViewFlavor::Default));
 
     let defs: Vec<&Definition> = if let Some(scope_name) = scope {
@@ -141,7 +141,7 @@ fn collect_ports_recursive(
 }
 
 pub fn build_ibd(model: &Model, def_name: &str) -> DiagramGraph {
-    let title = format!("ibd [{}]", def_name);
+    let title = format!("iv [{}]", def_name);
     let mut graph = DiagramGraph::new(title, DiagramKind::InterconnectionView);
 
     let usages = model.usages_in_def(def_name);
@@ -231,7 +231,7 @@ pub fn build_stm(model: &Model, state_def_name: Option<&str>) -> DiagramGraph {
     };
 
     let title = target
-        .map(|d| format!("stm [{}]", d.name))
+        .map(|d| format!("stv [{}]", d.name))
         .unwrap_or_else(|| "stm".to_string());
     let mut graph = DiagramGraph::new(title, DiagramKind::StateTransitionView);
 
@@ -285,7 +285,7 @@ pub fn build_stm(model: &Model, state_def_name: Option<&str>) -> DiagramGraph {
 ///
 /// Shows: requirements, satisfy and verify relationships.
 pub fn build_req(model: &Model) -> DiagramGraph {
-    let title = format!("req [{}]", model.file);
+    let title = format!("grv [{}]", model.file);
     let mut graph = DiagramGraph::new(title, DiagramKind::GridView(GridViewFlavor::Requirements));
 
     // Add requirement nodes
@@ -387,7 +387,7 @@ pub fn build_req(model: &Model) -> DiagramGraph {
 ///
 /// Shows: packages and their contained definitions.
 pub fn build_pkg(model: &Model) -> DiagramGraph {
-    let title = format!("pkg [{}]", model.file);
+    let title = format!("bv [{}]", model.file);
     let mut graph = DiagramGraph::new(title, DiagramKind::BrowserView);
 
     // Packages
@@ -508,7 +508,7 @@ pub fn build_par(model: &Model, scope: Option<&str>) -> DiagramGraph {
 /// Shows: states with entry/do/exit actions, full transition labels
 /// (trigger [guard] / effect), initial and final pseudo-states.
 pub fn build_stm_from_state_machine(sm: &StateMachineModel) -> DiagramGraph {
-    let title = format!("stm [{}]", sm.name);
+    let title = format!("stv [{}]", sm.name);
     let mut graph = DiagramGraph::new(title, DiagramKind::StateTransitionView);
 
     // Initial pseudo-state
@@ -587,7 +587,7 @@ pub fn build_stm_from_state_machine(sm: &StateMachineModel) -> DiagramGraph {
 /// Shows: actions as rounded boxes, decisions as diamonds, fork/join bars,
 /// initial node, final node (done), and control flow edges.
 pub fn build_act_from_action_model(am: &ActionModel) -> DiagramGraph {
-    let title = format!("act [{}]", am.name);
+    let title = format!("afv [{}]", am.name);
     let mut graph = DiagramGraph::new(title, DiagramKind::ActionFlowView);
 
     // Initial node
@@ -1286,14 +1286,42 @@ pub fn build_sv(model: &Model, scope: Option<&str>) -> DiagramGraph {
         });
     }
 
-    // Collect messages from flows
-    let lifeline_names: std::collections::HashSet<&str> =
-        parts.iter().map(|p| p.name.as_str()).collect();
+    // Also add action usages as potential lifelines
+    let action_parts: Vec<&crate::model::Usage> = if let Some(scope_name) = scope {
+        model.usages_in_def(scope_name)
+            .into_iter()
+            .filter(|u| matches!(u.kind.as_str(), "action" | "connection" | "flow"))
+            .collect()
+    } else {
+        Vec::new()
+    };
+    for ap in &action_parts {
+        if !graph.has_node(&ap.name) {
+            graph.add_node(DiagramNode {
+                id: ap.name.clone(),
+                label: format!("{}{}", ap.name,
+                    ap.type_ref.as_ref().map(|t| format!(" : {}", t)).unwrap_or_default()),
+                kind: NodeKind::Lifeline,
+                stereotype: None,
+                attributes: Vec::new(),
+                is_definition: false,
+            });
+        }
+    }
+
+    // Collect messages from flows and connections
+    let lifeline_names: std::collections::HashSet<String> =
+        graph.nodes.iter().map(|n| n.id.clone()).collect();
+
+    // Helper: extract the root part name from a dotted path
+    fn root_part(path: &str) -> &str {
+        path.split('.').next().unwrap_or(path)
+    }
 
     for flow in &model.flows {
-        let src = simple_name(&flow.source);
-        let tgt = simple_name(&flow.target);
-        // Only include flows between known lifelines
+        let src = root_part(&flow.source);
+        let tgt = root_part(&flow.target);
+        // Include flows where at least one endpoint matches a lifeline
         if lifeline_names.contains(src) || lifeline_names.contains(tgt) {
             // Ensure both endpoints exist as nodes
             if !graph.has_node(src) {
@@ -1320,6 +1348,40 @@ pub fn build_sv(model: &Model, scope: Option<&str>) -> DiagramGraph {
                 source: src.to_string(),
                 target: tgt.to_string(),
                 label: flow.name.clone().or(flow.item_type.clone()),
+                kind: EdgeKind::Message,
+            });
+        }
+    }
+
+    // Also include connections as messages
+    for conn in &model.connections {
+        let src = root_part(&conn.source);
+        let tgt = root_part(&conn.target);
+        if lifeline_names.contains(src) || lifeline_names.contains(tgt) {
+            if !graph.has_node(src) {
+                graph.add_node(DiagramNode {
+                    id: src.to_string(),
+                    label: src.to_string(),
+                    kind: NodeKind::Lifeline,
+                    stereotype: None,
+                    attributes: Vec::new(),
+                    is_definition: false,
+                });
+            }
+            if !graph.has_node(tgt) {
+                graph.add_node(DiagramNode {
+                    id: tgt.to_string(),
+                    label: tgt.to_string(),
+                    kind: NodeKind::Lifeline,
+                    stereotype: None,
+                    attributes: Vec::new(),
+                    is_definition: false,
+                });
+            }
+            graph.add_edge(DiagramEdge {
+                source: src.to_string(),
+                target: tgt.to_string(),
+                label: conn.name.clone(),
                 kind: EdgeKind::Message,
             });
         }

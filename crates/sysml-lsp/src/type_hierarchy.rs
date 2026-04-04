@@ -1,5 +1,5 @@
 use sysml_core::model::{simple_name, DefKind, Model};
-use tower_lsp::lsp_types::{SymbolKind, TypeHierarchyItem, Url};
+use tower_lsp::lsp_types::{TypeHierarchyItem, Url};
 
 use crate::convert::span_to_range;
 use crate::document_symbols::def_kind_to_symbol_kind;
@@ -28,7 +28,7 @@ pub fn supertypes(
 ) -> Vec<TypeHierarchyItem> {
     let target = simple_name(name);
     // Find the definition to get its supertype
-    for (uri_str, model) in models {
+    for (_uri_str, model) in models {
         if let Some(def) = model.find_def(target) {
             if let Some(ref st) = def.super_type {
                 let st_name = simple_name(st);
