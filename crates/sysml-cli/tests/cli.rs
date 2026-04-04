@@ -1266,3 +1266,44 @@ fn deps_transitive() {
         .assert()
         .success();
 }
+
+// ========================================================================
+// Book-pattern: require constraint and metadata
+// ========================================================================
+
+#[test]
+fn require_constraint_extracted() {
+    // Create temp file with require constraint pattern from the book
+    let dir = tempfile::tempdir().unwrap();
+    let file = dir.path().join("req.sysml");
+    fs::write(&file, r#"
+        requirement def MassReq {
+            subject vehicle : Vehicle;
+            require constraint { vehicle.mass <= 2000; }
+        }
+        part def Vehicle { attribute mass : Real = 1500; }
+    "#).unwrap();
+    cmd()
+        .args(["list", file.to_str().unwrap()])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("constraint"))
+        .stdout(predicate::str::contains("MassReq"));
+}
+
+#[test]
+fn metadata_annotation_extracted() {
+    let dir = tempfile::tempdir().unwrap();
+    let file = dir.path().join("meta.sysml");
+    fs::write(&file, r#"
+        metadata def Risk { attribute severity : Real; }
+        part def Vehicle { @Risk; part engine : Engine; }
+        part def Engine;
+    "#).unwrap();
+    cmd()
+        .args(["list", file.to_str().unwrap()])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("metadata"))
+        .stdout(predicate::str::contains("Risk"));
+}

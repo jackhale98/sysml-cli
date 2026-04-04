@@ -853,6 +853,28 @@ fn walk_node_scoped(
                 if kind == "connection_usage" || kind == "interface_usage" {
                     extract_connect_clause(&node, source, model);
                 }
+                // Unnamed constraint_usage (e.g., require constraint { expr })
+                // Extract the body expression text and store as a usage
+                if kind == "constraint_usage" {
+                    let body_text = extract_constraint_body_text(&node, source);
+                    if let Some(expr_text) = body_text {
+                        model.usages.push(Usage {
+                            kind: "constraint".to_string(),
+                            name: String::new(),
+                            type_ref: None,
+                            span: Span::from_node(&node),
+                            direction: None,
+                            is_conjugated: false,
+                            parent_def: parent_def_name.map(|s| s.to_string()),
+                            multiplicity: None,
+                            value_expr: Some(expr_text),
+                            short_name: None,
+                            redefinition: None,
+                            subsets: None,
+                            qualified_name: None,
+                        });
+                    }
+                }
             }
         }
 
@@ -1078,6 +1100,32 @@ fn walk_node_scoped(
                             span: Span::from_node(&node),
                         });
                     }
+                    break;
+                }
+            }
+        }
+
+        // --- Metadata annotation (@Risk { ... }) ---
+        "metadata_annotation" => {
+            let mut cursor = node.walk();
+            for child in node.children(&mut cursor) {
+                if matches!(child.kind(), "qualified_name" | "identifier" | "feature_chain") {
+                    let meta_name = node_text(&child, source).to_string();
+                    model.usages.push(Usage {
+                        kind: "metadata".to_string(),
+                        name: meta_name,
+                        type_ref: None,
+                        span: Span::from_node(&node),
+                        direction: None,
+                        is_conjugated: false,
+                        parent_def: parent_def_name.map(|s| s.to_string()),
+                        multiplicity: None,
+                        value_expr: None,
+                        short_name: None,
+                        redefinition: None,
+                        subsets: None,
+                        qualified_name: None,
+                    });
                     break;
                 }
             }
@@ -1557,6 +1605,28 @@ fn inspect_body_children(
             _ => {}
         }
     }
+}
+
+/// Extract expression text from a constraint_body or definition_body.
+fn extract_constraint_body_text(node: &Node, source: &[u8]) -> Option<String> {
+    let mut cursor = node.walk();
+    for child in node.children(&mut cursor) {
+        if child.kind() == "constraint_body" || child.kind() == "definition_body" {
+            let mut bc = child.walk();
+            for body_child in child.children(&mut bc) {
+                match body_child.kind() {
+                    "expression_statement" | "result_expression" => {
+                        let text = node_text(&body_child, source).trim_end_matches(';').trim();
+                        if !text.is_empty() {
+                            return Some(text.to_string());
+                        }
+                    }
+                    _ => {}
+                }
+            }
+        }
+    }
+    None
 }
 
 /// Extract flow relationship.
