@@ -41,22 +41,29 @@ pub fn build_bdd(model: &Model, scope: Option<&str>) -> DiagramGraph {
 
         // Collect child usages as attributes
         for u in model.usages_in_def(&def.name) {
-            let t = u.type_ref.as_deref().unwrap_or("?");
+            let t = u.type_ref.as_deref().unwrap_or("");
             let mult = u
                 .multiplicity
                 .as_ref()
                 .map(|m| format!(" {}", m))
                 .unwrap_or_default();
-            attrs.push((u.kind.clone(), format!("{} : {}{}", u.name, t, mult)));
+            let type_str = if t.is_empty() { String::new() } else { format!(" : {}", t) };
+            attrs.push((u.kind.clone(), format!("{}{}{}", u.name, type_str, mult)));
         }
 
+        // Build label with optional short name (e.g., "<REQ2> flightTimeReq")
+        let label = if let Some(ref sn) = def.short_name {
+            format!("<{}> {}", sn, def.name)
+        } else {
+            def.name.clone()
+        };
         graph.add_node(DiagramNode {
             id: def.name.clone(),
-            label: def.name.clone(),
+            label,
             kind: NodeKind::Block,
             stereotype: Some(stereotype),
             attributes: attrs,
-            is_definition: false,
+            is_definition: true,
         });
     }
 
@@ -117,7 +124,7 @@ fn collect_ports_recursive(
         .collect();
     for cu in &children {
         if cu.kind == "port" {
-            let pt = cu.type_ref.as_deref().unwrap_or("?");
+            let pt = cu.type_ref.as_deref().unwrap_or("");
             let dir = cu.direction
                 .map(|d| format!("{} ", d.label()))
                 .unwrap_or_default();
@@ -149,19 +156,19 @@ pub fn build_ibd(model: &Model, def_name: &str) -> DiagramGraph {
     // Add part usages as blocks, with ports inside them as attributes
     for u in &usages {
         if u.kind == "part" {
-            let t = u.type_ref.as_deref().unwrap_or("?");
+            let t = u.type_ref.as_deref().unwrap_or("");
             // Collect ports recursively from this part and its nested parts
             let child_ports = collect_ports_recursive(model, &u.name, &u.span, "");
             graph.add_node(DiagramNode {
                 id: u.name.clone(),
-                label: format!("{} : {}", u.name, t),
+                label: if t.is_empty() { u.name.clone() } else { format!("{} : {}", u.name, t) },
                 kind: NodeKind::Block,
                 stereotype: None,
                 attributes: child_ports,
                 is_definition: false,
             });
         } else if u.kind == "port" {
-            let t = u.type_ref.as_deref().unwrap_or("?");
+            let t = u.type_ref.as_deref().unwrap_or("");
             let dir = u
                 .direction
                 .map(|d| format!("{} ", d.label()))
@@ -288,21 +295,63 @@ pub fn build_req(model: &Model) -> DiagramGraph {
     let title = format!("grv [{}]", model.file);
     let mut graph = DiagramGraph::new(title, DiagramKind::GridView(GridViewFlavor::Requirements));
 
-    // Add requirement nodes
+    // Add requirement definition nodes
     for def in &model.definitions {
         if def.kind == DefKind::Requirement {
             let mut attrs = Vec::new();
             if let Some(ref doc) = def.doc {
                 attrs.push(("text".to_string(), doc.clone()));
             }
+            let label = if let Some(ref sn) = def.short_name {
+                format!("<{}> {}", sn, def.name)
+            } else {
+                def.name.clone()
+            };
             graph.add_node(DiagramNode {
                 id: def.name.clone(),
-                label: def.name.clone(),
+                label,
+                kind: NodeKind::Requirement,
+                stereotype: Some(if def.parent_def.is_some() {
+                    "<<requirement>>".to_string()
+                } else {
+                    "<<requirement def>>".to_string()
+                }),
+                attributes: attrs,
+                is_definition: def.parent_def.is_none(),
+            });
+        }
+    }
+    // Add requirement usage nodes (nested requirements)
+    for usage in &model.usages {
+        if usage.kind == "requirement" && !usage.name.is_empty() {
+            if graph.has_node(&usage.name) {
+                continue;
+            }
+            let attrs = Vec::new();
+            let label = if let Some(ref sn) = usage.short_name {
+                format!("<{}> {}", sn, usage.name)
+            } else {
+                usage.name.clone()
+            };
+            graph.add_node(DiagramNode {
+                id: usage.name.clone(),
+                label,
                 kind: NodeKind::Requirement,
                 stereotype: Some("<<requirement>>".to_string()),
                 attributes: attrs,
                 is_definition: false,
             });
+            // Edge from parent to child requirement
+            if let Some(ref parent) = usage.parent_def {
+                if graph.has_node(parent) {
+                    graph.add_edge(DiagramEdge {
+                        source: parent.clone(),
+                        target: usage.name.clone(),
+                        label: None,
+                        kind: EdgeKind::Containment,
+                    });
+                }
+            }
         }
     }
 
@@ -485,7 +534,7 @@ pub fn build_par(model: &Model, scope: Option<&str>) -> DiagramGraph {
                     .direction
                     .map(|d| format!("{} ", d.label()))
                     .unwrap_or_default();
-                let t = p.type_ref.as_deref().unwrap_or("?");
+                let t = p.type_ref.as_deref().unwrap_or("");
                 (format!("{}{}", dir, p.name), t.to_string())
             })
             .collect();
@@ -719,7 +768,7 @@ fn add_action_step(
             *counter += 1;
             graph.add_node(DiagramNode {
                 id: dec_id.clone(),
-                label: name.as_deref().unwrap_or("?").to_string(),
+                label: name.as_deref().unwrap_or("").to_string(),
                 kind: NodeKind::Decision,
                 stereotype: None,
                 attributes: Vec::new(),
