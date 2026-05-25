@@ -1307,3 +1307,83 @@ fn metadata_annotation_extracted() {
         .stdout(predicate::str::contains("metadata"))
         .stdout(predicate::str::contains("Risk"));
 }
+
+// ========================================================================
+// JSON output: fmt / add / remove / rename
+// ========================================================================
+
+#[test]
+fn fmt_json_check_already_formatted() {
+    cmd()
+        .args(["fmt", "-f", "json", "--check", &fixture("simple-vehicle.sysml")])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("\"files\""))
+        .stdout(predicate::str::contains("\"action\""));
+}
+
+#[test]
+fn fmt_json_check_unformatted() {
+    let dir = tempfile::tempdir().unwrap();
+    let file = dir.path().join("bad.sysml");
+    fs::write(&file, "part def Vehicle {\npart engine : Engine;\n}\n").unwrap();
+    cmd()
+        .args(["fmt", "-f", "json", "--check", file.to_str().unwrap()])
+        .assert()
+        .failure()
+        .stdout(predicate::str::contains("\"would_change\": true"));
+}
+
+#[test]
+fn add_json_dry_run_emits_envelope() {
+    let dir = tempfile::tempdir().unwrap();
+    let file = dir.path().join("test.sysml");
+    fs::write(&file, "part def Vehicle;\n").unwrap();
+    cmd()
+        .args([
+            "add", "-f", "json",
+            file.to_str().unwrap(),
+            "part-def", "Engine",
+            "--dry-run",
+        ])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("\"action\""))
+        .stdout(predicate::str::contains("\"element\""))
+        .stdout(predicate::str::contains("\"Engine\""));
+}
+
+#[test]
+fn remove_json_dry_run_envelope() {
+    let dir = tempfile::tempdir().unwrap();
+    let file = dir.path().join("test.sysml");
+    fs::write(&file, "part def Vehicle;\npart def Engine;\n").unwrap();
+    cmd()
+        .args([
+            "remove", "-f", "json",
+            file.to_str().unwrap(),
+            "Engine", "--dry-run",
+        ])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("\"removed\""))
+        .stdout(predicate::str::contains("\"Engine\""));
+}
+
+#[test]
+fn rename_json_dry_run_envelope() {
+    let dir = tempfile::tempdir().unwrap();
+    let file = dir.path().join("test.sysml");
+    fs::write(&file, "part def Engine;\n").unwrap();
+    cmd()
+        .args([
+            "rename", "-f", "json",
+            file.to_str().unwrap(),
+            "Engine", "Motor", "--dry-run",
+        ])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("\"from\""))
+        .stdout(predicate::str::contains("\"to\""))
+        .stdout(predicate::str::contains("\"edits\""));
+}

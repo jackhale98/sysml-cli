@@ -1203,6 +1203,7 @@ dependencies = [
  "dialoguer",
  "predicates",
  "rustyline",
+ "serde",
  "serde_json",
  "sysml-core",
  "tempfile",

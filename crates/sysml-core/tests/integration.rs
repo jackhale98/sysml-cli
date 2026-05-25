@@ -12,6 +12,14 @@ fn lint(source: &str) -> Vec<sysml_core::diagnostic::Diagnostic> {
     for check in &checks {
         diagnostics.extend(check.run(&model));
     }
+    // Match the production CLI behaviour (commands/check.rs): emit
+    // diagnostics in source order so callers can assume sorted output.
+    diagnostics.sort_by(|a, b| {
+        a.span
+            .start_row
+            .cmp(&b.span.start_row)
+            .then(a.span.start_col.cmp(&b.span.start_col))
+    });
     diagnostics
 }
 

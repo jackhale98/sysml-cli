@@ -4,12 +4,33 @@
 use std::path::PathBuf;
 use std::process::ExitCode;
 
+use serde::Serialize;
+
 use sysml_core::parser as sysml_parser;
 use sysml_core::codegen::edit;
 
-use crate::read_source;
+use crate::{read_source, Cli};
+
+#[derive(Serialize)]
+struct EditSummary {
+    file: String,
+    edits: usize,
+    diff: Option<String>,
+}
+
+#[derive(Serialize)]
+struct RenameEnvelope<'a> {
+    command: &'a str,
+    from: &'a str,
+    to: &'a str,
+    dry_run: bool,
+    project_wide: bool,
+    files: Vec<EditSummary>,
+    edits: usize,
+}
 
 pub(crate) fn run(
+    cli: &Cli,
     file: &PathBuf,
     old_name: &str,
     new_name: &str,
@@ -17,7 +38,7 @@ pub(crate) fn run(
     project_wide: bool,
 ) -> ExitCode {
     if project_wide {
-        return run_project_wide(file, old_name, new_name, dry_run);
+        return run_project_wide(cli, file, old_name, new_name, dry_run);
     }
 
     // Single-file rename
@@ -43,19 +64,56 @@ pub(crate) fn run(
         }
     };
 
+    let json_mode = cli.format == "json";
+
     if dry_run {
-        print!("{}", edit::diff(&source, &result, &path_str));
+        if json_mode {
+            let envelope = RenameEnvelope {
+                command: "rename",
+                from: old_name,
+                to: new_name,
+                dry_run: true,
+                project_wide: false,
+                files: vec![EditSummary {
+                    file: path_str.clone(),
+                    edits: plan.edits.len(),
+                    diff: Some(edit::diff(&source, &result, &path_str)),
+                }],
+                edits: plan.edits.len(),
+            };
+            println!("{}", serde_json::to_string_pretty(&envelope).unwrap_or_default());
+        } else {
+            print!("{}", edit::diff(&source, &result, &path_str));
+        }
     } else {
         if let Err(e) = std::fs::write(file, &result) {
             eprintln!("error: cannot write `{}`: {}", path_str, e);
             return ExitCode::from(1);
         }
-        eprintln!("Renamed `{}` to `{}` in {}", old_name, new_name, path_str);
+        if json_mode {
+            let envelope = RenameEnvelope {
+                command: "rename",
+                from: old_name,
+                to: new_name,
+                dry_run: false,
+                project_wide: false,
+                files: vec![EditSummary {
+                    file: path_str.clone(),
+                    edits: plan.edits.len(),
+                    diff: None,
+                }],
+                edits: plan.edits.len(),
+            };
+            println!("{}", serde_json::to_string_pretty(&envelope).unwrap_or_default());
+        } else {
+            eprintln!("Renamed `{}` to `{}` in {}", old_name, new_name, path_str);
+        }
     }
     ExitCode::SUCCESS
 }
 
 fn run_project_wide(
+    cli: &Cli,
     start_file: &PathBuf,
     old_name: &str,
     new_name: &str,
@@ -68,6 +126,8 @@ fn run_project_wide(
         return ExitCode::FAILURE;
     }
 
+    let json_mode = cli.format == "json";
+    let mut summaries: Vec<EditSummary> = Vec::new();
     let mut changed_count = 0;
     let mut total_replacements = 0;
 
@@ -108,23 +168,50 @@ fn run_project_wide(
         total_replacements += replacements;
         changed_count += 1;
 
+        if json_mode {
+            summaries.push(EditSummary {
+                file: path_str.clone(),
+                edits: replacements,
+                diff: if dry_run {
+                    Some(edit::diff(&source, &result, &path_str))
+                } else {
+                    None
+                },
+            });
+        }
+
         if dry_run {
-            print!("{}", edit::diff(&source, &result, &path_str));
+            if !json_mode {
+                print!("{}", edit::diff(&source, &result, &path_str));
+            }
         } else {
             if let Err(e) = std::fs::write(file_path, &result) {
                 eprintln!("error: cannot write `{}`: {}", path_str, e);
                 return ExitCode::from(1);
             }
-            eprintln!(
-                "  {} ({} replacement{})",
-                path_str,
-                replacements,
-                if replacements == 1 { "" } else { "s" }
-            );
+            if !json_mode {
+                eprintln!(
+                    "  {} ({} replacement{})",
+                    path_str,
+                    replacements,
+                    if replacements == 1 { "" } else { "s" }
+                );
+            }
         }
     }
 
-    if changed_count == 0 {
+    if json_mode {
+        let envelope = RenameEnvelope {
+            command: "rename",
+            from: old_name,
+            to: new_name,
+            dry_run,
+            project_wide: true,
+            files: summaries,
+            edits: total_replacements,
+        };
+        println!("{}", serde_json::to_string_pretty(&envelope).unwrap_or_default());
+    } else if changed_count == 0 {
         eprintln!("No occurrences of `{}` found in {} file(s).", old_name, files.len());
     } else if !dry_run {
         eprintln!(

@@ -21,6 +21,7 @@ use crate::{read_source, select_item};
 /// `import` (name is the import path).
 #[allow(clippy::too_many_arguments)]
 pub(crate) fn run(
+    cli: &crate::Cli,
     file: Option<&PathBuf>,
     kind: Option<&str>,
     name: Option<&str>,
@@ -42,6 +43,7 @@ pub(crate) fn run(
     verify: Option<&str>,
     by: Option<&str>,
 ) -> ExitCode {
+    let json_mode = cli.format == "json";
     // Handle --satisfy/--verify flags (no positional kind needed)
     if let Some(req) = satisfy {
         let by_elem = match by {
@@ -52,7 +54,7 @@ pub(crate) fn run(
             }
         };
         let text = template::generate_relationship("satisfy", req, by_elem, 0);
-        return handle_generated_text(file, &text, inside, dry_run, stdout, "satisfy");
+        return handle_generated_text(file, &text, inside, dry_run, stdout, "satisfy", json_mode);
     }
     if let Some(req) = verify {
         let by_elem = match by {
@@ -63,7 +65,7 @@ pub(crate) fn run(
             }
         };
         let text = template::generate_relationship("verify", req, by_elem, 0);
-        return handle_generated_text(file, &text, inside, dry_run, stdout, "verify");
+        return handle_generated_text(file, &text, inside, dry_run, stdout, "verify", json_mode);
     }
 
     // Reinterpret positionals: clap fills file/kind/name in order.
@@ -115,7 +117,8 @@ pub(crate) fn run(
                            members, exposes, filter, teach, type_ref, connect, by)
             } else {
                 run_insert(file, kind, name, type_ref, inside, dry_run,
-                           doc, extends, is_abstract, short_name, members, connect, by)
+                           doc, extends, is_abstract, short_name, members, connect, by,
+                           json_mode)
             }
         }
         // Partial args
@@ -127,6 +130,7 @@ pub(crate) fn run(
 }
 
 /// Handle generated text: print to stdout or insert into file.
+#[allow(clippy::too_many_arguments)]
 fn handle_generated_text(
     file: Option<&PathBuf>,
     text: &str,
@@ -134,9 +138,20 @@ fn handle_generated_text(
     dry_run: bool,
     stdout: bool,
     label: &str,
+    json_mode: bool,
 ) -> ExitCode {
     if stdout || file.is_none() {
-        print!("{}", text);
+        if json_mode {
+            let envelope = serde_json::json!({
+                "command": "add",
+                "action": "stdout",
+                "kind": label,
+                "text": text,
+            });
+            println!("{}", serde_json::to_string_pretty(&envelope).unwrap_or_default());
+        } else {
+            print!("{}", text);
+        }
         return ExitCode::SUCCESS;
     }
     let file = file.unwrap();
@@ -167,13 +182,35 @@ fn handle_generated_text(
     };
 
     if dry_run {
-        print!("{}", edit::diff(&source, &result, &path_str));
+        if json_mode {
+            let envelope = serde_json::json!({
+                "command": "add",
+                "action": "dry-run",
+                "file": path_str,
+                "element": { "kind": label },
+                "diff": edit::diff(&source, &result, &path_str),
+                "inserted_text": text,
+            });
+            println!("{}", serde_json::to_string_pretty(&envelope).unwrap_or_default());
+        } else {
+            print!("{}", edit::diff(&source, &result, &path_str));
+        }
     } else {
         if let Err(e) = std::fs::write(file, &result) {
             eprintln!("error: cannot write `{}`: {}", path_str, e);
             return ExitCode::from(1);
         }
-        eprintln!("Added {} to {}", label, path_str);
+        if json_mode {
+            let envelope = serde_json::json!({
+                "command": "add",
+                "action": "inserted",
+                "file": path_str,
+                "element": { "kind": label },
+            });
+            println!("{}", serde_json::to_string_pretty(&envelope).unwrap_or_default());
+        } else {
+            eprintln!("Added {} to {}", label, path_str);
+        }
     }
     ExitCode::SUCCESS
 }
@@ -1017,6 +1054,7 @@ fn wizard_type_ref_prompt(
 
 /// Insert element into a file (replaces old `edit add` command).
 #[allow(clippy::too_many_arguments)]
+#[allow(clippy::too_many_arguments)]
 fn run_insert(
     file: &PathBuf,
     kind: &str,
@@ -1031,6 +1069,7 @@ fn run_insert(
     members: &[String],
     connect: Option<&str>,
     by: Option<&str>,
+    json_mode: bool,
 ) -> ExitCode {
     let (path_str, source) = match read_source(file) {
         Ok(v) => v,
@@ -1138,28 +1177,58 @@ fn run_insert(
     };
 
     if dry_run {
-        print!("{}", edit::diff(&source, &result, &path_str));
+        if json_mode {
+            let envelope = serde_json::json!({
+                "command": "add",
+                "action": "dry-run",
+                "file": path_str,
+                "element": {
+                    "name": name,
+                    "kind": kind,
+                    "parent": target_parent.clone(),
+                },
+                "diff": edit::diff(&source, &result, &path_str),
+                "inserted_text": text,
+            });
+            println!("{}", serde_json::to_string_pretty(&envelope).unwrap_or_default());
+        } else {
+            print!("{}", edit::diff(&source, &result, &path_str));
+        }
     } else {
         if let Err(e) = std::fs::write(file, &result) {
             eprintln!("error: cannot write `{}`: {}", path_str, e);
             return ExitCode::from(1);
         }
-        eprintln!("Added `{}` to {}", name, path_str);
+        if json_mode {
+            let envelope = serde_json::json!({
+                "command": "add",
+                "action": "inserted",
+                "file": path_str,
+                "element": {
+                    "name": name,
+                    "kind": kind,
+                    "parent": target_parent.clone(),
+                },
+            });
+            println!("{}", serde_json::to_string_pretty(&envelope).unwrap_or_default());
+        } else {
+            eprintln!("Added `{}` to {}", name, path_str);
 
-        // Suggest import if type reference is not defined in this file
-        let refs_to_check: Vec<&str> = [type_ref, extends]
-            .iter()
-            .filter_map(|r| *r)
-            .filter(|r| !r.contains("::"))  // Skip already-qualified refs
-            .collect();
-        if !refs_to_check.is_empty() {
-            let updated = std::fs::read_to_string(file).unwrap_or_default();
-            let updated_model = sysml_parser::parse_file(&path_str, &updated);
-            for tr in refs_to_check {
-                let defined = updated_model.definitions.iter().any(|d| d.name == tr);
-                if !defined {
-                    eprintln!("  hint: `{}` is not defined in this file. You may need:", tr);
-                    eprintln!("    sysml add {} import '...::{}'", path_str, tr);
+            // Suggest import if type reference is not defined in this file
+            let refs_to_check: Vec<&str> = [type_ref, extends]
+                .iter()
+                .filter_map(|r| *r)
+                .filter(|r| !r.contains("::"))  // Skip already-qualified refs
+                .collect();
+            if !refs_to_check.is_empty() {
+                let updated = std::fs::read_to_string(file).unwrap_or_default();
+                let updated_model = sysml_parser::parse_file(&path_str, &updated);
+                for tr in refs_to_check {
+                    let defined = updated_model.definitions.iter().any(|d| d.name == tr);
+                    if !defined {
+                        eprintln!("  hint: `{}` is not defined in this file. You may need:", tr);
+                        eprintln!("    sysml add {} import '...::{}'", path_str, tr);
+                    }
                 }
             }
         }

@@ -1,8 +1,10 @@
 mod code_actions;
+mod code_lens;
 mod completion;
 mod convert;
 mod diagnostics;
 mod document_highlight;
+mod document_link;
 mod document_symbols;
 mod folding;
 mod formatting;

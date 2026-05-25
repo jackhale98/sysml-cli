@@ -2,7 +2,7 @@
 
 ## Validation Checks
 
-`sysml` ships with 12 validation checks. Each can be individually disabled with `--disable <name>`.
+`sysml` ships with 17 validation checks. Each can be individually disabled with `--disable <name>`.
 
 | Check | Name | Severity | Description |
 |-------|------|----------|-------------|
@@ -18,6 +18,11 @@
 | Calculations | `calculations` | Warning | Calc defs with a body but no return statement |
 | Import Cycles | `import-cycles` | Warning | Self-imports, bidirectional, and transitive import cycles |
 | Multiplicity | `multiplicity` | Warning | Invalid multiplicity bounds (lower > upper, zero upper, negative) |
+| Missing Docs | `missing-docs` | Note | Public top-level definitions without a `doc /* ... */` block |
+| Naming | `naming` | Note | Definitions not in PascalCase, usages not in camelCase |
+| Orphan Req | `orphan-req` | Warning | Requirement defs that are never satisfied, verified, or specialized |
+| Self-Specialization | `self-specialization` | Error | A definition naming itself as its own super-type (`part def X :> X`) |
+| Unbound Port | `unbound-port` | Warning | Port usages declared inside a part but never connected |
 
 ## Diagnostic Codes
 
@@ -43,6 +48,11 @@
 | W009 | port-types | `connected ports have incompatible directions` |
 | W010 | import-cycles | `package '<name>' imports itself` / `circular import` |
 | W011 | multiplicity | `multiplicity lower bound exceeds upper bound` |
+| W012 | missing-docs | `<kind> '<name>' has no documentation comment` |
+| W013 | naming | `<kind> name '<name>' should start with an uppercase letter (PascalCase)` |
+| W014 | orphan-req | `requirement def '<name>' is never satisfied, verified, or specialized` |
+| W015 | self-specialization | `<kind> '<name>' specializes itself: ':> <name>' would cause infinite recursion` |
+| W016 | unbound-port | `port '<name>' (in '<parent>') is declared but never connected` |
 
 ## Output Formats
 

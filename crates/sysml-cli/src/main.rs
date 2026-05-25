@@ -48,6 +48,7 @@ fn main() -> ExitCode {
             connect, satisfy, verify, by,
             exposes, filter, interactive,
         } => commands::add::run(
+            &cli,
             file.as_ref(), kind.as_deref(), name.as_deref(),
             type_ref.as_deref(), inside.as_deref(), *dry_run, *stdout,
             *teach, doc.as_deref(), extends.as_deref(), *r#abstract,
@@ -57,13 +58,13 @@ fn main() -> ExitCode {
             by.as_deref(),
         ),
         Command::Remove { file, name, dry_run } => {
-            commands::remove::run(file, name, *dry_run)
+            commands::remove::run(&cli, file, name, *dry_run)
         }
         Command::Rename { file, old_name, new_name, dry_run, project } => {
-            commands::rename::run(file, old_name, new_name, *dry_run, *project)
+            commands::rename::run(&cli, file, old_name, new_name, *dry_run, *project)
         }
         Command::Fmt { files, check, diff, indent_width } => {
-            commands::fmt::run(files, *check, *diff, *indent_width)
+            commands::fmt::run(&cli, files, *check, *diff, *indent_width)
         }
         Command::Completions { shell } => {
             generate_completions(shell);

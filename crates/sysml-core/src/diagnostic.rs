@@ -102,4 +102,9 @@ pub mod codes {
     pub const PORT_DIRECTION_MISMATCH: &str = "W009";
     pub const IMPORT_CYCLE: &str = "W010";
     pub const MULTIPLICITY_VIOLATION: &str = "W011";
+    pub const MISSING_DOC: &str = "W012";
+    pub const NAMING_CONVENTION: &str = "W013";
+    pub const ORPHANED_REQUIREMENT: &str = "W014";
+    pub const SELF_SPECIALIZATION: &str = "W015";
+    pub const UNBOUND_PORT: &str = "W016";
 }

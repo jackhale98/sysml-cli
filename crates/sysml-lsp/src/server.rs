@@ -8,7 +8,9 @@ use sysml_core::model::qualify_model;
 use sysml_core::parser;
 
 use crate::code_actions;
+use crate::code_lens;
 use crate::completion;
+use crate::document_link;
 use crate::inlay_hints;
 use crate::convert::span_to_range;
 use crate::diagnostics;
@@ -148,6 +150,13 @@ impl LanguageServer for SysmlLanguageServer {
                     prepare_provider: Some(true),
                     work_done_progress_options: WorkDoneProgressOptions::default(),
                 })),
+                code_lens_provider: Some(CodeLensOptions {
+                    resolve_provider: Some(false),
+                }),
+                document_link_provider: Some(DocumentLinkOptions {
+                    resolve_provider: Some(false),
+                    work_done_progress_options: WorkDoneProgressOptions::default(),
+                }),
                 ..Default::default()
             },
             server_info: Some(ServerInfo {
@@ -712,6 +721,51 @@ impl LanguageServer for SysmlLanguageServer {
             Ok(None)
         } else {
             Ok(Some(result))
+        }
+    }
+
+    async fn code_lens(
+        &self,
+        params: CodeLensParams,
+    ) -> Result<Option<Vec<CodeLens>>> {
+        let uri_str = params.text_document.uri.to_string();
+        let Some(file_state) = self.state.files.get(&uri_str) else {
+            return Ok(None);
+        };
+        let lenses = code_lens::code_lenses(&file_state.model);
+        if lenses.is_empty() {
+            Ok(None)
+        } else {
+            Ok(Some(lenses))
+        }
+    }
+
+    async fn document_link(
+        &self,
+        params: DocumentLinkParams,
+    ) -> Result<Option<Vec<DocumentLink>>> {
+        let uri_str = params.text_document.uri.to_string();
+        let Some(file_state) = self.state.files.get(&uri_str) else {
+            return Ok(None);
+        };
+        // Build a simple-name → file mapping over every workspace file
+        // we know about, so the link provider can resolve qualified
+        // names like `Lib::Foo` to the file declaring `Foo`.
+        let mut name_to_file: std::collections::HashMap<String, String> =
+            std::collections::HashMap::new();
+        for entry in self.state.files.iter() {
+            let model = &entry.value().model;
+            for d in &model.definitions {
+                name_to_file
+                    .entry(d.name.clone())
+                    .or_insert_with(|| model.file.clone());
+            }
+        }
+        let links = document_link::document_links(&file_state.model, &name_to_file);
+        if links.is_empty() {
+            Ok(None)
+        } else {
+            Ok(Some(links))
         }
     }
 }

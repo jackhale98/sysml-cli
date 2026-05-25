@@ -9,7 +9,7 @@ Built on [tree-sitter](https://tree-sitter.github.io/) for reliable parsing of S
 | | |
 |---|---|
 | [Tutorial](docs/tutorial.md) | Build a weather station model from scratch using the CLI |
-| [Validation & Diagnostics](docs/validation.md) | 12 lint checks, diagnostic codes, output formats |
+| [Validation & Diagnostics](docs/validation.md) | 17 lint checks, diagnostic codes, output formats |
 | [Architecture](docs/architecture.md) | Crate structure, design decisions, 3-crate workspace |
 | [CI & Editor Integration](docs/ci-integration.md) | GitHub Actions workflow, LSP setup, Emacs sysml2-mode, JSON output |
 | **Command references** | [Analysis](docs/commands/analysis.md) &#183; [Diagrams](docs/commands/diagrams.md) &#183; [Editing](docs/commands/editing.md) &#183; [Simulation](docs/commands/simulation.md) &#183; [Project](docs/commands/project.md) |
@@ -35,7 +35,7 @@ The build compiles the [tree-sitter-sysml](https://github.com/jackhale98/tree-si
 
 ### Language server (LSP)
 
-The `sysml-lsp` binary is a full-featured language server for SysML v2 with 17 capabilities: diagnostics, go-to-definition, find references, hover (with rollup values), contextual completions, document outline, workspace symbols, semantic highlighting, code actions (quick-fix + add import), formatting, document highlight, folding, rename, type hierarchy, and inlay hints.
+The `sysml-lsp` binary is a full-featured language server for SysML v2 with 19 capabilities: diagnostics, go-to-definition, find references, hover (with rollup values), contextual completions, document outline, workspace symbols, semantic highlighting, code actions (quick-fix + add import), formatting, document highlight, folding, rename, type hierarchy, inlay hints, **code lens** (satisfy / verify / usage counts above each definition), and **document link** (clickable imports and super-types).
 
 ```sh
 cargo install --path crates/sysml-lsp
@@ -310,7 +310,7 @@ sysml pipeline run ci
 
 | Flag | Description |
 |------|-------------|
-| `-f, --format <FORMAT>` | Output format: `text`, `json` (default: `text`) |
+| `-f, --format <FORMAT>` | Output format: `text`, `json` (default: `text`). All commands — including editing (`fmt`, `add`, `remove`, `rename`) — emit a structured JSON envelope under `-f json` for editor and CI integration. |
 | `-q, --quiet` | Suppress summary line on stderr |
 | `-I, --include <PATH>` | Additional files/directories for import resolution |
 | `--stdlib-path <PATH>` | Path to the SysML v2 standard library directory (env: `SYSML_STDLIB_PATH`, config: `stdlib_path`) |
@@ -325,7 +325,7 @@ sysml pipeline run ci
 | `rename` | Rename an element and update all references (`--project` for cross-file) | |
 | `fmt` | Format SysML v2 source files | |
 | **Analysis** | | [analysis](docs/commands/analysis.md) |
-| `check` | Validate models against 12 structural rules (also: `lint`) | |
+| `check` | Validate models against 17 structural rules (also: `lint`) | |
 | `list` (`ls`) | List model elements with filters | |
 | `show` | Show detailed element information | |
 | `trace` | Requirements traceability matrix | |
@@ -360,7 +360,7 @@ sysml pipeline run ci
 | `doc` | Generate Markdown documentation from model structure and comments | |
 | `completions` | Generate shell completion scripts | |
 | **Language Server** | | [editor setup](docs/ci-integration.md#language-server-sysml-lsp) |
-| `sysml-lsp` | LSP server with 17 capabilities: diagnostics, go-to-def, references, hover (with rollups), contextual completions, outline, workspace symbols, semantic tokens, code actions, formatting, document highlight, folding, rename, type hierarchy, inlay hints | |
+| `sysml-lsp` | LSP server with 19 capabilities: diagnostics, go-to-def, references, hover (with rollups), contextual completions, outline, workspace symbols, semantic tokens, code actions, formatting, document highlight, folding, rename, type hierarchy, inlay hints, code lens, document link | |
 
 ## License
 
