@@ -1,4 +1,4 @@
-/// Expression AST and runtime values for the simulation engine.
+//! Expression AST and runtime values for the simulation engine.
 
 use serde::Serialize;
 use std::collections::HashMap;

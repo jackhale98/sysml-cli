@@ -19,7 +19,10 @@ pub(crate) fn run(cli: &Cli, full: bool, stats: bool) -> ExitCode {
     let (project_root, config) = match discover_project(&cwd) {
         Some(result) => result,
         None => {
-            eprintln!("error: no sysml project found (looked from {}).", cwd.display());
+            eprintln!(
+                "error: no sysml project found (looked from {}).",
+                cwd.display()
+            );
             eprintln!("  Run `sysml init` to create a project.");
             return ExitCode::from(1);
         }
@@ -79,7 +82,14 @@ pub(crate) fn run(cli: &Cli, full: bool, stats: bool) -> ExitCode {
     if stats {
         print_stats(cli, &cache_stats, elapsed);
     } else {
-        print_summary(cli, &config.project.name, &model_root, &cache_stats, elapsed, full);
+        print_summary(
+            cli,
+            &config.project.name,
+            &model_root,
+            &cache_stats,
+            elapsed,
+            full,
+        );
     }
 
     ExitCode::SUCCESS
@@ -102,11 +112,7 @@ fn get_git_head(project_root: &std::path::Path) -> Result<String, std::io::Error
     }
 }
 
-fn print_stats(
-    cli: &Cli,
-    stats: &sysml_core::cache::CacheStats,
-    elapsed: std::time::Duration,
-) {
+fn print_stats(cli: &Cli, stats: &sysml_core::cache::CacheStats, elapsed: std::time::Duration) {
     if cli.format == "json" {
         let json = serde_json::json!({
             "nodes": stats.nodes,

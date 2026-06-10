@@ -1,7 +1,7 @@
+use crate::{read_source, Cli};
 use std::path::PathBuf;
 use std::process::ExitCode;
 use sysml_core::parser as sysml_parser;
-use crate::{Cli, read_source};
 
 pub(crate) fn run(cli: &Cli, files: &[PathBuf], check: bool, min_score: f64) -> ExitCode {
     let (files, _) = crate::files_or_project(files);
@@ -34,7 +34,10 @@ pub(crate) fn run(cli: &Cli, files: &[PathBuf], check: bool, min_score: f64) -> 
 
         if !report.undocumented_defs.is_empty() {
             println!();
-            println!("Undocumented definitions ({}):", report.undocumented_defs.len());
+            println!(
+                "Undocumented definitions ({}):",
+                report.undocumented_defs.len()
+            );
             for item in &report.undocumented_defs {
                 println!("  {} ({}) line {}", item.name, item.kind, item.line);
             }
@@ -58,7 +61,10 @@ pub(crate) fn run(cli: &Cli, files: &[PathBuf], check: bool, min_score: f64) -> 
 
         if !report.no_member_defs.is_empty() {
             println!();
-            println!("Definitions with no members ({}):", report.no_member_defs.len());
+            println!(
+                "Definitions with no members ({}):",
+                report.no_member_defs.len()
+            );
             for item in &report.no_member_defs {
                 println!("  {} ({}) line {}", item.name, item.kind, item.line);
             }
@@ -66,7 +72,10 @@ pub(crate) fn run(cli: &Cli, files: &[PathBuf], check: bool, min_score: f64) -> 
 
         if !report.unsatisfied_reqs.is_empty() {
             println!();
-            println!("Unsatisfied requirements ({}):", report.unsatisfied_reqs.len());
+            println!(
+                "Unsatisfied requirements ({}):",
+                report.unsatisfied_reqs.len()
+            );
             for item in &report.unsatisfied_reqs {
                 println!("  {}", item.name);
             }
@@ -74,7 +83,10 @@ pub(crate) fn run(cli: &Cli, files: &[PathBuf], check: bool, min_score: f64) -> 
 
         if !report.unverified_reqs.is_empty() {
             println!();
-            println!("Unverified requirements ({}):", report.unverified_reqs.len());
+            println!(
+                "Unverified requirements ({}):",
+                report.unverified_reqs.len()
+            );
             for item in &report.unverified_reqs {
                 println!("  {}", item.name);
             }
@@ -82,12 +94,30 @@ pub(crate) fn run(cli: &Cli, files: &[PathBuf], check: bool, min_score: f64) -> 
 
         println!();
         println!("Summary:");
-        println!("  Documentation:       {:.0}%", report.summary.documented_pct);
-        println!("  Typed usages:        {:.0}%", report.summary.typed_usages_pct);
-        println!("  Populated defs:      {:.0}%", report.summary.populated_defs_pct);
-        println!("  Req satisfaction:    {:.0}%", report.summary.req_satisfaction_pct);
-        println!("  Req verification:    {:.0}%", report.summary.req_verification_pct);
-        println!("  Overall score:       {:.0}%", report.summary.overall_score);
+        println!(
+            "  Documentation:       {:.0}%",
+            report.summary.documented_pct
+        );
+        println!(
+            "  Typed usages:        {:.0}%",
+            report.summary.typed_usages_pct
+        );
+        println!(
+            "  Populated defs:      {:.0}%",
+            report.summary.populated_defs_pct
+        );
+        println!(
+            "  Req satisfaction:    {:.0}%",
+            report.summary.req_satisfaction_pct
+        );
+        println!(
+            "  Req verification:    {:.0}%",
+            report.summary.req_verification_pct
+        );
+        println!(
+            "  Overall score:       {:.0}%",
+            report.summary.overall_score
+        );
     }
 
     if check && report.summary.overall_score < min_score {

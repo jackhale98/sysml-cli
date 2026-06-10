@@ -1,4 +1,4 @@
-/// Extract Expr AST from tree-sitter expression nodes.
+//! Extract Expr AST from tree-sitter expression nodes.
 
 use tree_sitter::Node;
 
@@ -53,7 +53,9 @@ pub fn extract_expr(node: &Node, source: &[u8]) -> Result<Expr, EvalError> {
             // Named children vary, so iterate all children
             let child_count = node.child_count();
             if child_count < 3 {
-                return Err(EvalError::new("binary expression has fewer than 3 children"));
+                return Err(EvalError::new(
+                    "binary expression has fewer than 3 children",
+                ));
             }
 
             // Find the operator (anonymous node between two named children)
@@ -89,9 +91,9 @@ pub fn extract_expr(node: &Node, source: &[u8]) -> Result<Expr, EvalError> {
                     let c0 = children[0];
                     let c1 = children[1];
                     let c2 = children[2];
-                    let lhs_n = if lhs_node.is_some() { lhs_node.unwrap() } else { &c0 };
+                    let lhs_n = if let Some(n) = lhs_node { n } else { &c0 };
                     let op_t = op_text.unwrap_or_else(|| node_text(&c1, source).trim().to_string());
-                    let rhs_n = if rhs_node.is_some() { rhs_node.unwrap() } else { &c2 };
+                    let rhs_n = if let Some(n) = rhs_node { n } else { &c2 };
 
                     let lhs = extract_expr(lhs_n, source)?;
                     let rhs = extract_expr(rhs_n, source)?;
@@ -253,10 +255,7 @@ mod tests {
 
     /// Parse a SysML constraint body and extract the expression.
     fn parse_constraint_expr(expr_source: &str) -> Expr {
-        let source = format!(
-            "constraint def Test {{ in x : Real; {} }}",
-            expr_source
-        );
+        let source = format!("constraint def Test {{ in x : Real; {} }}", expr_source);
         let mut parser = Parser::new();
         parser.set_language(&get_language()).unwrap();
         let tree = parser.parse(&source, None).unwrap();
@@ -322,10 +321,7 @@ mod tests {
 
         if let Some(num_node) = find_number(tree.root_node()) {
             let expr = extract_expr(&num_node, source_bytes).unwrap();
-            assert_eq!(
-                matches!(expr, Expr::Literal(Value::Number(n)) if (n - 42.0).abs() < 0.001),
-                true
-            );
+            assert!(matches!(expr, Expr::Literal(Value::Number(n)) if (n - 42.0).abs() < 0.001));
         }
         // If the grammar doesn't produce a number_literal directly, that's OK
     }

@@ -1,4 +1,4 @@
-/// Tree-sitter parsing and model extraction for SysML v2 files.
+//! Tree-sitter parsing and model extraction for SysML v2 files.
 
 use tree_sitter::{Language, Node, Parser};
 
@@ -129,7 +129,7 @@ fn def_kind_from_keyword(keyword: &str) -> Option<DefKind> {
         "constraint" => Some(DefKind::Constraint),
         "calc" => Some(DefKind::Calc),
         "requirement" => Some(DefKind::Requirement),
-        "use" => Some(DefKind::UseCase),       // "use case def"
+        "use" => Some(DefKind::UseCase), // "use case def"
         "verification" => Some(DefKind::Verification),
         "analysis" => Some(DefKind::Analysis),
         "concern" => Some(DefKind::Concern),
@@ -263,7 +263,9 @@ fn usage_kind_from_node(node: &Node, source: &[u8]) -> Option<&'static str> {
             // KerML usage: check keyword child
             let mut cursor = node.walk();
             for child in node.children(&mut cursor) {
-                if child.is_named() { continue; }
+                if child.is_named() {
+                    continue;
+                }
                 match node_text(&child, source) {
                     "assoc" => return Some("assoc"),
                     "behavior" => return Some("behavior"),
@@ -580,7 +582,10 @@ fn get_redefinition(node: &Node, source: &[u8]) -> Option<String> {
                             if let Some(t) = kc_child.child_by_field_name("target") {
                                 return Some(node_text(&t, source).to_string());
                             }
-                            if kc_child.kind() == "qualified_name" || kc_child.kind() == "identifier" || kc_child.kind() == "feature_chain" {
+                            if kc_child.kind() == "qualified_name"
+                                || kc_child.kind() == "identifier"
+                                || kc_child.kind() == "feature_chain"
+                            {
                                 return Some(node_text(&kc_child, source).to_string());
                             }
                         }
@@ -624,7 +629,10 @@ fn get_subsets(node: &Node, source: &[u8]) -> Option<String> {
                             if let Some(t) = kc_child.child_by_field_name("target") {
                                 return Some(node_text(&t, source).to_string());
                             }
-                            if kc_child.kind() == "qualified_name" || kc_child.kind() == "identifier" || kc_child.kind() == "feature_chain" {
+                            if kc_child.kind() == "qualified_name"
+                                || kc_child.kind() == "identifier"
+                                || kc_child.kind() == "feature_chain"
+                            {
                                 return Some(node_text(&kc_child, source).to_string());
                             }
                         }
@@ -643,12 +651,7 @@ fn get_subsets(node: &Node, source: &[u8]) -> Option<String> {
 }
 
 /// Recursively walk the parse tree and extract model elements.
-fn walk_node(
-    node: Node,
-    source: &[u8],
-    model: &mut Model,
-    enclosing_verification: Option<&str>,
-) {
+fn walk_node(node: Node, source: &[u8], model: &mut Model, enclosing_verification: Option<&str>) {
     walk_node_scoped(node, source, model, enclosing_verification, None);
 }
 
@@ -683,13 +686,23 @@ fn walk_node_scoped(
         }
 
         // --- Definitions ---
-        "definition" | "state_definition" | "enumeration_definition"
-        | "generic_definition" | "package_declaration" | "namespace_declaration" => {
+        "definition"
+        | "state_definition"
+        | "enumeration_definition"
+        | "generic_definition"
+        | "package_declaration"
+        | "namespace_declaration" => {
             let Some(def_kind) = def_kind_from_node(&node, source) else {
                 // Fall through to default recursion
                 let mut cursor = node.walk();
                 for child in node.children(&mut cursor) {
-                    walk_node_scoped(child, source, model, enclosing_verification, parent_def_name);
+                    walk_node_scoped(
+                        child,
+                        source,
+                        model,
+                        enclosing_verification,
+                        parent_def_name,
+                    );
                 }
                 return;
             };
@@ -739,8 +752,12 @@ fn walk_node_scoped(
                         if child.kind() == "definition_body" || child.kind() == "enumeration_body" {
                             let mut bc = child.walk();
                             for body_child in child.children(&mut bc) {
-                                if body_child.kind() == "enum_usage" || body_child.kind() == "enum_member" {
-                                    if let Some(member_name) = field_text(&body_child, "name", source) {
+                                if body_child.kind() == "enum_usage"
+                                    || body_child.kind() == "enum_member"
+                                {
+                                    if let Some(member_name) =
+                                        field_text(&body_child, "name", source)
+                                    {
                                         let member_doc = get_doc_comment(&body_child, source);
                                         model.definitions[def_idx].enum_members.push(EnumMember {
                                             name: member_name,
@@ -784,24 +801,40 @@ fn walk_node_scoped(
         }
 
         // --- Usages ---
-        "usage" | "action_usage" | "state_usage" | "connection_usage"
-        | "interface_usage" | "constraint_usage" | "requirement_usage"
-        | "event_usage" | "allocation_usage" | "flow_usage" | "metadata_usage"
-        | "feature_usage" | "binding_usage" | "succession_usage"
-        | "succession_flow_usage" | "constraint_expression_usage" | "kerml_usage" => {
+        "usage"
+        | "action_usage"
+        | "state_usage"
+        | "connection_usage"
+        | "interface_usage"
+        | "constraint_usage"
+        | "requirement_usage"
+        | "event_usage"
+        | "allocation_usage"
+        | "flow_usage"
+        | "metadata_usage"
+        | "feature_usage"
+        | "binding_usage"
+        | "succession_usage"
+        | "succession_flow_usage"
+        | "constraint_expression_usage"
+        | "kerml_usage" => {
             let usage_kind = usage_kind_from_node(&node, source).unwrap_or("feature");
             let redefinition = get_redefinition(&node, source);
             let subsets = get_subsets(&node, source);
             // Fall back to redefines/subsets target as usage name
             // (e.g. `part redefines foo { ... }` → name is "foo")
             let name = field_text(&node, "name", source)
-                .or_else(|| redefinition.as_ref().map(|r| {
-                    // Strip qualified prefix: "vehicle_C1::rearAxle" → "rearAxle"
-                    r.rsplit("::").next().unwrap_or(r).to_string()
-                }))
-                .or_else(|| subsets.as_ref().map(|s| {
-                    s.rsplit("::").next().unwrap_or(s).to_string()
-                }));
+                .or_else(|| {
+                    redefinition.as_ref().map(|r| {
+                        // Strip qualified prefix: "vehicle_C1::rearAxle" → "rearAxle"
+                        r.rsplit("::").next().unwrap_or(r).to_string()
+                    })
+                })
+                .or_else(|| {
+                    subsets
+                        .as_ref()
+                        .map(|s| s.rsplit("::").next().unwrap_or(s).to_string())
+                });
             if let Some(name) = name {
                 let type_ref = get_type_ref(&node, source);
                 if let Some(ref t) = type_ref {
@@ -838,13 +871,13 @@ fn walk_node_scoped(
 
                 // If this usage has a body, recurse with this usage as the
                 // parent scope so nested usages get the correct parent_def.
-                let has_body = node.children(&mut node.walk())
+                let has_body = node
+                    .children(&mut node.walk())
                     .any(|c| c.kind().ends_with("_body") || c.kind() == "{");
                 if has_body {
                     let mut cursor = node.walk();
                     for child in node.children(&mut cursor) {
-                        walk_node_scoped(child, source, model,
-                            enclosing_verification, Some(&name));
+                        walk_node_scoped(child, source, model, enclosing_verification, Some(&name));
                     }
                     return; // Already recursed with updated scope
                 }
@@ -903,8 +936,12 @@ fn walk_node_scoped(
             let mut cursor = node.walk();
             for child in node.children(&mut cursor) {
                 match child.kind() {
-                    "first" => { saw_first = true; }
-                    "then" => { saw_then = true; }
+                    "first" => {
+                        saw_first = true;
+                    }
+                    "then" => {
+                        saw_then = true;
+                    }
                     "qualified_name" | "identifier" | "feature_chain" => {
                         let text = node_text(&child, source).to_string();
                         if saw_then {
@@ -964,10 +1001,22 @@ fn walk_node_scoped(
                 let mut found = "control_node".to_string();
                 for child in node.children(&mut cursor) {
                     match node_text(&child, source) {
-                        "fork" => { found = "fork_node".to_string(); break; }
-                        "join" => { found = "join_node".to_string(); break; }
-                        "merge" => { found = "merge_node".to_string(); break; }
-                        "decide" => { found = "decide_node".to_string(); break; }
+                        "fork" => {
+                            found = "fork_node".to_string();
+                            break;
+                        }
+                        "join" => {
+                            found = "join_node".to_string();
+                            break;
+                        }
+                        "merge" => {
+                            found = "merge_node".to_string();
+                            break;
+                        }
+                        "decide" => {
+                            found = "decide_node".to_string();
+                            break;
+                        }
                         _ => {}
                     }
                 }
@@ -1004,8 +1053,14 @@ fn walk_node_scoped(
             let mut cursor = node.walk();
             for child in node.children(&mut cursor) {
                 match child.kind() {
-                    "from" => { after_from = true; after_to = false; }
-                    "to" => { after_to = true; after_from = false; }
+                    "from" => {
+                        after_from = true;
+                        after_to = false;
+                    }
+                    "to" => {
+                        after_to = true;
+                        after_from = false;
+                    }
                     "qualified_name" | "feature_chain" | "identifier" => {
                         let text = node_text(&child, source).to_string();
                         if after_to {
@@ -1039,7 +1094,10 @@ fn walk_node_scoped(
             let mut refs = Vec::new();
             let mut cursor = node.walk();
             for child in node.children(&mut cursor) {
-                if matches!(child.kind(), "qualified_name" | "feature_chain" | "identifier") {
+                if matches!(
+                    child.kind(),
+                    "qualified_name" | "feature_chain" | "identifier"
+                ) {
                     refs.push(node_text(&child, source).to_string());
                 }
             }
@@ -1063,8 +1121,13 @@ fn walk_node_scoped(
             let mut cursor = node.walk();
             for child in node.children(&mut cursor) {
                 match child.kind() {
-                    "from" => { after_from = true; }
-                    "to" => { after_to = true; after_from = false; }
+                    "from" => {
+                        after_from = true;
+                    }
+                    "to" => {
+                        after_to = true;
+                        after_from = false;
+                    }
                     "qualified_name" | "feature_chain" | "identifier" => {
                         let text = node_text(&child, source).to_string();
                         if after_to && to_ref.is_none() {
@@ -1109,7 +1172,10 @@ fn walk_node_scoped(
         "metadata_annotation" => {
             let mut cursor = node.walk();
             for child in node.children(&mut cursor) {
-                if matches!(child.kind(), "qualified_name" | "identifier" | "feature_chain") {
+                if matches!(
+                    child.kind(),
+                    "qualified_name" | "identifier" | "feature_chain"
+                ) {
                     let meta_name = node_text(&child, source).to_string();
                     model.usages.push(Usage {
                         kind: "metadata".to_string(),
@@ -1137,7 +1203,13 @@ fn walk_node_scoped(
             // Recurse to find nested constraint_usage
             let mut cursor = node.walk();
             for child in node.children(&mut cursor) {
-                walk_node_scoped(child, source, model, enclosing_verification, parent_def_name);
+                walk_node_scoped(
+                    child,
+                    source,
+                    model,
+                    enclosing_verification,
+                    parent_def_name,
+                );
             }
             return;
         }
@@ -1159,8 +1231,11 @@ fn walk_node_scoped(
         }
 
         // --- Subject, objective, actor declarations (analysis/use-case bodies) ---
-        "subject_declaration" | "objective_declaration" | "actor_declaration"
-        | "stakeholder_declaration" | "frame_statement" => {
+        "subject_declaration"
+        | "objective_declaration"
+        | "actor_declaration"
+        | "stakeholder_declaration"
+        | "frame_statement" => {
             let decl_kind = match kind {
                 "subject_declaration" => "subject",
                 "objective_declaration" => "objective",
@@ -1190,7 +1265,13 @@ fn walk_node_scoped(
             // Recurse into body for nested elements
             let mut cursor = node.walk();
             for child in node.children(&mut cursor) {
-                walk_node_scoped(child, source, model, enclosing_verification, parent_def_name);
+                walk_node_scoped(
+                    child,
+                    source,
+                    model,
+                    enclosing_verification,
+                    parent_def_name,
+                );
             }
             return;
         }
@@ -1251,7 +1332,9 @@ fn walk_node_scoped(
                 if child.kind() == "then_succession" {
                     let mut cursor3 = child.walk();
                     for grandchild in child.children(&mut cursor3) {
-                        if grandchild.kind() == "qualified_name" || grandchild.kind() == "identifier" {
+                        if grandchild.kind() == "qualified_name"
+                            || grandchild.kind() == "identifier"
+                        {
                             let target = node_text(&grandchild, source).to_string();
                             model.usages.push(Usage {
                                 kind: "then_succession".to_string(),
@@ -1327,7 +1410,13 @@ fn walk_node_scoped(
     // Recurse into children
     let mut cursor = node.walk();
     for child in node.children(&mut cursor) {
-        walk_node_scoped(child, source, model, enclosing_verification, parent_def_name);
+        walk_node_scoped(
+            child,
+            source,
+            model,
+            enclosing_verification,
+            parent_def_name,
+        );
     }
 }
 
@@ -1445,7 +1534,10 @@ fn extract_allocation(node: &Node, source: &[u8], model: &mut Model) {
 fn get_body_braces(node: &Node) -> (Option<usize>, Option<usize>) {
     let mut cursor = node.walk();
     for child in node.children(&mut cursor) {
-        if child.kind() == "definition_body" || child.kind() == "state_body" || child.kind() == "enumeration_body" {
+        if child.kind() == "definition_body"
+            || child.kind() == "state_body"
+            || child.kind() == "enumeration_body"
+        {
             let mut body_cursor = child.walk();
             let mut open = None;
             let mut close = None;
@@ -1470,7 +1562,13 @@ fn extract_view_body(node: &Node, source: &[u8], name: &str) -> ViewDef {
 
     let mut cursor = node.walk();
     for child in node.children(&mut cursor) {
-        visit_view_body_node(&child, source, &mut exposes, &mut kind_filters, &mut render_as);
+        visit_view_body_node(
+            &child,
+            source,
+            &mut exposes,
+            &mut kind_filters,
+            &mut render_as,
+        );
     }
 
     ViewDef {
@@ -1511,7 +1609,7 @@ fn visit_view_body_node(
             // Extract kind= value if present
             if let Some(pos) = text.find("kind") {
                 let after = &text[pos + 4..];
-                let after = after.trim_start_matches(|c: char| c == ' ' || c == '=');
+                let after = after.trim_start_matches([' ', '=']);
                 let kind_val: String = after
                     .chars()
                     .take_while(|c| c.is_alphanumeric() || *c == '_')
@@ -1553,7 +1651,13 @@ fn inspect_def_body(node: &Node, kind: DefKind) -> (bool, usize, bool, bool) {
     for child in node.children(&mut cursor) {
         if child.kind() == "definition_body" {
             has_body = true;
-            inspect_body_children(&child, kind, &mut param_count, &mut has_constraint_expr, &mut has_return);
+            inspect_body_children(
+                &child,
+                kind,
+                &mut param_count,
+                &mut has_constraint_expr,
+                &mut has_return,
+            );
         }
     }
 

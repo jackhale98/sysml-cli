@@ -10,21 +10,21 @@ use sysml_core::parser;
 use crate::code_actions;
 use crate::code_lens;
 use crate::completion;
-use crate::document_link;
-use crate::inlay_hints;
 use crate::convert::span_to_range;
 use crate::diagnostics;
 use crate::document_highlight;
+use crate::document_link;
 use crate::document_symbols;
 use crate::folding;
 use crate::formatting;
 use crate::goto_definition;
 use crate::hover;
+use crate::inlay_hints;
 use crate::references;
 use crate::rename;
 use crate::semantic_tokens as sem_tok;
-use crate::type_hierarchy;
 use crate::state::{FileState, WorldState};
+use crate::type_hierarchy;
 use crate::workspace_symbols;
 
 pub struct SysmlLanguageServer {
@@ -233,9 +233,7 @@ impl LanguageServer for SysmlLanguageServer {
             return Ok(None);
         };
 
-        let Some(offset) =
-            crate::convert::position_to_offset(&file_state.source, &pos)
-        else {
+        let Some(offset) = crate::convert::position_to_offset(&file_state.source, &pos) else {
             return Ok(None);
         };
 
@@ -265,10 +263,7 @@ impl LanguageServer for SysmlLanguageServer {
         })))
     }
 
-    async fn references(
-        &self,
-        params: ReferenceParams,
-    ) -> Result<Option<Vec<Location>>> {
+    async fn references(&self, params: ReferenceParams) -> Result<Option<Vec<Location>>> {
         let uri = params.text_document_position.text_document.uri;
         let pos = params.text_document_position.position;
         let uri_str = uri.to_string();
@@ -278,9 +273,7 @@ impl LanguageServer for SysmlLanguageServer {
             return Ok(None);
         };
 
-        let Some(offset) =
-            crate::convert::position_to_offset(&file_state.source, &pos)
-        else {
+        let Some(offset) = crate::convert::position_to_offset(&file_state.source, &pos) else {
             return Ok(None);
         };
 
@@ -290,9 +283,7 @@ impl LanguageServer for SysmlLanguageServer {
             &file_state.source,
             offset,
         )
-        .or_else(|| {
-            find_element_name_at_offset(&file_state.model, &file_state.source, offset)
-        });
+        .or_else(|| find_element_name_at_offset(&file_state.model, &file_state.source, offset));
 
         let Some(name) = name else {
             return Ok(None);
@@ -309,8 +300,7 @@ impl LanguageServer for SysmlLanguageServer {
         let mut all_refs = Vec::new();
         for (uri_key, _) in &models {
             if let Some(fs) = self.state.files.get(uri_key) {
-                let file_refs =
-                    references::find_references_in_model(&fs.model, uri_key, &name);
+                let file_refs = references::find_references_in_model(&fs.model, uri_key, &name);
                 for r in file_refs {
                     if let Ok(loc_uri) = Url::parse(&r.uri) {
                         all_refs.push(Location {
@@ -350,9 +340,7 @@ impl LanguageServer for SysmlLanguageServer {
             return Ok(None);
         };
 
-        let Some(offset) =
-            crate::convert::position_to_offset(&file_state.source, &pos)
-        else {
+        let Some(offset) = crate::convert::position_to_offset(&file_state.source, &pos) else {
             return Ok(None);
         };
 
@@ -366,11 +354,12 @@ impl LanguageServer for SysmlLanguageServer {
             hover::hover_info(&file_state.model, name)
                 .or_else(|| hover::hover_usage_info(&file_state.model, name))
         } else {
-            find_element_name_at_offset(&file_state.model, &file_state.source, offset)
-                .and_then(|n| {
+            find_element_name_at_offset(&file_state.model, &file_state.source, offset).and_then(
+                |n| {
                     hover::hover_info(&file_state.model, &n)
                         .or_else(|| hover::hover_usage_info(&file_state.model, &n))
-                })
+                },
+            )
         };
 
         let Some(markdown) = markdown else {
@@ -394,13 +383,12 @@ impl LanguageServer for SysmlLanguageServer {
         };
 
         // Detect completion context from text before cursor
-        let filter = if let Some(offset) =
-            crate::convert::position_to_offset(&file_state.source, &pos)
-        {
-            completion::detect_context(&file_state.source, offset)
-        } else {
-            completion::CompletionFilter::All
-        };
+        let filter =
+            if let Some(offset) = crate::convert::position_to_offset(&file_state.source, &pos) {
+                completion::detect_context(&file_state.source, offset)
+            } else {
+                completion::CompletionFilter::All
+            };
 
         let workspace_defs: Vec<_> = self
             .state
@@ -448,17 +436,10 @@ impl LanguageServer for SysmlLanguageServer {
         })))
     }
 
-    async fn code_action(
-        &self,
-        params: CodeActionParams,
-    ) -> Result<Option<CodeActionResponse>> {
+    async fn code_action(&self, params: CodeActionParams) -> Result<Option<CodeActionResponse>> {
         let uri = params.text_document.uri;
         let uri_str = uri.to_string();
-        let source = self
-            .state
-            .files
-            .get(&uri_str)
-            .map(|fs| fs.source.clone());
+        let source = self.state.files.get(&uri_str).map(|fs| fs.source.clone());
         let workspace_names = self.workspace_def_names();
         let actions = code_actions::code_actions(
             &uri,
@@ -470,21 +451,24 @@ impl LanguageServer for SysmlLanguageServer {
             Ok(None)
         } else {
             Ok(Some(
-                actions.into_iter().map(CodeActionOrCommand::CodeAction).collect(),
+                actions
+                    .into_iter()
+                    .map(CodeActionOrCommand::CodeAction)
+                    .collect(),
             ))
         }
     }
 
-    async fn formatting(
-        &self,
-        params: DocumentFormattingParams,
-    ) -> Result<Option<Vec<TextEdit>>> {
+    async fn formatting(&self, params: DocumentFormattingParams) -> Result<Option<Vec<TextEdit>>> {
         let uri_str = params.text_document.uri.to_string();
         let Some(file_state) = self.state.files.get(&uri_str) else {
             return Ok(None);
         };
 
-        Ok(formatting::format_document(&file_state.source, Some(&params.options)))
+        Ok(formatting::format_document(
+            &file_state.source,
+            Some(&params.options),
+        ))
     }
 
     async fn document_highlight(
@@ -499,9 +483,7 @@ impl LanguageServer for SysmlLanguageServer {
             return Ok(None);
         };
 
-        let Some(offset) =
-            crate::convert::position_to_offset(&file_state.source, &pos)
-        else {
+        let Some(offset) = crate::convert::position_to_offset(&file_state.source, &pos) else {
             return Ok(None);
         };
 
@@ -510,9 +492,7 @@ impl LanguageServer for SysmlLanguageServer {
             &file_state.source,
             offset,
         )
-        .or_else(|| {
-            find_element_name_at_offset(&file_state.model, &file_state.source, offset)
-        });
+        .or_else(|| find_element_name_at_offset(&file_state.model, &file_state.source, offset));
 
         let Some(name) = name else {
             return Ok(None);
@@ -526,10 +506,7 @@ impl LanguageServer for SysmlLanguageServer {
         }
     }
 
-    async fn folding_range(
-        &self,
-        params: FoldingRangeParams,
-    ) -> Result<Option<Vec<FoldingRange>>> {
+    async fn folding_range(&self, params: FoldingRangeParams) -> Result<Option<Vec<FoldingRange>>> {
         let uri_str = params.text_document.uri.to_string();
         let Some(file_state) = self.state.files.get(&uri_str) else {
             return Ok(None);
@@ -552,8 +529,7 @@ impl LanguageServer for SysmlLanguageServer {
             return Ok(None);
         };
 
-        let Some(offset) =
-            crate::convert::position_to_offset(&file_state.source, &params.position)
+        let Some(offset) = crate::convert::position_to_offset(&file_state.source, &params.position)
         else {
             return Ok(None);
         };
@@ -580,9 +556,7 @@ impl LanguageServer for SysmlLanguageServer {
             return Ok(None);
         };
 
-        let Some(offset) =
-            crate::convert::position_to_offset(&file_state.source, &pos)
-        else {
+        let Some(offset) = crate::convert::position_to_offset(&file_state.source, &pos) else {
             return Ok(None);
         };
 
@@ -592,9 +566,7 @@ impl LanguageServer for SysmlLanguageServer {
             &file_state.source,
             offset,
         )
-        .or_else(|| {
-            find_element_name_at_offset(&file_state.model, &file_state.source, offset)
-        });
+        .or_else(|| find_element_name_at_offset(&file_state.model, &file_state.source, offset));
 
         let Some(old_name) = name else {
             return Ok(None);
@@ -624,10 +596,7 @@ impl LanguageServer for SysmlLanguageServer {
         Ok(rename::rename_symbol(&models_refs, &old_name, &new_name))
     }
 
-    async fn inlay_hint(
-        &self,
-        params: InlayHintParams,
-    ) -> Result<Option<Vec<InlayHint>>> {
+    async fn inlay_hint(&self, params: InlayHintParams) -> Result<Option<Vec<InlayHint>>> {
         let uri_str = params.text_document.uri.to_string();
         let Some(file_state) = self.state.files.get(&uri_str) else {
             return Ok(None);
@@ -652,9 +621,7 @@ impl LanguageServer for SysmlLanguageServer {
             return Ok(None);
         };
 
-        let Some(offset) =
-            crate::convert::position_to_offset(&file_state.source, &pos)
-        else {
+        let Some(offset) = crate::convert::position_to_offset(&file_state.source, &pos) else {
             return Ok(None);
         };
 
@@ -664,9 +631,7 @@ impl LanguageServer for SysmlLanguageServer {
             &file_state.source,
             offset,
         )
-        .or_else(|| {
-            find_element_name_at_offset(&file_state.model, &file_state.source, offset)
-        });
+        .or_else(|| find_element_name_at_offset(&file_state.model, &file_state.source, offset));
 
         let Some(name) = name else {
             return Ok(None);
@@ -724,10 +689,7 @@ impl LanguageServer for SysmlLanguageServer {
         }
     }
 
-    async fn code_lens(
-        &self,
-        params: CodeLensParams,
-    ) -> Result<Option<Vec<CodeLens>>> {
+    async fn code_lens(&self, params: CodeLensParams) -> Result<Option<Vec<CodeLens>>> {
         let uri_str = params.text_document.uri.to_string();
         let Some(file_state) = self.state.files.get(&uri_str) else {
             return Ok(None);
@@ -740,10 +702,7 @@ impl LanguageServer for SysmlLanguageServer {
         }
     }
 
-    async fn document_link(
-        &self,
-        params: DocumentLinkParams,
-    ) -> Result<Option<Vec<DocumentLink>>> {
+    async fn document_link(&self, params: DocumentLinkParams) -> Result<Option<Vec<DocumentLink>>> {
         let uri_str = params.text_document.uri.to_string();
         let Some(file_state) = self.state.files.get(&uri_str) else {
             return Ok(None);

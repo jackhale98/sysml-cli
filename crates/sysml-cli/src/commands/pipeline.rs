@@ -1,4 +1,4 @@
-/// Pipeline command: run named validation pipelines from config.
+//! Pipeline command: run named validation pipelines from config.
 
 use std::path::Path;
 use std::process::{self, ExitCode};
@@ -72,10 +72,7 @@ fn run_list(format: &str, quiet: bool) -> ExitCode {
     }
 
     if !quiet {
-        eprintln!(
-            "{} pipeline(s) defined",
-            config.pipelines.len()
-        );
+        eprintln!("{} pipeline(s) defined", config.pipelines.len());
     }
     ExitCode::SUCCESS
 }
@@ -124,9 +121,7 @@ fn run_pipeline(name: &str, dry_run: bool, _format: &str, quiet: bool) -> ExitCo
             continue;
         }
 
-        let status = process::Command::new(&exe)
-            .args(&args)
-            .status();
+        let status = process::Command::new(&exe).args(&args).status();
 
         match status {
             Ok(s) if s.success() => {}
@@ -147,7 +142,10 @@ fn run_pipeline(name: &str, dry_run: bool, _format: &str, quiet: bool) -> ExitCo
     }
 
     if !quiet {
-        eprintln!("Pipeline `{name}` completed successfully ({} steps)", pipeline.steps.len());
+        eprintln!(
+            "Pipeline `{name}` completed successfully ({} steps)",
+            pipeline.steps.len()
+        );
     }
     ExitCode::SUCCESS
 }
@@ -221,10 +219,7 @@ mod tests {
 
     #[test]
     fn shell_words_simple() {
-        assert_eq!(
-            shell_words("lint model.sysml"),
-            vec!["lint", "model.sysml"]
-        );
+        assert_eq!(shell_words("lint model.sysml"), vec!["lint", "model.sysml"]);
     }
 
     #[test]

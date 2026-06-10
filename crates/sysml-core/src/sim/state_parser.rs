@@ -1,4 +1,4 @@
-/// Extract state machine models from tree-sitter parse trees.
+//! Extract state machine models from tree-sitter parse trees.
 
 use tree_sitter::{Node, Parser};
 
@@ -68,7 +68,13 @@ fn extract_state_machine_from_node(node: &Node, source: &[u8]) -> Option<StateMa
     let mut cursor = node.walk();
     for child in node.children(&mut cursor) {
         if child.kind() == "state_body" || child.kind() == "definition_body" {
-            extract_state_body(&child, source, &mut states, &mut transitions, &mut entry_state);
+            extract_state_body(
+                &child,
+                source,
+                &mut states,
+                &mut transitions,
+                &mut entry_state,
+            );
         }
     }
 
@@ -95,10 +101,7 @@ fn extract_state_machine_from_node(node: &Node, source: &[u8]) -> Option<StateMa
 /// Only produces a StateMachineModel if the state_usage contains at least
 /// one child state or transition (i.e., it's a real state region, not a
 /// leaf state like `state off;`).
-fn extract_state_machine_from_state_usage(
-    node: &Node,
-    source: &[u8],
-) -> Option<StateMachineModel> {
+fn extract_state_machine_from_state_usage(node: &Node, source: &[u8]) -> Option<StateMachineModel> {
     let name_node = node.child_by_field_name("name")?;
     let name = node_text(&name_node, source).to_string();
 
@@ -109,7 +112,13 @@ fn extract_state_machine_from_state_usage(
     let mut cursor = node.walk();
     for child in node.children(&mut cursor) {
         if child.kind() == "state_body" || child.kind() == "definition_body" {
-            extract_state_body(&child, source, &mut states, &mut transitions, &mut entry_state);
+            extract_state_body(
+                &child,
+                source,
+                &mut states,
+                &mut transitions,
+                &mut entry_state,
+            );
         }
     }
 
@@ -163,7 +172,13 @@ fn extract_state_machine_from_exhibit(node: &Node, source: &[u8]) -> Option<Stat
     let mut cursor = node.walk();
     for child in node.children(&mut cursor) {
         if child.kind() == "state_body" {
-            extract_state_body(&child, source, &mut states, &mut transitions, &mut entry_state);
+            extract_state_body(
+                &child,
+                source,
+                &mut states,
+                &mut transitions,
+                &mut entry_state,
+            );
         }
     }
 
@@ -383,11 +398,8 @@ fn extract_transition(node: &Node, source: &[u8]) -> Option<Transition> {
                     saw_if = false;
                 }
                 if saw_do && child.is_named() {
-                    effect = extract_action_ref(&child, source).or_else(|| {
-                        Some(ActionRef::Inline(
-                            node_text(&child, source).to_string(),
-                        ))
-                    });
+                    effect = extract_action_ref(&child, source)
+                        .or_else(|| Some(ActionRef::Inline(node_text(&child, source).to_string())));
                     saw_do = false;
                 }
             }
@@ -578,7 +590,10 @@ mod tests {
             }
         "#;
         let machines = extract_state_machines("test.sysml", source);
-        let ops = machines.iter().find(|m| m.name == "operatingStates").unwrap();
+        let ops = machines
+            .iter()
+            .find(|m| m.name == "operatingStates")
+            .unwrap();
         assert_eq!(ops.entry_state, Some("off".to_string()));
         assert_eq!(ops.states.len(), 3);
         assert_eq!(ops.transitions.len(), 3);
@@ -636,7 +651,9 @@ mod tests {
         assert_eq!(nested.transitions.len(), 2);
         assert_eq!(nested.transitions[0].source, "off");
         assert_eq!(nested.transitions[0].target, "on");
-        assert!(matches!(&nested.transitions[0].trigger, Some(Trigger::Signal(s)) if s == "StartSignal"));
+        assert!(
+            matches!(&nested.transitions[0].trigger, Some(Trigger::Signal(s)) if s == "StartSignal")
+        );
     }
 
     #[test]

@@ -1,4 +1,4 @@
-/// Checks for unused definitions and unresolved type references.
+//! Checks for unused definitions and unresolved type references.
 
 use crate::checks::Check;
 use crate::diagnostic::{codes, Diagnostic};
@@ -16,10 +16,12 @@ fn levenshtein(a: &str, b: &str) -> usize {
     for i in 1..=n {
         curr[0] = i;
         for j in 1..=m {
-            let cost = if a_bytes[i - 1] == b_bytes[j - 1] { 0 } else { 1 };
-            curr[j] = (prev[j] + 1)
-                .min(curr[j - 1] + 1)
-                .min(prev[j - 1] + cost);
+            let cost = if a_bytes[i - 1] == b_bytes[j - 1] {
+                0
+            } else {
+                1
+            };
+            curr[j] = (prev[j] + 1).min(curr[j - 1] + 1).min(prev[j - 1] + cost);
         }
         std::mem::swap(&mut prev, &mut curr);
     }
@@ -29,7 +31,10 @@ fn levenshtein(a: &str, b: &str) -> usize {
 /// Find the closest match for `name` among `candidates`, using Levenshtein distance.
 /// Returns `None` if no candidate is within the threshold (max 3 edits, and at most
 /// half the name length).
-pub fn find_closest_match<'a>(name: &str, candidates: impl Iterator<Item = &'a str>) -> Option<&'a str> {
+pub fn find_closest_match<'a>(
+    name: &str,
+    candidates: impl Iterator<Item = &'a str>,
+) -> Option<&'a str> {
     let max_dist = name.len().min(6) / 2 + 1; // allow 1 edit for short names, up to 3 for longer
     let mut best: Option<(&str, usize)> = None;
 
@@ -45,10 +50,8 @@ pub fn find_closest_match<'a>(name: &str, candidates: impl Iterator<Item = &'a s
         }
 
         let dist = levenshtein(name, candidate);
-        if dist > 0 && dist <= max_dist {
-            if best.is_none() || dist < best.unwrap().1 {
-                best = Some((candidate, dist));
-            }
+        if dist > 0 && dist <= max_dist && (best.is_none() || dist < best.unwrap().1) {
+            best = Some((candidate, dist));
         }
     }
     best.map(|(s, _)| s)
@@ -57,27 +60,85 @@ pub fn find_closest_match<'a>(name: &str, candidates: impl Iterator<Item = &'a s
 /// Standard library types that are always available (not defined in user files).
 const BUILTIN_TYPES: &[&str] = &[
     // ScalarValues
-    "Boolean", "String", "Integer", "Real", "Natural", "Complex", "Rational",
+    "Boolean",
+    "String",
+    "Integer",
+    "Real",
+    "Natural",
+    "Complex",
+    "Rational",
     "ScalarValues",
     // ISQ common quantities
-    "MassValue", "LengthValue", "TimeValue", "PowerValue", "ForceValue",
-    "PressureValue", "TemperatureValue", "VelocityValue", "AccelerationValue",
-    "AreaValue", "VolumeValue", "DensityValue", "EnergyValue", "TorqueValue",
-    "AngularVelocityValue", "FrequencyValue", "ElectricCurrentValue",
-    "VoltageValue", "ResistanceValue", "CapacitanceValue",
+    "MassValue",
+    "LengthValue",
+    "TimeValue",
+    "PowerValue",
+    "ForceValue",
+    "PressureValue",
+    "TemperatureValue",
+    "VelocityValue",
+    "AccelerationValue",
+    "AreaValue",
+    "VolumeValue",
+    "DensityValue",
+    "EnergyValue",
+    "TorqueValue",
+    "AngularVelocityValue",
+    "FrequencyValue",
+    "ElectricCurrentValue",
+    "VoltageValue",
+    "ResistanceValue",
+    "CapacitanceValue",
     "ISQ",
     // SI units
-    "SI", "kg", "m", "s", "A", "K", "mol", "cd", "N", "Pa", "J", "W", "Hz",
+    "SI",
+    "kg",
+    "m",
+    "s",
+    "A",
+    "K",
+    "mol",
+    "cd",
+    "N",
+    "Pa",
+    "J",
+    "W",
+    "Hz",
     // Common base types
-    "Anything", "Nothing", "Object", "Occurrence", "Item", "Part",
-    "Connection", "Interface", "Port", "Flow", "Action", "State",
-    "Constraint", "Requirement", "Calculation", "Analysis",
-    "Verification", "UseCase", "View", "Viewpoint", "Rendering",
-    "Attribute", "Enum", "Package", "Feature", "Classifier", "Type",
+    "Anything",
+    "Nothing",
+    "Object",
+    "Occurrence",
+    "Item",
+    "Part",
+    "Connection",
+    "Interface",
+    "Port",
+    "Flow",
+    "Action",
+    "State",
+    "Constraint",
+    "Requirement",
+    "Calculation",
+    "Analysis",
+    "Verification",
+    "UseCase",
+    "View",
+    "Viewpoint",
+    "Rendering",
+    "Attribute",
+    "Enum",
+    "Package",
+    "Feature",
+    "Classifier",
+    "Type",
     // Trade studies
-    "TradeStudy", "MaximizeObjective", "MinimizeObjective",
+    "TradeStudy",
+    "MaximizeObjective",
+    "MinimizeObjective",
     // Verification
-    "VerdictKind", "PassFail",
+    "VerdictKind",
+    "PassFail",
     // Sampling
     "SampledFunction",
 ];
@@ -167,8 +228,20 @@ impl Check for UnresolvedTypeCheck {
 
         // Check connection targets
         for conn in &model.connections {
-            check_ref_exists(&conn.source, &conn.span, &known, &model.file, &mut diagnostics);
-            check_ref_exists(&conn.target, &conn.span, &known, &model.file, &mut diagnostics);
+            check_ref_exists(
+                &conn.source,
+                &conn.span,
+                &known,
+                &model.file,
+                &mut diagnostics,
+            );
+            check_ref_exists(
+                &conn.target,
+                &conn.span,
+                &known,
+                &model.file,
+                &mut diagnostics,
+            );
         }
 
         // Check allocation targets
@@ -206,7 +279,10 @@ fn check_ref_exists(
             file,
             span.clone(),
             codes::UNRESOLVED_TARGET,
-            format!("reference `{}` does not resolve to any definition or usage", name),
+            format!(
+                "reference `{}` does not resolve to any definition or usage",
+                name
+            ),
         );
         if let Some(closest) = find_closest_match(simple, known.iter().copied()) {
             diag = diag.with_suggestion(format!("did you mean `{}`?", closest));
@@ -270,14 +346,14 @@ mod tests {
 
     #[test]
     fn closest_match_finds_typo() {
-        let candidates = vec!["Vehicle", "Engine", "Wheel", "Transmission"];
+        let candidates = ["Vehicle", "Engine", "Wheel", "Transmission"];
         let result = find_closest_match("Vehicl", candidates.iter().copied());
         assert_eq!(result, Some("Vehicle"));
     }
 
     #[test]
     fn closest_match_case_sensitive() {
-        let candidates = vec!["Vehicle", "Engine"];
+        let candidates = ["Vehicle", "Engine"];
         // "vehicle" differs by 1 char from "Vehicle" (case)
         let result = find_closest_match("vehicle", candidates.iter().copied());
         assert_eq!(result, Some("Vehicle"));
@@ -285,7 +361,7 @@ mod tests {
 
     #[test]
     fn closest_match_no_match_when_too_different() {
-        let candidates = vec!["Vehicle", "Engine"];
+        let candidates = ["Vehicle", "Engine"];
         let result = find_closest_match("Completely", candidates.iter().copied());
         assert_eq!(result, None);
     }
@@ -293,14 +369,14 @@ mod tests {
     #[test]
     fn closest_match_exact_not_returned() {
         // Exact matches have distance 0 and should not be returned
-        let candidates = vec!["Vehicle", "Engine"];
+        let candidates = ["Vehicle", "Engine"];
         let result = find_closest_match("Vehicle", candidates.iter().copied());
         assert_eq!(result, None);
     }
 
     #[test]
     fn closest_match_picks_closest() {
-        let candidates = vec!["Engines", "Engine", "Engin"];
+        let candidates = ["Engines", "Engine", "Engin"];
         let result = find_closest_match("Engne", candidates.iter().copied());
         assert_eq!(result, Some("Engine"));
     }
@@ -316,7 +392,10 @@ mod tests {
         let check = UnresolvedTypeCheck;
         let diags = check.run(&model);
         let vehicel_diag = diags.iter().find(|d| d.message.contains("Vehicel"));
-        assert!(vehicel_diag.is_some(), "should flag 'Vehicel' as unresolved");
+        assert!(
+            vehicel_diag.is_some(),
+            "should flag 'Vehicel' as unresolved"
+        );
         let suggestion = vehicel_diag.unwrap().suggestion.as_deref();
         assert_eq!(suggestion, Some("did you mean `Vehicle`?"));
     }

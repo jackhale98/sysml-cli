@@ -3,7 +3,7 @@ use std::process::ExitCode;
 
 use sysml_core::parser as sysml_parser;
 
-use crate::{Cli, ExportCommand, read_source};
+use crate::{read_source, Cli, ExportCommand};
 
 pub(crate) fn run(cli: &Cli, kind: &ExportCommand) -> ExitCode {
     match kind {
@@ -37,8 +37,8 @@ fn run_export_interfaces(cli: &Cli, file: &PathBuf, part: &str) -> ExitCode {
                     println!("  No interface items found.");
                 } else {
                     println!(
-                        "  {:<15} {:<10} {:<12} {:<10} {:<12} {}",
-                        "Name", "Direction", "SysML Type", "FMI Type", "Causality", "Port"
+                        "  {:<15} {:<10} {:<12} {:<10} {:<12} Port",
+                        "Name", "Direction", "SysML Type", "FMI Type", "Causality"
                     );
                     println!("  {}", "-".repeat(70));
                     for item in &interface.items {

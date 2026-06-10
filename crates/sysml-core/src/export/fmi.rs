@@ -1,7 +1,7 @@
-/// FMI 3.0 interface extraction from SysML v2 models.
-///
-/// Extracts port items from part definitions and maps them to FMI
-/// variable contracts with type mapping and conjugation support.
+//! FMI 3.0 interface extraction from SysML v2 models.
+//!
+//! Extracts port items from part definitions and maps them to FMI
+//! variable contracts with type mapping and conjugation support.
 
 use serde::Serialize;
 
@@ -102,10 +102,7 @@ pub fn extract_interface(model: &Model, part_name: &str) -> Result<FmiInterface,
                     if item.kind != "item" {
                         continue;
                     }
-                    let item_type = item
-                        .type_ref
-                        .as_deref()
-                        .unwrap_or("Real");
+                    let item_type = item.type_ref.as_deref().unwrap_or("Real");
 
                     // Determine effective direction with conjugation
                     let raw_dir = item.direction.unwrap_or(Direction::In);
@@ -129,10 +126,7 @@ pub fn extract_interface(model: &Model, part_name: &str) -> Result<FmiInterface,
                 }
             }
             "attribute" => {
-                let attr_type = usage
-                    .type_ref
-                    .as_deref()
-                    .unwrap_or("Real");
+                let attr_type = usage.type_ref.as_deref().unwrap_or("Real");
                 attributes.push(FmiAttribute {
                     name: usage.name.clone(),
                     sysml_type: attr_type.to_string(),
@@ -169,7 +163,9 @@ pub fn list_exportable(model: &Model) -> Vec<ExportablePart> {
             .filter(|c| {
                 c.source.starts_with(&format!("{}.", def.name))
                     || c.target.starts_with(&format!("{}.", def.name))
-                    || usages.iter().any(|u| u.kind == "part" && u.name == c.source.split('.').next().unwrap_or(""))
+                    || usages.iter().any(|u| {
+                        u.kind == "part" && u.name == c.source.split('.').next().unwrap_or("")
+                    })
             })
             .count();
 
@@ -202,7 +198,11 @@ mod tests {
         // FuelPort: in item fuelFlow : Real → 1 item
         // DrivePort: out item torque : Real, out item speed : Real → 2 items (conjugated → in)
         // IgnitionPort: in item ignitionOn : Boolean → 1 item
-        assert_eq!(interface.items.len(), 4, "Engine should have 4 interface items");
+        assert_eq!(
+            interface.items.len(),
+            4,
+            "Engine should have 4 interface items"
+        );
 
         // Check conjugation: driveOut uses ~DrivePort, so out→in
         let drive_items: Vec<_> = interface
@@ -212,7 +212,10 @@ mod tests {
             .collect();
         assert_eq!(drive_items.len(), 2);
         for item in &drive_items {
-            assert_eq!(item.direction, "in", "Conjugated DrivePort items should be 'in'");
+            assert_eq!(
+                item.direction, "in",
+                "Conjugated DrivePort items should be 'in'"
+            );
             assert_eq!(item.causality, "input");
         }
 
@@ -239,7 +242,10 @@ mod tests {
 
         // Check attributes
         assert_eq!(interface.attributes.len(), 2);
-        let displacement = interface.attributes.iter().find(|a| a.name == "displacement");
+        let displacement = interface
+            .attributes
+            .iter()
+            .find(|a| a.name == "displacement");
         assert!(displacement.is_some());
         assert_eq!(displacement.unwrap().sysml_type, "Real");
 
@@ -254,9 +260,16 @@ mod tests {
         let interface = extract_interface(&model, "Transmission").unwrap();
 
         // Transmission has 1 port: driveIn (DrivePort, no conjugation)
-        assert_eq!(interface.items.len(), 2, "Transmission has 2 items from DrivePort");
+        assert_eq!(
+            interface.items.len(),
+            2,
+            "Transmission has 2 items from DrivePort"
+        );
         for item in &interface.items {
-            assert_eq!(item.direction, "out", "DrivePort items are 'out' (no conjugation)");
+            assert_eq!(
+                item.direction, "out",
+                "DrivePort items are 'out' (no conjugation)"
+            );
         }
 
         assert_eq!(interface.attributes.len(), 1);
@@ -270,7 +283,10 @@ mod tests {
 
         let names: Vec<&str> = parts.iter().map(|p| p.name.as_str()).collect();
         assert!(names.contains(&"Engine"), "Engine should be exportable");
-        assert!(names.contains(&"Transmission"), "Transmission should be exportable");
+        assert!(
+            names.contains(&"Transmission"),
+            "Transmission should be exportable"
+        );
     }
 
     #[test]

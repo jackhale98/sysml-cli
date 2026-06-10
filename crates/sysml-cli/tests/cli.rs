@@ -1,6 +1,6 @@
-/// End-to-end CLI integration tests.
-///
-/// These test the actual binary with real SysML fixture files.
+//! End-to-end CLI integration tests.
+//!
+//! These test the actual binary with real SysML fixture files.
 
 use assert_cmd::Command;
 use predicates::prelude::*;
@@ -80,7 +80,12 @@ fn list_filter_by_kind() {
 #[test]
 fn list_filter_by_name() {
     cmd()
-        .args(["list", "--name", "Vehicle", &fixture("simple-vehicle.sysml")])
+        .args([
+            "list",
+            "--name",
+            "Vehicle",
+            &fixture("simple-vehicle.sysml"),
+        ])
         .assert()
         .success()
         .stdout(predicate::str::contains("Vehicle"));
@@ -142,46 +147,12 @@ fn show_raw_usage() {
 #[test]
 fn show_raw_missing_element() {
     cmd()
-        .args(["show", "--raw", &fixture("simple-vehicle.sysml"), "NotThere"])
-        .assert()
-        .failure()
-        .stderr(predicate::str::contains("not found"));
-}
-
-// ========================================================================
-// verify run (non-interactive — should fail without TTY)
-// ========================================================================
-
-#[cfg(feature = "verify")]
-#[test]
-fn verify_run_no_tty() {
-    // verify run requires an interactive terminal; should fail gracefully in CI
-    cmd()
-        .args(["verify", "run", &fixture("simple-vehicle.sysml")])
-        .assert()
-        .failure()
-        .stderr(predicate::str::contains("interactive terminal"));
-}
-
-// ========================================================================
-// mfg start-lot (non-interactive — should fail without TTY)
-// ========================================================================
-
-#[cfg(feature = "mfg")]
-#[test]
-fn mfg_start_lot_no_tty() {
-    cmd()
-        .args(["mfg", "start-lot", &fixture("simple-vehicle.sysml")])
-        .assert()
-        .failure()
-        .stderr(predicate::str::contains("interactive terminal"));
-}
-
-#[cfg(feature = "mfg")]
-#[test]
-fn mfg_step_missing_lot() {
-    cmd()
-        .args(["mfg", "step", "NONEXISTENT-LOT-ID"])
+        .args([
+            "show",
+            "--raw",
+            &fixture("simple-vehicle.sysml"),
+            "NotThere",
+        ])
         .assert()
         .failure()
         .stderr(predicate::str::contains("not found"));
@@ -204,7 +175,11 @@ fn diagram_bdd_mermaid() {
 fn diagram_bdd_plantuml() {
     cmd()
         .args([
-            "diagram", "-t", "bdd", "-o", "plantuml",
+            "diagram",
+            "-t",
+            "bdd",
+            "-o",
+            "plantuml",
             &fixture("simple-vehicle.sysml"),
         ])
         .assert()
@@ -216,7 +191,11 @@ fn diagram_bdd_plantuml() {
 fn diagram_bdd_dot() {
     cmd()
         .args([
-            "diagram", "-t", "bdd", "-o", "dot",
+            "diagram",
+            "-t",
+            "bdd",
+            "-o",
+            "dot",
             &fixture("simple-vehicle.sysml"),
         ])
         .assert()
@@ -228,7 +207,11 @@ fn diagram_bdd_dot() {
 fn diagram_bdd_d2() {
     cmd()
         .args([
-            "diagram", "-t", "bdd", "-o", "d2",
+            "diagram",
+            "-t",
+            "bdd",
+            "-o",
+            "d2",
             &fixture("simple-vehicle.sysml"),
         ])
         .assert()
@@ -276,10 +259,7 @@ fn simulate_list() {
 #[test]
 fn simulate_eval() {
     cmd()
-        .args([
-            "simulate", "eval",
-            &fixture("simulation.sysml"),
-        ])
+        .args(["simulate", "eval", &fixture("simulation.sysml")])
         .assert()
         .success();
 }
@@ -290,10 +270,13 @@ fn simulate_state_machine_with_events() {
     // so exit code is 1 — but the trace is still produced correctly.
     cmd()
         .args([
-            "simulate", "state-machine",
+            "simulate",
+            "state-machine",
             &fixture("flashlight.sysml"),
-            "-n", "FlashlightStates",
-            "-e", "switchOn,switchOff",
+            "-n",
+            "FlashlightStates",
+            "-e",
+            "switchOn,switchOff",
         ])
         .assert()
         .stdout(predicate::str::contains("Step 0"))
@@ -330,9 +313,14 @@ fn add_stdout_part_def() {
 fn add_stdout_with_members() {
     cmd()
         .args([
-            "add", "--stdout", "part-def", "Vehicle",
-            "-m", "part engine:Engine",
-            "--doc", "A vehicle",
+            "add",
+            "--stdout",
+            "part-def",
+            "Vehicle",
+            "-m",
+            "part engine:Engine",
+            "--doc",
+            "A vehicle",
         ])
         .assert()
         .success()
@@ -344,9 +332,14 @@ fn add_stdout_with_members() {
 fn add_stdout_view_def_with_expose() {
     cmd()
         .args([
-            "add", "--stdout", "view-def", "PartsView",
-            "--expose", "Vehicle::*",
-            "--filter", "part",
+            "add",
+            "--stdout",
+            "view-def",
+            "PartsView",
+            "--expose",
+            "Vehicle::*",
+            "--filter",
+            "part",
         ])
         .assert()
         .success()
@@ -384,7 +377,8 @@ fn add_insert_into_file() {
         .args([
             "add",
             file.to_str().unwrap(),
-            "part-def", "Engine",
+            "part-def",
+            "Engine",
             "--dry-run",
         ])
         .assert()
@@ -403,12 +397,7 @@ fn remove_dry_run() {
     fs::write(&file, "part def Vehicle;\npart def Engine;\n").unwrap();
 
     cmd()
-        .args([
-            "remove",
-            file.to_str().unwrap(),
-            "Engine",
-            "--dry-run",
-        ])
+        .args(["remove", file.to_str().unwrap(), "Engine", "--dry-run"])
         .assert()
         .success()
         .stdout(predicate::str::contains("-part def Engine;"));
@@ -428,7 +417,8 @@ fn rename_dry_run() {
         .args([
             "rename",
             file.to_str().unwrap(),
-            "Engine", "Motor",
+            "Engine",
+            "Motor",
             "--dry-run",
         ])
         .assert()
@@ -526,7 +516,11 @@ fn deps_missing_target() {
 #[test]
 fn diff_identical_files() {
     cmd()
-        .args(["diff", &fixture("simple-vehicle.sysml"), &fixture("simple-vehicle.sysml")])
+        .args([
+            "diff",
+            &fixture("simple-vehicle.sysml"),
+            &fixture("simple-vehicle.sysml"),
+        ])
         .assert()
         .success()
         .stdout(predicate::str::contains("No semantic differences"));
@@ -641,63 +635,6 @@ fn lint_suggests_closest_match() {
 }
 
 // ========================================================================
-// quality
-// ========================================================================
-
-#[cfg(feature = "capa")]
-#[test]
-fn quality_list() {
-    cmd()
-        .args(["quality", "list"])
-        .assert()
-        .success()
-        .stdout(predicate::str::contains("NCR"))
-        .stdout(predicate::str::contains("CAPA"))
-        .stdout(predicate::str::contains("Process Deviation"));
-}
-
-#[cfg(feature = "capa")]
-#[test]
-fn quality_trend_no_files() {
-    cmd()
-        .args(["quality", "trend"])
-        .assert()
-        .success()
-        .stdout(predicate::str::contains("Trend Analysis"));
-}
-
-#[cfg(feature = "capa")]
-#[test]
-fn quality_create_requires_terminal() {
-    // Non-interactive invocation should fail gracefully
-    cmd()
-        .args(["quality", "create", "--type", "ncr"])
-        .assert()
-        .failure()
-        .stderr(predicate::str::contains("interactive terminal"));
-}
-
-#[cfg(feature = "capa")]
-#[test]
-fn quality_rca_requires_terminal() {
-    cmd()
-        .args(["quality", "rca", "--source", "NCR-001", "--method", "five-why"])
-        .assert()
-        .failure()
-        .stderr(predicate::str::contains("interactive terminal"));
-}
-
-#[cfg(feature = "capa")]
-#[test]
-fn quality_action_requires_terminal() {
-    cmd()
-        .args(["quality", "action", "--capa", "CAPA-001"])
-        .assert()
-        .failure()
-        .stderr(predicate::str::contains("interactive terminal"));
-}
-
-// ========================================================================
 // pipeline
 // ========================================================================
 
@@ -805,7 +742,12 @@ fn pipeline_run_unknown_name() {
 fn stdlib_path_flag_accepted() {
     // Just verify the --stdlib-path flag is accepted without error
     cmd()
-        .args(["--stdlib-path", "/nonexistent/stdlib", "lint", &fixture("simple-vehicle.sysml")])
+        .args([
+            "--stdlib-path",
+            "/nonexistent/stdlib",
+            "lint",
+            &fixture("simple-vehicle.sysml"),
+        ])
         .assert()
         .success();
 }
@@ -843,8 +785,15 @@ fn pipeline_create_adds_to_config() {
 #[test]
 fn rollup_compute_mass() {
     cmd()
-        .args(["rollup", "compute", &fixture("rollup-vehicle.sysml"),
-               "--root", "Vehicle", "--attr", "mass"])
+        .args([
+            "rollup",
+            "compute",
+            &fixture("rollup-vehicle.sysml"),
+            "--root",
+            "Vehicle",
+            "--attr",
+            "mass",
+        ])
         .assert()
         .success()
         .stdout(predicate::str::contains("900"));
@@ -853,8 +802,15 @@ fn rollup_compute_mass() {
 #[test]
 fn rollup_compute_cost() {
     cmd()
-        .args(["rollup", "compute", &fixture("rollup-vehicle.sysml"),
-               "--root", "Vehicle", "--attr", "cost"])
+        .args([
+            "rollup",
+            "compute",
+            &fixture("rollup-vehicle.sysml"),
+            "--root",
+            "Vehicle",
+            "--attr",
+            "cost",
+        ])
         .assert()
         .success()
         .stdout(predicate::str::contains("17300"));
@@ -863,8 +819,17 @@ fn rollup_compute_cost() {
 #[test]
 fn rollup_compute_json() {
     cmd()
-        .args(["-f", "json", "rollup", "compute", &fixture("rollup-vehicle.sysml"),
-               "--root", "Vehicle", "--attr", "mass"])
+        .args([
+            "-f",
+            "json",
+            "rollup",
+            "compute",
+            &fixture("rollup-vehicle.sysml"),
+            "--root",
+            "Vehicle",
+            "--attr",
+            "mass",
+        ])
         .assert()
         .success()
         .stdout(predicate::str::contains("\"total\": 900"));
@@ -873,8 +838,17 @@ fn rollup_compute_json() {
 #[test]
 fn rollup_compute_rss() {
     cmd()
-        .args(["rollup", "compute", &fixture("rollup-vehicle.sysml"),
-               "--root", "Vehicle", "--attr", "mass", "--method", "rss"])
+        .args([
+            "rollup",
+            "compute",
+            &fixture("rollup-vehicle.sysml"),
+            "--root",
+            "Vehicle",
+            "--attr",
+            "mass",
+            "--method",
+            "rss",
+        ])
         .assert()
         .success()
         .stdout(predicate::str::contains("rss"));
@@ -883,8 +857,17 @@ fn rollup_compute_rss() {
 #[test]
 fn rollup_budget_pass() {
     cmd()
-        .args(["rollup", "budget", &fixture("rollup-vehicle.sysml"),
-               "--root", "Vehicle", "--attr", "mass", "--limit", "1000"])
+        .args([
+            "rollup",
+            "budget",
+            &fixture("rollup-vehicle.sysml"),
+            "--root",
+            "Vehicle",
+            "--attr",
+            "mass",
+            "--limit",
+            "1000",
+        ])
         .assert()
         .success()
         .stdout(predicate::str::contains("PASS"));
@@ -893,8 +876,17 @@ fn rollup_budget_pass() {
 #[test]
 fn rollup_budget_fail() {
     cmd()
-        .args(["rollup", "budget", &fixture("rollup-vehicle.sysml"),
-               "--root", "Vehicle", "--attr", "mass", "--limit", "500"])
+        .args([
+            "rollup",
+            "budget",
+            &fixture("rollup-vehicle.sysml"),
+            "--root",
+            "Vehicle",
+            "--attr",
+            "mass",
+            "--limit",
+            "500",
+        ])
         .assert()
         .failure()
         .stdout(predicate::str::contains("FAIL"));
@@ -903,8 +895,15 @@ fn rollup_budget_fail() {
 #[test]
 fn rollup_sensitivity() {
     cmd()
-        .args(["rollup", "sensitivity", &fixture("rollup-vehicle.sysml"),
-               "--root", "Vehicle", "--attr", "mass"])
+        .args([
+            "rollup",
+            "sensitivity",
+            &fixture("rollup-vehicle.sysml"),
+            "--root",
+            "Vehicle",
+            "--attr",
+            "mass",
+        ])
         .assert()
         .success()
         .stdout(predicate::str::contains("body"))
@@ -914,8 +913,13 @@ fn rollup_sensitivity() {
 #[test]
 fn rollup_query() {
     cmd()
-        .args(["rollup", "query", &fixture("rollup-vehicle.sysml"),
-               "--attr", "mass"])
+        .args([
+            "rollup",
+            "query",
+            &fixture("rollup-vehicle.sysml"),
+            "--attr",
+            "mass",
+        ])
         .assert()
         .success()
         .stdout(predicate::str::contains("Engine"))
@@ -926,8 +930,15 @@ fn rollup_query() {
 #[test]
 fn rollup_unknown_root() {
     cmd()
-        .args(["rollup", "compute", &fixture("rollup-vehicle.sysml"),
-               "--root", "NonExistent", "--attr", "mass"])
+        .args([
+            "rollup",
+            "compute",
+            &fixture("rollup-vehicle.sysml"),
+            "--root",
+            "NonExistent",
+            "--attr",
+            "mass",
+        ])
         .assert()
         .failure()
         .stderr(predicate::str::contains("not found"));
@@ -936,8 +947,17 @@ fn rollup_unknown_root() {
 #[test]
 fn rollup_unknown_method() {
     cmd()
-        .args(["rollup", "compute", &fixture("rollup-vehicle.sysml"),
-               "--root", "Vehicle", "--attr", "mass", "--method", "bogus"])
+        .args([
+            "rollup",
+            "compute",
+            &fixture("rollup-vehicle.sysml"),
+            "--root",
+            "Vehicle",
+            "--attr",
+            "mass",
+            "--method",
+            "bogus",
+        ])
         .assert()
         .failure()
         .stderr(predicate::str::contains("unknown aggregation"));
@@ -960,7 +980,13 @@ fn analyze_list() {
 #[test]
 fn analyze_list_json() {
     cmd()
-        .args(["-f", "json", "analyze", "list", &fixture("analysis-trade.sysml")])
+        .args([
+            "-f",
+            "json",
+            "analyze",
+            "list",
+            &fixture("analysis-trade.sysml"),
+        ])
         .assert()
         .success()
         .stdout(predicate::str::contains("\"name\": \"FuelAnalysis\""));
@@ -969,8 +995,13 @@ fn analyze_list_json() {
 #[test]
 fn analyze_run() {
     cmd()
-        .args(["analyze", "run", &fixture("analysis-trade.sysml"),
-               "-n", "FuelAnalysis"])
+        .args([
+            "analyze",
+            "run",
+            &fixture("analysis-trade.sysml"),
+            "-n",
+            "FuelAnalysis",
+        ])
         .assert()
         .success()
         .stdout(predicate::str::contains("Subject: vehicle"))
@@ -980,8 +1011,13 @@ fn analyze_run() {
 #[test]
 fn analyze_trade() {
     cmd()
-        .args(["analyze", "trade", &fixture("analysis-trade.sysml"),
-               "-n", "EngineTradeOff"])
+        .args([
+            "analyze",
+            "trade",
+            &fixture("analysis-trade.sysml"),
+            "-n",
+            "EngineTradeOff",
+        ])
         .assert()
         .success()
         .stdout(predicate::str::contains("Trade Study"))
@@ -993,8 +1029,13 @@ fn analyze_trade() {
 #[test]
 fn analyze_trade_no_alternatives() {
     cmd()
-        .args(["analyze", "trade", &fixture("analysis-trade.sysml"),
-               "-n", "FuelAnalysis"])
+        .args([
+            "analyze",
+            "trade",
+            &fixture("analysis-trade.sysml"),
+            "-n",
+            "FuelAnalysis",
+        ])
         .assert()
         .failure()
         .stderr(predicate::str::contains("no alternatives"));
@@ -1003,8 +1044,13 @@ fn analyze_trade_no_alternatives() {
 #[test]
 fn analyze_unknown_name() {
     cmd()
-        .args(["analyze", "run", &fixture("analysis-trade.sysml"),
-               "-n", "NonExistent"])
+        .args([
+            "analyze",
+            "run",
+            &fixture("analysis-trade.sysml"),
+            "-n",
+            "NonExistent",
+        ])
         .assert()
         .failure()
         .stderr(predicate::str::contains("not found"));
@@ -1017,7 +1063,12 @@ fn analyze_unknown_name() {
 #[test]
 fn find_by_name() {
     cmd()
-        .args(["find", &fixture("rollup-vehicle.sysml"), "--pattern", "Engine"])
+        .args([
+            "find",
+            &fixture("rollup-vehicle.sysml"),
+            "--pattern",
+            "Engine",
+        ])
         .assert()
         .success()
         .stdout(predicate::str::contains("Engine"));
@@ -1026,7 +1077,12 @@ fn find_by_name() {
 #[test]
 fn find_by_attribute() {
     cmd()
-        .args(["find", &fixture("rollup-vehicle.sysml"), "--pattern", "mass"])
+        .args([
+            "find",
+            &fixture("rollup-vehicle.sysml"),
+            "--pattern",
+            "mass",
+        ])
         .assert()
         .success()
         .stdout(predicate::str::contains("5 match"));
@@ -1035,7 +1091,14 @@ fn find_by_attribute() {
 #[test]
 fn find_defs_only() {
     cmd()
-        .args(["find", &fixture("rollup-vehicle.sysml"), "--pattern", "Engine", "--kind", "defs"])
+        .args([
+            "find",
+            &fixture("rollup-vehicle.sysml"),
+            "--pattern",
+            "Engine",
+            "--kind",
+            "defs",
+        ])
         .assert()
         .success()
         .stdout(predicate::str::contains("1 match"));
@@ -1044,7 +1107,12 @@ fn find_defs_only() {
 #[test]
 fn find_no_matches() {
     cmd()
-        .args(["find", &fixture("rollup-vehicle.sysml"), "--pattern", "nonexistent"])
+        .args([
+            "find",
+            &fixture("rollup-vehicle.sysml"),
+            "--pattern",
+            "nonexistent",
+        ])
         .assert()
         .success()
         .stderr(predicate::str::contains("No matches"));
@@ -1053,7 +1121,14 @@ fn find_no_matches() {
 #[test]
 fn find_json() {
     cmd()
-        .args(["-f", "json", "find", &fixture("rollup-vehicle.sysml"), "--pattern", "Vehicle"])
+        .args([
+            "-f",
+            "json",
+            "find",
+            &fixture("rollup-vehicle.sysml"),
+            "--pattern",
+            "Vehicle",
+        ])
         .assert()
         .success()
         .stdout(predicate::str::contains("\"name\": \"Vehicle\""));
@@ -1066,9 +1141,23 @@ fn find_json() {
 #[test]
 fn rollup_sweep() {
     cmd()
-        .args(["rollup", "sweep", &fixture("rollup-vehicle.sysml"),
-               "--root", "Vehicle", "--attr", "mass",
-               "--param", "engine", "--from", "100", "--to", "300", "--steps", "3"])
+        .args([
+            "rollup",
+            "sweep",
+            &fixture("rollup-vehicle.sysml"),
+            "--root",
+            "Vehicle",
+            "--attr",
+            "mass",
+            "--param",
+            "engine",
+            "--from",
+            "100",
+            "--to",
+            "300",
+            "--steps",
+            "3",
+        ])
         .assert()
         .success()
         .stdout(predicate::str::contains("Sweep"))
@@ -1078,9 +1167,25 @@ fn rollup_sweep() {
 #[test]
 fn rollup_sweep_json() {
     cmd()
-        .args(["-f", "json", "rollup", "sweep", &fixture("rollup-vehicle.sysml"),
-               "--root", "Vehicle", "--attr", "mass",
-               "--param", "engine", "--from", "100", "--to", "200", "--steps", "2"])
+        .args([
+            "-f",
+            "json",
+            "rollup",
+            "sweep",
+            &fixture("rollup-vehicle.sysml"),
+            "--root",
+            "Vehicle",
+            "--attr",
+            "mass",
+            "--param",
+            "engine",
+            "--from",
+            "100",
+            "--to",
+            "200",
+            "--steps",
+            "2",
+        ])
         .assert()
         .success()
         .stdout(predicate::str::contains("\"sensitivity\""));
@@ -1089,9 +1194,19 @@ fn rollup_sweep_json() {
 #[test]
 fn rollup_what_if() {
     cmd()
-        .args(["rollup", "what-if", &fixture("rollup-vehicle.sysml"),
-               "--root", "Vehicle", "--attr", "mass",
-               "-s", "light:engine=100", "-s", "heavy:engine=300"])
+        .args([
+            "rollup",
+            "what-if",
+            &fixture("rollup-vehicle.sysml"),
+            "--root",
+            "Vehicle",
+            "--attr",
+            "mass",
+            "-s",
+            "light:engine=100",
+            "-s",
+            "heavy:engine=300",
+        ])
         .assert()
         .success()
         .stdout(predicate::str::contains("What-if"))
@@ -1102,9 +1217,19 @@ fn rollup_what_if() {
 #[test]
 fn rollup_what_if_json() {
     cmd()
-        .args(["-f", "json", "rollup", "what-if", &fixture("rollup-vehicle.sysml"),
-               "--root", "Vehicle", "--attr", "mass",
-               "-s", "test:engine=150"])
+        .args([
+            "-f",
+            "json",
+            "rollup",
+            "what-if",
+            &fixture("rollup-vehicle.sysml"),
+            "--root",
+            "Vehicle",
+            "--attr",
+            "mass",
+            "-s",
+            "test:engine=150",
+        ])
         .assert()
         .success()
         .stdout(predicate::str::contains("\"baseline\""));
@@ -1194,7 +1319,12 @@ fn diagram_bv_alias() {
 #[test]
 fn diagram_sv_sequence() {
     cmd()
-        .args(["diagram", "-t", "sv", &fixture("annex-a-simple-vehicle-model.sysml")])
+        .args([
+            "diagram",
+            "-t",
+            "sv",
+            &fixture("annex-a-simple-vehicle-model.sysml"),
+        ])
         .assert()
         .success()
         .stdout(predicate::str::contains("sequenceDiagram"));
@@ -1224,7 +1354,12 @@ fn check_direct() {
 #[test]
 fn check_severity_error() {
     cmd()
-        .args(["check", "--severity", "error", &fixture("simple-vehicle.sysml")])
+        .args([
+            "check",
+            "--severity",
+            "error",
+            &fixture("simple-vehicle.sysml"),
+        ])
         .assert()
         .success();
 }
@@ -1248,8 +1383,14 @@ fn interfaces_basic() {
 #[test]
 fn rename_project_dry_run() {
     cmd()
-        .args(["rename", &fixture("rollup-vehicle.sysml"),
-               "Engine", "Motor", "--dry-run", "--project"])
+        .args([
+            "rename",
+            &fixture("rollup-vehicle.sysml"),
+            "Engine",
+            "Motor",
+            "--dry-run",
+            "--project",
+        ])
         .assert()
         .success()
         .stdout(predicate::str::contains("Engine").or(predicate::str::contains("Motor")));
@@ -1262,7 +1403,12 @@ fn rename_project_dry_run() {
 #[test]
 fn deps_transitive() {
     cmd()
-        .args(["deps", &fixture("simple-vehicle.sysml"), "Engine", "--transitive"])
+        .args([
+            "deps",
+            &fixture("simple-vehicle.sysml"),
+            "Engine",
+            "--transitive",
+        ])
         .assert()
         .success();
 }
@@ -1276,13 +1422,17 @@ fn require_constraint_extracted() {
     // Create temp file with require constraint pattern from the book
     let dir = tempfile::tempdir().unwrap();
     let file = dir.path().join("req.sysml");
-    fs::write(&file, r#"
+    fs::write(
+        &file,
+        r#"
         requirement def MassReq {
             subject vehicle : Vehicle;
             require constraint { vehicle.mass <= 2000; }
         }
         part def Vehicle { attribute mass : Real = 1500; }
-    "#).unwrap();
+    "#,
+    )
+    .unwrap();
     cmd()
         .args(["list", file.to_str().unwrap()])
         .assert()
@@ -1295,11 +1445,15 @@ fn require_constraint_extracted() {
 fn metadata_annotation_extracted() {
     let dir = tempfile::tempdir().unwrap();
     let file = dir.path().join("meta.sysml");
-    fs::write(&file, r#"
+    fs::write(
+        &file,
+        r#"
         metadata def Risk { attribute severity : Real; }
         part def Vehicle { @Risk; part engine : Engine; }
         part def Engine;
-    "#).unwrap();
+    "#,
+    )
+    .unwrap();
     cmd()
         .args(["list", file.to_str().unwrap()])
         .assert()
@@ -1315,7 +1469,13 @@ fn metadata_annotation_extracted() {
 #[test]
 fn fmt_json_check_already_formatted() {
     cmd()
-        .args(["fmt", "-f", "json", "--check", &fixture("simple-vehicle.sysml")])
+        .args([
+            "fmt",
+            "-f",
+            "json",
+            "--check",
+            &fixture("simple-vehicle.sysml"),
+        ])
         .assert()
         .success()
         .stdout(predicate::str::contains("\"files\""))
@@ -1341,9 +1501,12 @@ fn add_json_dry_run_emits_envelope() {
     fs::write(&file, "part def Vehicle;\n").unwrap();
     cmd()
         .args([
-            "add", "-f", "json",
+            "add",
+            "-f",
+            "json",
             file.to_str().unwrap(),
-            "part-def", "Engine",
+            "part-def",
+            "Engine",
             "--dry-run",
         ])
         .assert()
@@ -1360,9 +1523,12 @@ fn remove_json_dry_run_envelope() {
     fs::write(&file, "part def Vehicle;\npart def Engine;\n").unwrap();
     cmd()
         .args([
-            "remove", "-f", "json",
+            "remove",
+            "-f",
+            "json",
             file.to_str().unwrap(),
-            "Engine", "--dry-run",
+            "Engine",
+            "--dry-run",
         ])
         .assert()
         .success()
@@ -1377,9 +1543,13 @@ fn rename_json_dry_run_envelope() {
     fs::write(&file, "part def Engine;\n").unwrap();
     cmd()
         .args([
-            "rename", "-f", "json",
+            "rename",
+            "-f",
+            "json",
             file.to_str().unwrap(),
-            "Engine", "Motor", "--dry-run",
+            "Engine",
+            "Motor",
+            "--dry-run",
         ])
         .assert()
         .success()

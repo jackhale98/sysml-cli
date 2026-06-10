@@ -1,4 +1,4 @@
-/// Modelica partial model stub generation from FMI interface contracts.
+//! Modelica partial model stub generation from FMI interface contracts.
 
 use crate::export::fmi::FmiInterface;
 

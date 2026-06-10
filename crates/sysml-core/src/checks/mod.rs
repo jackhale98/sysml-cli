@@ -1,7 +1,7 @@
-/// Validation checks for SysML v2 models.
-///
-/// Each check module implements the `Check` trait, which takes a `Model`
-/// and returns a list of `Diagnostic` entries.
+//! Validation checks for SysML v2 models.
+//!
+//! Each check module implements the `Check` trait, which takes a `Model`
+//! and returns a list of `Diagnostic` entries.
 
 pub mod calculations;
 pub mod constraints;

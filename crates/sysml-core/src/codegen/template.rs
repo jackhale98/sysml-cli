@@ -1,4 +1,4 @@
-/// SysML v2 boilerplate template generation.
+//! SysML v2 boilerplate template generation.
 
 use crate::model::DefKind;
 
@@ -45,7 +45,9 @@ pub fn parse_template_kind(s: &str) -> Option<DefKind> {
         "constraint def" | "constraint" => Some(DefKind::Constraint),
         "calc def" | "calc" => Some(DefKind::Calc),
         "requirement def" | "requirement" | "req" => Some(DefKind::Requirement),
-        "verification def" | "verification" | "verification-def" | "vcase" => Some(DefKind::Verification),
+        "verification def" | "verification" | "verification-def" | "vcase" => {
+            Some(DefKind::Verification)
+        }
         "use case def" | "use case" | "usecase" => Some(DefKind::UseCase),
         "enum def" | "enum" => Some(DefKind::Enum),
         "attribute def" | "attribute" | "attr" => Some(DefKind::Attribute),
@@ -88,8 +90,10 @@ pub fn generate_template(opts: &TemplateOptions) -> String {
     }
 
     // Body
-    let has_body = opts.doc.is_some() || !opts.members.is_empty()
-        || !opts.exposes.is_empty() || opts.filter.is_some();
+    let has_body = opts.doc.is_some()
+        || !opts.members.is_empty()
+        || !opts.exposes.is_empty()
+        || opts.filter.is_some();
     if has_body {
         out.push_str(" {\n");
 
@@ -191,7 +195,10 @@ pub fn parse_member_spec(s: &str) -> Option<MemberSpec> {
     // Detect raw-line patterns: transitions, successions, entry/exit, accept/send
     let first_token = trimmed.split_whitespace().next().unwrap_or("");
     let first_word = first_token.trim_end_matches(';');
-    if matches!(first_word, "transition" | "entry" | "exit" | "first" | "accept" | "send") {
+    if matches!(
+        first_word,
+        "transition" | "entry" | "exit" | "first" | "accept" | "send"
+    ) {
         return Some(MemberSpec {
             usage_kind: String::new(),
             name: trimmed.to_string(),
@@ -206,8 +213,12 @@ pub fn parse_member_spec(s: &str) -> Option<MemberSpec> {
     if first_word == "constraint" {
         let rest = trimmed.strip_prefix("constraint").unwrap().trim();
         // If no colon (not a typed usage) and has operator chars, treat as expression
-        if !rest.contains(':') && (rest.contains(">=") || rest.contains("<=")
-            || rest.contains("==") || rest.contains(" and ") || rest.contains(" or "))
+        if !rest.contains(':')
+            && (rest.contains(">=")
+                || rest.contains("<=")
+                || rest.contains("==")
+                || rest.contains(" and ")
+                || rest.contains(" or "))
         {
             return Some(MemberSpec {
                 usage_kind: String::new(),
@@ -254,7 +265,11 @@ fn parse_name_type_mult(s: &str) -> (String, Option<String>, Option<String>) {
         // rest could be "Type[mult]" or "Type"
         if let Some((type_ref, mult)) = rest.split_once('[') {
             let mult = mult.trim_end_matches(']');
-            (name.to_string(), Some(type_ref.to_string()), Some(mult.to_string()))
+            (
+                name.to_string(),
+                Some(type_ref.to_string()),
+                Some(mult.to_string()),
+            )
         } else {
             (name.to_string(), Some(rest.to_string()), None)
         }
@@ -282,9 +297,7 @@ pub fn generate_connection_usage(
 ) -> String {
     let ind = " ".repeat(indent);
     let inner = " ".repeat(indent + 4);
-    let type_part = type_ref
-        .map(|t| format!(" : {}", t))
-        .unwrap_or_default();
+    let type_part = type_ref.map(|t| format!(" : {}", t)).unwrap_or_default();
     format!(
         "{}connection {}{}\n{}connect {};\n",
         ind, name, type_part, inner, connect_endpoints,
@@ -297,14 +310,12 @@ pub fn generate_connection_usage(
 /// ```text
 /// satisfy requirement TemperatureAccuracy by WeatherStationUnit;
 /// ```
-pub fn generate_relationship(
-    rel_kind: &str,
-    requirement: &str,
-    by: &str,
-    indent: usize,
-) -> String {
+pub fn generate_relationship(rel_kind: &str, requirement: &str, by: &str, indent: usize) -> String {
     let ind = " ".repeat(indent);
-    format!("{}{} requirement {} by {};\n", ind, rel_kind, requirement, by)
+    format!(
+        "{}{} requirement {} by {};\n",
+        ind, rel_kind, requirement, by
+    )
 }
 
 /// Generate an import statement.
@@ -368,16 +379,14 @@ mod tests {
             is_abstract: true,
             short_name: Some("V".to_string()),
             doc: None,
-            members: vec![
-                MemberSpec {
-                    usage_kind: "part".to_string(),
-                    name: "engine".to_string(),
-                    type_ref: Some("Engine".to_string()),
-                    direction: None,
-                    multiplicity: None,
-                    raw_line: false,
-                },
-            ],
+            members: vec![MemberSpec {
+                usage_kind: "part".to_string(),
+                name: "engine".to_string(),
+                type_ref: Some("Engine".to_string()),
+                direction: None,
+                multiplicity: None,
+                raw_line: false,
+            }],
             exposes: Vec::new(),
             filter: None,
             indent: 0,
@@ -396,16 +405,14 @@ mod tests {
             is_abstract: false,
             short_name: None,
             doc: None,
-            members: vec![
-                MemberSpec {
-                    usage_kind: "item".to_string(),
-                    name: "fuel".to_string(),
-                    type_ref: Some("FuelType".to_string()),
-                    direction: Some("in".to_string()),
-                    multiplicity: None,
-                    raw_line: false,
-                },
-            ],
+            members: vec![MemberSpec {
+                usage_kind: "item".to_string(),
+                name: "fuel".to_string(),
+                type_ref: Some("FuelType".to_string()),
+                direction: Some("in".to_string()),
+                multiplicity: None,
+                raw_line: false,
+            }],
             exposes: Vec::new(),
             filter: None,
             indent: 0,
@@ -439,7 +446,10 @@ mod tests {
         assert_eq!(parse_template_kind("port def"), Some(DefKind::Port));
         assert_eq!(parse_template_kind("action-def"), Some(DefKind::Action));
         assert_eq!(parse_template_kind("state"), Some(DefKind::State));
-        assert_eq!(parse_template_kind("requirement"), Some(DefKind::Requirement));
+        assert_eq!(
+            parse_template_kind("requirement"),
+            Some(DefKind::Requirement)
+        );
         assert_eq!(parse_template_kind("package"), Some(DefKind::Package));
         assert_eq!(parse_template_kind("nonsense"), None);
     }
@@ -577,12 +587,7 @@ mod tests {
 
     #[test]
     fn generate_connection_usage_indented() {
-        let result = generate_connection_usage(
-            "conn1",
-            Some("C"),
-            "a.x to b.y",
-            8,
-        );
+        let result = generate_connection_usage("conn1", Some("C"), "a.x to b.y", 8);
         assert!(result.starts_with("        connection conn1 : C\n"));
         assert!(result.contains("            connect a.x to b.y;"));
     }
@@ -590,13 +595,19 @@ mod tests {
     #[test]
     fn generate_satisfy_relationship() {
         let result = generate_relationship("satisfy", "TempAccuracy", "WeatherStation", 0);
-        assert_eq!(result, "satisfy requirement TempAccuracy by WeatherStation;\n");
+        assert_eq!(
+            result,
+            "satisfy requirement TempAccuracy by WeatherStation;\n"
+        );
     }
 
     #[test]
     fn generate_verify_relationship() {
         let result = generate_relationship("verify", "TempAccuracy", "TestTempAccuracy", 4);
-        assert_eq!(result, "    verify requirement TempAccuracy by TestTempAccuracy;\n");
+        assert_eq!(
+            result,
+            "    verify requirement TempAccuracy by TestTempAccuracy;\n"
+        );
     }
 
     #[test]
@@ -797,8 +808,14 @@ mod tests {
 
     #[test]
     fn parse_template_kind_verification() {
-        assert_eq!(parse_template_kind("verification"), Some(DefKind::Verification));
-        assert_eq!(parse_template_kind("verification-def"), Some(DefKind::Verification));
+        assert_eq!(
+            parse_template_kind("verification"),
+            Some(DefKind::Verification)
+        );
+        assert_eq!(
+            parse_template_kind("verification-def"),
+            Some(DefKind::Verification)
+        );
     }
 
     #[test]

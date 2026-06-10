@@ -1,4 +1,4 @@
-/// Extraction and evaluation of constraint and calc definitions.
+//! Extraction and evaluation of constraint and calc definitions.
 
 use tree_sitter::{Node, Parser};
 
@@ -74,6 +74,7 @@ fn is_definition_of(node: &Node, source: &[u8], keyword: &str) -> bool {
     false
 }
 
+#[allow(clippy::only_used_in_recursion)]
 fn collect_constraints(node: Node, source: &[u8], file: &str, results: &mut Vec<ConstraintModel>) {
     if node.kind() == "constraint_definition" || is_definition_of(&node, source, "constraint") {
         if let Some(name_node) = node.child_by_field_name("name") {
@@ -147,6 +148,7 @@ pub fn extract_calculations(file: &str, source: &str) -> Vec<CalcModel> {
     results
 }
 
+#[allow(clippy::only_used_in_recursion)]
 fn collect_calculations(node: Node, source: &[u8], file: &str, results: &mut Vec<CalcModel>) {
     if node.kind() == "calc_definition" || is_definition_of(&node, source, "calc") {
         if let Some(name_node) = node.child_by_field_name("name") {
@@ -344,10 +346,10 @@ mod tests {
         let mut env = Env::new();
         env.bind("massActual", Value::Number(1500.0));
         env.bind("massLimit", Value::Number(2000.0));
-        assert_eq!(eval::evaluate_constraint(expr, &env).unwrap(), true);
+        assert!(eval::evaluate_constraint(expr, &env).unwrap());
 
         env.bind("massActual", Value::Number(2500.0));
-        assert_eq!(eval::evaluate_constraint(expr, &env).unwrap(), false);
+        assert!(!eval::evaluate_constraint(expr, &env).unwrap());
     }
 
     #[test]

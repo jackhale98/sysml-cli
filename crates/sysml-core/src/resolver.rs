@@ -1,8 +1,8 @@
-/// Multi-file import resolution for SysML v2 models.
-///
-/// Resolves `import` statements across files in a project directory,
-/// making definitions from imported packages available for type
-/// checking, simulation, and linting.
+//! Multi-file import resolution for SysML v2 models.
+//!
+//! Resolves `import` statements across files in a project directory,
+//! making definitions from imported packages available for type
+//! checking, simulation, and linting.
 
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};

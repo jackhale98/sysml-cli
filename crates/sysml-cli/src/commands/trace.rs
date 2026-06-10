@@ -3,7 +3,7 @@ use std::process::ExitCode;
 
 use sysml_core::parser as sysml_parser;
 
-use crate::{Cli, read_source};
+use crate::{read_source, Cli};
 
 pub(crate) fn run(cli: &Cli, files: &[PathBuf], check: bool, min_coverage: f64) -> ExitCode {
     let (files, _) = crate::files_or_project(files);

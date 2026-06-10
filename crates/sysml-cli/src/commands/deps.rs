@@ -1,8 +1,8 @@
+use crate::{read_source, Cli};
 use std::collections::HashSet;
 use std::path::PathBuf;
 use std::process::ExitCode;
 use sysml_core::parser as sysml_parser;
-use crate::{Cli, read_source};
 
 pub(crate) fn run(
     cli: &Cli,

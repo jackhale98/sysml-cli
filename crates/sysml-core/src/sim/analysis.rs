@@ -1,8 +1,8 @@
-/// Analysis case extraction and evaluation for SysML v2.
-///
-/// Extracts analysis case definitions (subject, objective, parameters,
-/// return expression) from parsed models and provides evaluation support
-/// for parametric studies and trade-off analysis.
+//! Analysis case extraction and evaluation for SysML v2.
+//!
+//! Extracts analysis case definitions (subject, objective, parameters,
+//! return expression) from parsed models and provides evaluation support
+//! for parametric studies and trade-off analysis.
 
 use crate::model::{DefKind, Model, Span};
 use crate::parser;
@@ -398,41 +398,44 @@ pub fn evaluate_analysis(
 }
 
 /// Evaluate a trade study: score each alternative and pick the best.
-pub fn evaluate_trade_study(
-    _model: &Model,
-    case: &AnalysisCaseModel,
-) -> TradeResult {
-    let objective = case.objective.as_ref()
+pub fn evaluate_trade_study(_model: &Model, case: &AnalysisCaseModel) -> TradeResult {
+    let objective = case
+        .objective
+        .as_ref()
         .map(|o| o.kind.clone())
         .unwrap_or(ObjectiveKind::General);
 
-    let alt_scores: Vec<AlternativeScore> = case.alternatives.iter().map(|alt| {
-        // Try to compute a score from overrides
-        // Look for numeric overrides that could serve as evaluation criteria
-        let score = alt.overrides.iter()
-            .find(|(k, _)| k.contains("cost") || k.contains("mass") || k.contains("eval"))
-            .and_then(|(_, v)| v.trim().parse::<f64>().ok());
+    let alt_scores: Vec<AlternativeScore> = case
+        .alternatives
+        .iter()
+        .map(|alt| {
+            // Try to compute a score from overrides
+            // Look for numeric overrides that could serve as evaluation criteria
+            let score = alt
+                .overrides
+                .iter()
+                .find(|(k, _)| k.contains("cost") || k.contains("mass") || k.contains("eval"))
+                .and_then(|(_, v)| v.trim().parse::<f64>().ok());
 
-        AlternativeScore {
-            name: alt.name.clone(),
-            score,
-            overrides: alt.overrides.clone(),
-        }
-    }).collect();
+            AlternativeScore {
+                name: alt.name.clone(),
+                score,
+                overrides: alt.overrides.clone(),
+            }
+        })
+        .collect();
 
     let winner = match objective {
-        ObjectiveKind::Maximize => {
-            alt_scores.iter()
-                .filter_map(|a| a.score.map(|s| (a.name.clone(), s)))
-                .max_by(|a, b| a.1.partial_cmp(&b.1).unwrap())
-                .map(|(name, _)| name)
-        }
-        ObjectiveKind::Minimize => {
-            alt_scores.iter()
-                .filter_map(|a| a.score.map(|s| (a.name.clone(), s)))
-                .min_by(|a, b| a.1.partial_cmp(&b.1).unwrap())
-                .map(|(name, _)| name)
-        }
+        ObjectiveKind::Maximize => alt_scores
+            .iter()
+            .filter_map(|a| a.score.map(|s| (a.name.clone(), s)))
+            .max_by(|a, b| a.1.partial_cmp(&b.1).unwrap())
+            .map(|(name, _)| name),
+        ObjectiveKind::Minimize => alt_scores
+            .iter()
+            .filter_map(|a| a.score.map(|s| (a.name.clone(), s)))
+            .min_by(|a, b| a.1.partial_cmp(&b.1).unwrap())
+            .map(|(name, _)| name),
         ObjectiveKind::General => None,
     };
 
@@ -505,14 +508,8 @@ mod tests {
         let cases = extract_analysis_cases_from_model(&model);
         assert_eq!(cases.len(), 1);
         assert_eq!(cases[0].alternatives.len(), 2);
-        assert!(cases[0]
-            .alternatives
-            .iter()
-            .any(|a| a.name == "engine4cyl"));
-        assert!(cases[0]
-            .alternatives
-            .iter()
-            .any(|a| a.name == "engine6cyl"));
+        assert!(cases[0].alternatives.iter().any(|a| a.name == "engine4cyl"));
+        assert!(cases[0].alternatives.iter().any(|a| a.name == "engine6cyl"));
         assert_eq!(
             cases[0].objective.as_ref().unwrap().kind,
             ObjectiveKind::Maximize
@@ -575,7 +572,7 @@ mod tests {
         "#;
         let cases = extract_analysis_cases("test.sysml", source);
         // Should find both the def and the usage
-        assert!(cases.len() >= 1);
+        assert!(!cases.is_empty());
         assert!(cases.iter().any(|c| c.name == "FuelStudy"));
     }
 
@@ -601,9 +598,12 @@ mod tests {
         let result = evaluate_analysis(&model, case, &env);
         assert_eq!(result.name, "PowerToWeight");
         // Should have resolved local binding
-        assert!(!result.bindings.is_empty() || result.return_value.is_some(),
+        assert!(
+            !result.bindings.is_empty() || result.return_value.is_some(),
             "should have computed something: bindings={:?}, return={:?}",
-            result.bindings, result.return_value);
+            result.bindings,
+            result.return_value
+        );
     }
 
     #[test]

@@ -1,4 +1,4 @@
-/// Integration tests for sysml-core.
+//! Integration tests for sysml-core.
 
 use sysml_core::checks;
 use sysml_core::diagnostic::Severity;
@@ -43,7 +43,10 @@ fn clean_model_no_errors() {
         }
     "#;
     let diags = lint(source);
-    let errors = diags.iter().filter(|d| d.severity == Severity::Error).count();
+    let errors = diags
+        .iter()
+        .filter(|d| d.severity == Severity::Error)
+        .count();
     assert_eq!(errors, 0, "Clean model should have no errors");
 }
 
@@ -53,7 +56,10 @@ fn syntax_error_detected() {
         part def Vehicle {{{
     "#;
     let diags = lint_with(source, "syntax");
-    assert!(!diags.is_empty(), "Garbled syntax should produce syntax error");
+    assert!(
+        !diags.is_empty(),
+        "Garbled syntax should produce syntax error"
+    );
     assert!(diags.iter().all(|d| d.severity == Severity::Error));
 }
 
@@ -118,7 +124,10 @@ fn satisfied_requirement_ok() {
         }
     "#;
     let diags = lint_with(source, "unsatisfied");
-    assert!(diags.is_empty(), "Satisfied requirement should not be flagged");
+    assert!(
+        diags.is_empty(),
+        "Satisfied requirement should not be flagged"
+    );
 }
 
 #[test]
@@ -135,11 +144,13 @@ fn unverified_requirement() {
 
 #[test]
 fn diagnostic_sorting() {
-    let diags = lint(r#"
+    let diags = lint(
+        r#"
         part def A;
         part def B;
         part def C;
-    "#);
+    "#,
+    );
     // Should be sorted by line
     for pair in diags.windows(2) {
         assert!(
@@ -176,7 +187,10 @@ fn constraint_with_expression_ok() {
         }
     "#;
     let diags = lint_with(source, "constraints");
-    assert!(diags.is_empty(), "Constraint with expression should not be flagged");
+    assert!(
+        diags.is_empty(),
+        "Constraint with expression should not be flagged"
+    );
 }
 
 #[test]
@@ -184,7 +198,10 @@ fn constraint_semicolon_only_ok() {
     // Forward-declared constraint with no body should not be flagged
     let source = "constraint def Forward;";
     let diags = lint_with(source, "constraints");
-    assert!(diags.is_empty(), "Semicolon-only constraint should not be flagged");
+    assert!(
+        diags.is_empty(),
+        "Semicolon-only constraint should not be flagged"
+    );
 }
 
 // --- Calculation checks ---
@@ -218,7 +235,10 @@ fn calc_with_return_ok() {
 fn calc_semicolon_only_ok() {
     let source = "calc def Forward;";
     let diags = lint_with(source, "calculations");
-    assert!(diags.is_empty(), "Semicolon-only calc should not be flagged");
+    assert!(
+        diags.is_empty(),
+        "Semicolon-only calc should not be flagged"
+    );
 }
 
 // ========================================================================
@@ -229,11 +249,13 @@ fn calc_semicolon_only_ok() {
 
 #[test]
 fn parse_visibility_on_definition() {
-    let model = parse(r#"
+    let model = parse(
+        r#"
         private part def Engine;
         public part def Vehicle;
         protected port def DataPort;
-    "#);
+    "#,
+    );
     let engine = model.find_def("Engine").unwrap();
     assert_eq!(engine.visibility, Some(Visibility::Private));
     let vehicle = model.find_def("Vehicle").unwrap();
@@ -253,10 +275,12 @@ fn parse_no_visibility_is_none() {
 
 #[test]
 fn parse_abstract_definition() {
-    let model = parse(r#"
+    let model = parse(
+        r#"
         abstract part def Vehicle;
         part def Car;
-    "#);
+    "#,
+    );
     let vehicle = model.find_def("Vehicle").unwrap();
     assert!(vehicle.is_abstract, "Vehicle should be abstract");
     let car = model.find_def("Car").unwrap();
@@ -292,14 +316,16 @@ fn parse_no_short_name_is_none() {
 
 #[test]
 fn parse_doc_comment_on_definition() {
-    let model = parse(r#"
+    let model = parse(
+        r#"
         part def Vehicle {
             doc /* The main vehicle definition */
         }
-    "#);
+    "#,
+    );
     let v = model.find_def("Vehicle").unwrap();
     assert!(
-        v.doc.as_ref().map_or(false, |d| d.contains("main vehicle")),
+        v.doc.as_ref().is_some_and(|d| d.contains("main vehicle")),
         "Doc should contain 'main vehicle', got: {:?}",
         v.doc
     );
@@ -307,11 +333,13 @@ fn parse_doc_comment_on_definition() {
 
 #[test]
 fn parse_doc_comments_collected() {
-    let model = parse(r#"
+    let model = parse(
+        r#"
         part def Vehicle {
             doc /* The main vehicle definition */
         }
-    "#);
+    "#,
+    );
     assert!(!model.comments.is_empty(), "Should collect doc comments");
     assert!(model.comments[0].text.contains("main vehicle"));
     assert_eq!(model.comments[0].parent_def.as_deref(), Some("Vehicle"));
@@ -321,11 +349,13 @@ fn parse_doc_comments_collected() {
 
 #[test]
 fn parse_nested_definition_has_parent() {
-    let model = parse(r#"
+    let model = parse(
+        r#"
         part def Vehicle {
             part def Engine;
         }
-    "#);
+    "#,
+    );
     let engine = model.find_def("Engine").unwrap();
     assert_eq!(engine.parent_def.as_deref(), Some("Vehicle"));
 }
@@ -341,49 +371,70 @@ fn parse_top_level_definition_no_parent() {
 
 #[test]
 fn parse_multiplicity_range() {
-    let model = parse(r#"
+    let model = parse(
+        r#"
         part def Vehicle {
             part wheels : Wheel [4];
         }
-    "#);
+    "#,
+    );
     let wheels = model.usages.iter().find(|u| u.name == "wheels").unwrap();
-    let mult = wheels.multiplicity.as_ref().expect("Should have multiplicity");
+    let mult = wheels
+        .multiplicity
+        .as_ref()
+        .expect("Should have multiplicity");
     assert_eq!(mult.lower.as_deref(), Some("4"));
 }
 
 #[test]
 fn parse_multiplicity_range_bounds() {
-    let model = parse(r#"
+    let model = parse(
+        r#"
         part def Vehicle {
             part passengers : Person [0..5];
         }
-    "#);
-    let passengers = model.usages.iter().find(|u| u.name == "passengers").unwrap();
-    let mult = passengers.multiplicity.as_ref().expect("Should have multiplicity");
+    "#,
+    );
+    let passengers = model
+        .usages
+        .iter()
+        .find(|u| u.name == "passengers")
+        .unwrap();
+    let mult = passengers
+        .multiplicity
+        .as_ref()
+        .expect("Should have multiplicity");
     assert_eq!(mult.lower.as_deref(), Some("0"));
     assert_eq!(mult.upper.as_deref(), Some("5"));
 }
 
 #[test]
 fn parse_multiplicity_star() {
-    let model = parse(r#"
+    let model = parse(
+        r#"
         part def Fleet {
             part vehicles : Vehicle [*];
         }
-    "#);
+    "#,
+    );
     let vehicles = model.usages.iter().find(|u| u.name == "vehicles").unwrap();
-    let mult = vehicles.multiplicity.as_ref().expect("Should have multiplicity");
+    let mult = vehicles
+        .multiplicity
+        .as_ref()
+        .expect("Should have multiplicity");
     assert_eq!(mult.lower, None);
     assert_eq!(mult.upper, None); // * means unbounded
 }
 
 #[test]
 fn parse_no_multiplicity_is_none() {
-    let model = parse(r#"
+    let model = parse(
+        r#"
         part def Vehicle {
             part engine : Engine;
         }
-    "#);
+    "#,
+    );
     let engine = model.usages.iter().find(|u| u.name == "engine").unwrap();
     assert_eq!(engine.multiplicity, None);
 }
@@ -392,14 +443,16 @@ fn parse_no_multiplicity_is_none() {
 
 #[test]
 fn parse_value_assignment() {
-    let model = parse(r#"
+    let model = parse(
+        r#"
         part def Vehicle {
             attribute mass : Real = 1500.0;
         }
-    "#);
+    "#,
+    );
     let mass = model.usages.iter().find(|u| u.name == "mass").unwrap();
     assert!(
-        mass.value_expr.as_ref().map_or(false, |v| v.contains("1500")),
+        mass.value_expr.as_ref().is_some_and(|v| v.contains("1500")),
         "Should extract value expression, got: {:?}",
         mass.value_expr
     );
@@ -407,11 +460,13 @@ fn parse_value_assignment() {
 
 #[test]
 fn parse_no_value_is_none() {
-    let model = parse(r#"
+    let model = parse(
+        r#"
         part def Vehicle {
             attribute mass : Real;
         }
-    "#);
+    "#,
+    );
     let mass = model.usages.iter().find(|u| u.name == "mass").unwrap();
     assert_eq!(mass.value_expr, None);
 }
@@ -420,11 +475,13 @@ fn parse_no_value_is_none() {
 
 #[test]
 fn parse_redefines_keyword() {
-    let model = parse(r#"
+    let model = parse(
+        r#"
         part def Car :> Vehicle {
             part engine : V8Engine redefines engine;
         }
-    "#);
+    "#,
+    );
     let engine = model.usages.iter().find(|u| u.name == "engine").unwrap();
     assert!(
         engine.redefinition.is_some(),
@@ -436,16 +493,19 @@ fn parse_redefines_keyword() {
 
 #[test]
 fn parse_subsets_keyword() {
-    let model = parse(r#"
+    let model = parse(
+        r#"
         part def Vehicle {
             part primaryEngine : Engine subsets engines;
         }
-    "#);
-    let pe = model.usages.iter().find(|u| u.name == "primaryEngine").unwrap();
-    assert!(
-        pe.subsets.is_some(),
-        "Should extract subsets relationship"
+    "#,
     );
+    let pe = model
+        .usages
+        .iter()
+        .find(|u| u.name == "primaryEngine")
+        .unwrap();
+    assert!(pe.subsets.is_some(), "Should extract subsets relationship");
 }
 
 // Short name on usages: the grammar only supports short_name on definitions,
@@ -453,30 +513,40 @@ fn parse_subsets_keyword() {
 
 #[test]
 fn parse_enum_members() {
-    let model = parse(r#"
+    let model = parse(
+        r#"
         enum def Color {
             enum red;
             enum green;
             enum blue;
         }
-    "#);
+    "#,
+    );
     let color = model.find_def("Color").expect("Color should be found");
     assert_eq!(color.kind, DefKind::Enum);
-    assert!(color.enum_members.len() >= 2,
+    assert!(
+        color.enum_members.len() >= 2,
         "Expected at least 2 enum members, got {}: {:?}",
         color.enum_members.len(),
-        color.enum_members.iter().map(|m| &m.name).collect::<Vec<_>>());
+        color
+            .enum_members
+            .iter()
+            .map(|m| &m.name)
+            .collect::<Vec<_>>()
+    );
 }
 
 // --- Connection extraction ---
 
 #[test]
 fn parse_connection_single_line() {
-    let model = parse("package T {
+    let model = parse(
+        "package T {
     part a : A;
     part b : B;
     connection c connect a to b;
-}");
+}",
+    );
     assert_eq!(model.connections.len(), 1, "Should find 1 connection");
     assert_eq!(model.connections[0].name.as_deref(), Some("c"));
     assert_eq!(model.connections[0].source, "a");
@@ -486,14 +556,20 @@ fn parse_connection_single_line() {
 #[test]
 fn parse_connection_multiline_with_type() {
     // connection on one line, connect clause on next (like simple-vehicle.sysml)
-    let model = parse("package T {
+    let model = parse(
+        "package T {
     part engine : Engine;
     part transmission : Transmission;
     connection engineToTrans : EngineConnection
         connect engine to transmission;
-}");
-    assert_eq!(model.connections.len(), 1,
-        "Multi-line connection should be extracted; got: {:?}", model.connections);
+}",
+    );
+    assert_eq!(
+        model.connections.len(),
+        1,
+        "Multi-line connection should be extracted; got: {:?}",
+        model.connections
+    );
     assert_eq!(model.connections[0].source, "engine");
     assert_eq!(model.connections[0].target, "transmission");
 }
@@ -501,14 +577,20 @@ fn parse_connection_multiline_with_type() {
 #[test]
 fn parse_interface_with_connect() {
     // interface with connect clause (like VehicleUsages.sysml)
-    let model = parse("package T {
+    let model = parse(
+        "package T {
     part a : A;
     part b : B;
     interface myIface : IfaceDef connect
         a.portX to b.portY;
-}");
-    assert_eq!(model.connections.len(), 1,
-        "Interface connect should be extracted; got: {:?}", model.connections);
+}",
+    );
+    assert_eq!(
+        model.connections.len(),
+        1,
+        "Interface connect should be extracted; got: {:?}",
+        model.connections
+    );
     assert_eq!(model.connections[0].source, "a.portX");
     assert_eq!(model.connections[0].target, "b.portY");
 }
@@ -518,23 +600,31 @@ fn parse_interface_connect_with_body() {
     // interface with connect clause AND body (like vehicle_C3 driveShaft)
     // The ::> bindings mean the actual references are transmission.drive and rearAxle.drive,
     // not the local endpoint names transDrive and axleDrive.
-    let model = parse("package T {
+    let model = parse(
+        "package T {
     interface driveShaft connect
         transDrive ::> transmission.drive to axleDrive ::> rearAxle.drive {
         flow transDrive.driveTorque to axleDrive.driveTorque;
     }
-}");
-    assert_eq!(model.connections.len(), 1,
-        "Interface with connect+body should extract connection; got: {:?}", model.connections);
+}",
+    );
+    assert_eq!(
+        model.connections.len(),
+        1,
+        "Interface with connect+body should extract connection; got: {:?}",
+        model.connections
+    );
     assert_eq!(model.connections[0].source, "transmission.drive");
     assert_eq!(model.connections[0].target, "rearAxle.drive");
 }
 
 #[test]
 fn parse_connection_dotted_endpoints() {
-    let model = parse("package T {
+    let model = parse(
+        "package T {
     connection c connect engine.drivePwrPort to transmission.clutchPort;
-}");
+}",
+    );
     assert_eq!(model.connections.len(), 1);
     assert_eq!(model.connections[0].source, "engine.drivePwrPort");
     assert_eq!(model.connections[0].target, "transmission.clutchPort");
@@ -545,8 +635,14 @@ fn parse_simple_vehicle_connection() {
     let source = std::fs::read_to_string("../../test/fixtures/simple-vehicle.sysml").unwrap();
     let model = sysml_parser::parse_file("simple-vehicle.sysml", &source);
     println!("Connections: {:?}", model.connections);
-    assert!(!model.connections.is_empty(), "simple-vehicle should have connections");
-    let conn = model.connections.iter().find(|c| c.name.as_deref() == Some("engineToTrans"));
+    assert!(
+        !model.connections.is_empty(),
+        "simple-vehicle should have connections"
+    );
+    let conn = model
+        .connections
+        .iter()
+        .find(|c| c.name.as_deref() == Some("engineToTrans"));
     assert!(conn.is_some(), "Should find engineToTrans connection");
 }
 
@@ -554,9 +650,19 @@ fn parse_simple_vehicle_connection() {
 fn parse_vehicle_usages_connections() {
     let source = std::fs::read_to_string("../../test/fixtures/VehicleUsages.sysml").unwrap();
     let model = sysml_parser::parse_file("VehicleUsages.sysml", &source);
-    let driveshaft = model.connections.iter().find(|c| c.name.as_deref() == Some("driveShaft"));
-    assert!(driveshaft.is_some(), "Should find driveShaft interface connection; all connections: {:?}",
-        model.connections.iter().map(|c| &c.name).collect::<Vec<_>>());
+    let driveshaft = model
+        .connections
+        .iter()
+        .find(|c| c.name.as_deref() == Some("driveShaft"));
+    assert!(
+        driveshaft.is_some(),
+        "Should find driveShaft interface connection; all connections: {:?}",
+        model
+            .connections
+            .iter()
+            .map(|c| &c.name)
+            .collect::<Vec<_>>()
+    );
     let ds = driveshaft.unwrap();
     // With ::> binding resolution, source/target should be the actual part references
     assert_eq!(ds.source, "transmission.drive");
@@ -565,7 +671,8 @@ fn parse_vehicle_usages_connections() {
 
 #[test]
 fn parse_fork_join_nodes() {
-    let model = parse(r#"
+    let model = parse(
+        r#"
         action def TransportPassenger {
             action driverGetIn;
             action passengerGetIn;
@@ -577,32 +684,63 @@ fn parse_fork_join_nodes() {
             first driverGetIn then joinBoard;
             first passengerGetIn then joinBoard;
         }
-    "#);
+    "#,
+    );
 
     // Should find fork and join nodes
-    let fork = model.usages.iter().find(|u| u.kind == "fork_node" && u.name == "forkBoard");
-    assert!(fork.is_some(), "Should find fork_node 'forkBoard'; usages: {:?}",
-        model.usages.iter().map(|u| format!("{}:{}", u.kind, u.name)).collect::<Vec<_>>());
+    let fork = model
+        .usages
+        .iter()
+        .find(|u| u.kind == "fork_node" && u.name == "forkBoard");
+    assert!(
+        fork.is_some(),
+        "Should find fork_node 'forkBoard'; usages: {:?}",
+        model
+            .usages
+            .iter()
+            .map(|u| format!("{}:{}", u.kind, u.name))
+            .collect::<Vec<_>>()
+    );
 
-    let join = model.usages.iter().find(|u| u.kind == "join_node" && u.name == "joinBoard");
+    let join = model
+        .usages
+        .iter()
+        .find(|u| u.kind == "join_node" && u.name == "joinBoard");
     assert!(join.is_some(), "Should find join_node 'joinBoard'");
 
     // Should find successions (first X then Y)
-    let succ = model.usages.iter().filter(|u| u.kind == "succession").collect::<Vec<_>>();
-    assert!(succ.len() >= 2, "Should find at least 2 successions; found: {:?}",
-        succ.iter().map(|s| format!("{} -> {}", s.name, s.type_ref.as_deref().unwrap_or("?"))).collect::<Vec<_>>());
+    let succ = model
+        .usages
+        .iter()
+        .filter(|u| u.kind == "succession")
+        .collect::<Vec<_>>();
+    assert!(
+        succ.len() >= 2,
+        "Should find at least 2 successions; found: {:?}",
+        succ.iter()
+            .map(|s| format!("{} -> {}", s.name, s.type_ref.as_deref().unwrap_or("?")))
+            .collect::<Vec<_>>()
+    );
 
     // Should find then_succession branches (then driverGetIn; then passengerGetIn;)
-    let branches = model.usages.iter().filter(|u| u.kind == "then_succession").collect::<Vec<_>>();
-    assert!(branches.len() >= 2, "Should find at least 2 then_succession branches; found: {:?}",
-        branches.iter().map(|b| &b.name).collect::<Vec<_>>());
+    let branches = model
+        .usages
+        .iter()
+        .filter(|u| u.kind == "then_succession")
+        .collect::<Vec<_>>();
+    assert!(
+        branches.len() >= 2,
+        "Should find at least 2 then_succession branches; found: {:?}",
+        branches.iter().map(|b| &b.name).collect::<Vec<_>>()
+    );
 }
 
 // --- Transition statement extraction ---
 
 #[test]
 fn parse_transition_statement() {
-    let model = parse(r#"
+    let model = parse(
+        r#"
         state def VehicleStates {
             state off;
             state starting;
@@ -610,19 +748,48 @@ fn parse_transition_statement() {
             transition first off then starting;
             transition startComplete first starting then on;
         }
-    "#);
-    let transitions: Vec<_> = model.usages.iter().filter(|u| u.kind == "transition").collect();
-    assert_eq!(transitions.len(), 2, "Should find 2 transitions; usages: {:?}",
-        model.usages.iter().map(|u| format!("{}:{}", u.kind, u.name)).collect::<Vec<_>>());
+    "#,
+    );
+    let transitions: Vec<_> = model
+        .usages
+        .iter()
+        .filter(|u| u.kind == "transition")
+        .collect();
+    assert_eq!(
+        transitions.len(),
+        2,
+        "Should find 2 transitions; usages: {:?}",
+        model
+            .usages
+            .iter()
+            .map(|u| format!("{}:{}", u.kind, u.name))
+            .collect::<Vec<_>>()
+    );
 
     // First transition: unnamed, off → starting
     let t1 = &transitions[0];
-    assert_eq!(t1.value_expr.as_deref(), Some("off"), "Source state should be 'off'");
-    assert_eq!(t1.type_ref.as_deref(), Some("starting"), "Target state should be 'starting'");
+    assert_eq!(
+        t1.value_expr.as_deref(),
+        Some("off"),
+        "Source state should be 'off'"
+    );
+    assert_eq!(
+        t1.type_ref.as_deref(),
+        Some("starting"),
+        "Target state should be 'starting'"
+    );
 
     // Second transition: named startComplete, starting → on
     let t2 = &transitions[1];
     assert_eq!(t2.name, "startComplete");
-    assert_eq!(t2.value_expr.as_deref(), Some("starting"), "Source state should be 'starting'");
-    assert_eq!(t2.type_ref.as_deref(), Some("on"), "Target state should be 'on'");
+    assert_eq!(
+        t2.value_expr.as_deref(),
+        Some("starting"),
+        "Source state should be 'starting'"
+    );
+    assert_eq!(
+        t2.type_ref.as_deref(),
+        Some("on"),
+        "Target state should be 'on'"
+    );
 }

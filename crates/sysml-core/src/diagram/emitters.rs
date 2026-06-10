@@ -1,4 +1,4 @@
-/// Diagram format emitters: convert DiagramGraph to text output.
+//! Diagram format emitters: convert DiagramGraph to text output.
 
 use super::graph::*;
 
@@ -12,6 +12,7 @@ pub enum DiagramFormat {
 }
 
 impl DiagramFormat {
+    #[allow(clippy::should_implement_trait)]
     pub fn from_str(s: &str) -> Option<Self> {
         match s.to_lowercase().as_str() {
             "mermaid" | "mmd" => Some(Self::Mermaid),
@@ -102,7 +103,10 @@ fn render_mermaid_class_diagram(out: &mut String, graph: &DiagramGraph) {
             .unwrap_or_default();
         out.push_str(&format!(
             "    {} {} {}{}\n",
-            mermaid_id(&edge.target), arrow, mermaid_id(&edge.source), label
+            mermaid_id(&edge.target),
+            arrow,
+            mermaid_id(&edge.source),
+            label
         ));
     }
 }
@@ -129,7 +133,10 @@ fn render_mermaid_class_node(out: &mut String, node: &DiagramNode, indent: &str)
 fn render_mermaid_stm(out: &mut String, graph: &DiagramGraph) {
     out.push_str("stateDiagram-v2\n");
     if graph.direction != LayoutDirection::TopBottom {
-        out.push_str(&format!("    direction {}\n", graph.direction.mermaid_code()));
+        out.push_str(&format!(
+            "    direction {}\n",
+            graph.direction.mermaid_code()
+        ));
     }
     for node in &graph.nodes {
         let id = mermaid_id(&node.id);
@@ -193,7 +200,9 @@ fn render_mermaid_activity(out: &mut String, graph: &DiagramGraph) {
             .unwrap_or_default();
         out.push_str(&format!(
             "    {} -->{} {}\n",
-            mermaid_id(&edge.source), label, mermaid_id(&edge.target)
+            mermaid_id(&edge.source),
+            label,
+            mermaid_id(&edge.target)
         ));
     }
 }
@@ -203,7 +212,11 @@ fn render_mermaid_sequence(out: &mut String, graph: &DiagramGraph) {
     // Declare participants in order
     for node in &graph.nodes {
         if node.kind == NodeKind::Lifeline {
-            out.push_str(&format!("    participant {} as {}\n", mermaid_id(&node.id), node.label));
+            out.push_str(&format!(
+                "    participant {} as {}\n",
+                mermaid_id(&node.id),
+                node.label
+            ));
         }
     }
     // Messages in order
@@ -212,7 +225,9 @@ fn render_mermaid_sequence(out: &mut String, graph: &DiagramGraph) {
             let label = edge.label.as_deref().unwrap_or("");
             out.push_str(&format!(
                 "    {}->>{}:{}\n",
-                mermaid_id(&edge.source), mermaid_id(&edge.target), label
+                mermaid_id(&edge.source),
+                mermaid_id(&edge.target),
+                label
             ));
         }
     }
@@ -259,7 +274,10 @@ fn render_mermaid_flowchart(out: &mut String, graph: &DiagramGraph) {
             .unwrap_or_default();
         out.push_str(&format!(
             "    {} {}{} {}\n",
-            mermaid_id(&edge.source), style, label, mermaid_id(&edge.target)
+            mermaid_id(&edge.source),
+            style,
+            label,
+            mermaid_id(&edge.target)
         ));
     }
 }
@@ -280,20 +298,30 @@ fn render_plantuml(graph: &DiagramGraph) -> String {
             // PlantUML sequence diagram
             for node in &graph.nodes {
                 if node.kind == NodeKind::Lifeline {
-                    out.push_str(&format!("participant \"{}\" as {}\n", node.label, node.id.replace(' ', "_")));
+                    out.push_str(&format!(
+                        "participant \"{}\" as {}\n",
+                        node.label,
+                        node.id.replace(' ', "_")
+                    ));
                 }
             }
             out.push('\n');
             for edge in &graph.edges {
                 if edge.kind == EdgeKind::Message {
                     let label = edge.label.as_deref().unwrap_or("");
-                    out.push_str(&format!("{} -> {} : {}\n",
-                        edge.source.replace(' ', "_"), edge.target.replace(' ', "_"), label));
+                    out.push_str(&format!(
+                        "{} -> {} : {}\n",
+                        edge.source.replace(' ', "_"),
+                        edge.target.replace(' ', "_"),
+                        label
+                    ));
                 }
             }
         }
         DiagramKind::GridView(_) => render_plantuml_req(&mut out, graph),
-        DiagramKind::GeneralView(GeneralViewFlavor::UseCase) => render_plantuml_ucd(&mut out, graph),
+        DiagramKind::GeneralView(GeneralViewFlavor::UseCase) => {
+            render_plantuml_ucd(&mut out, graph)
+        }
         _ => render_plantuml_class(&mut out, graph),
     }
 
@@ -558,10 +586,7 @@ fn render_dot(graph: &DiagramGraph) -> String {
 
     // Subgraphs
     for (i, sg) in graph.subgraphs.iter().enumerate() {
-        out.push_str(&format!(
-            "    subgraph cluster_{} {{\n",
-            i
-        ));
+        out.push_str(&format!("    subgraph cluster_{} {{\n", i));
         out.push_str(&format!(
             "        label=\"{}\";\n",
             sg.label.replace('"', "\\\"")
@@ -712,7 +737,9 @@ fn render_d2(graph: &DiagramGraph) -> String {
             .map(|l| format!(": {}", l))
             .unwrap_or_default();
         let style = match edge.kind {
-            EdgeKind::Satisfy | EdgeKind::Verify | EdgeKind::Dependency | EdgeKind::Allocate => " {\n    style.stroke-dash: 3\n  }",
+            EdgeKind::Satisfy | EdgeKind::Verify | EdgeKind::Dependency | EdgeKind::Allocate => {
+                " {\n    style.stroke-dash: 3\n  }"
+            }
             _ => "",
         };
         out.push_str(&format!("{} {} {} {}{}\n", src, arrow, tgt, label, style));
@@ -743,7 +770,10 @@ fn render_d2_node(out: &mut String, node: &DiagramNode, indent: &str) {
         if node.label.is_empty() {
             out.push_str(&format!("{}{}: {{ shape: {} }}\n", indent, id, shape));
         } else {
-            out.push_str(&format!("{}{}: {} {{ shape: {} }}\n", indent, id, node.label, shape));
+            out.push_str(&format!(
+                "{}{}: {} {{ shape: {} }}\n",
+                indent, id, node.label, shape
+            ));
         }
     } else {
         let stereo = node
@@ -775,7 +805,7 @@ fn mermaid_id(id: &str) -> String {
     } else if id == "__final__" {
         "final_state".to_string()
     } else {
-        id.replace(':', "_").replace(' ', "_").replace('.', "_")
+        id.replace([':', ' ', '.'], "_")
     }
 }
 
@@ -786,7 +816,7 @@ fn d2_id(id: &str) -> String {
     } else if id == "__final__" {
         "final".to_string()
     } else {
-        id.replace(' ', "_").replace('.', "_")
+        id.replace([' ', '.'], "_")
     }
 }
 
@@ -883,8 +913,14 @@ mod tests {
 
     #[test]
     fn format_from_str() {
-        assert_eq!(DiagramFormat::from_str("mermaid"), Some(DiagramFormat::Mermaid));
-        assert_eq!(DiagramFormat::from_str("puml"), Some(DiagramFormat::PlantUml));
+        assert_eq!(
+            DiagramFormat::from_str("mermaid"),
+            Some(DiagramFormat::Mermaid)
+        );
+        assert_eq!(
+            DiagramFormat::from_str("puml"),
+            Some(DiagramFormat::PlantUml)
+        );
         assert_eq!(DiagramFormat::from_str("dot"), Some(DiagramFormat::Dot));
         assert_eq!(DiagramFormat::from_str("d2"), Some(DiagramFormat::D2));
         assert_eq!(DiagramFormat::from_str("unknown"), None);
@@ -953,16 +989,14 @@ mod tests {
         let graph = DiagramGraph {
             title: "Test".to_string(),
             kind: DiagramKind::GridView(GridViewFlavor::Requirements),
-            nodes: vec![
-                DiagramNode {
-                    id: "block1".to_string(),
-                    label: "MyBlock".to_string(),
-                    kind: NodeKind::Block,
-                    stereotype: None,
-                    attributes: vec![],
-                    is_definition: false,
-                },
-            ],
+            nodes: vec![DiagramNode {
+                id: "block1".to_string(),
+                label: "MyBlock".to_string(),
+                kind: NodeKind::Block,
+                stereotype: None,
+                attributes: vec![],
+                is_definition: false,
+            }],
             edges: vec![],
             subgraphs: vec![],
             direction: LayoutDirection::TopBottom,
@@ -970,9 +1004,15 @@ mod tests {
         };
         let output = render(&graph, DiagramFormat::Mermaid);
         // Should NOT contain "]\n)" (broken syntax)
-        assert!(!output.contains("]\n)"), "Block node should not have newline inside parens");
+        assert!(
+            !output.contains("]\n)"),
+            "Block node should not have newline inside parens"
+        );
         // Should contain "])\n" (correct syntax)
-        assert!(output.contains("])\n"), "Block node should have closing paren before newline");
+        assert!(
+            output.contains("])\n"),
+            "Block node should have closing paren before newline"
+        );
     }
 
     #[test]
@@ -982,16 +1022,14 @@ mod tests {
         let graph = DiagramGraph {
             title: "Test".to_string(),
             kind: DiagramKind::ActionFlowView,
-            nodes: vec![
-                DiagramNode {
-                    id: "end1".to_string(),
-                    label: "".to_string(),
-                    kind: NodeKind::FinalState,
-                    stereotype: None,
-                    attributes: vec![],
-                    is_definition: false,
-                },
-            ],
+            nodes: vec![DiagramNode {
+                id: "end1".to_string(),
+                label: "".to_string(),
+                kind: NodeKind::FinalState,
+                stereotype: None,
+                attributes: vec![],
+                is_definition: false,
+            }],
             edges: vec![],
             subgraphs: vec![],
             direction: LayoutDirection::TopBottom,
@@ -999,7 +1037,10 @@ mod tests {
         };
         let output = render(&graph, DiagramFormat::Mermaid);
         // Should NOT contain triple parens
-        assert!(!output.contains("((("), "FinalState should not use triple parens");
+        assert!(
+            !output.contains("((("),
+            "FinalState should not use triple parens"
+        );
         // Should contain double parens with filled circle
         assert!(output.contains("(("), "FinalState should use double parens");
     }
@@ -1010,16 +1051,14 @@ mod tests {
         let graph = DiagramGraph {
             title: "Test".to_string(),
             kind: DiagramKind::GridView(GridViewFlavor::Requirements),
-            nodes: vec![
-                DiagramNode {
-                    id: "Pkg::Req1".to_string(),
-                    label: "Requirement 1".to_string(),
-                    kind: NodeKind::Requirement,
-                    stereotype: None,
-                    attributes: vec![],
-                    is_definition: false,
-                },
-            ],
+            nodes: vec![DiagramNode {
+                id: "Pkg::Req1".to_string(),
+                label: "Requirement 1".to_string(),
+                kind: NodeKind::Requirement,
+                stereotype: None,
+                attributes: vec![],
+                is_definition: false,
+            }],
             edges: vec![],
             subgraphs: vec![],
             direction: LayoutDirection::TopBottom,
@@ -1027,14 +1066,20 @@ mod tests {
         };
         let output = render(&graph, DiagramFormat::Mermaid);
         // Should use sanitized ID (no colons)
-        assert!(output.contains("Pkg__Req1"), "IDs with colons should be sanitized");
-        assert!(!output.contains("Pkg::Req1"), "Raw colons should not appear in mermaid IDs");
+        assert!(
+            output.contains("Pkg__Req1"),
+            "IDs with colons should be sanitized"
+        );
+        assert!(
+            !output.contains("Pkg::Req1"),
+            "Raw colons should not appear in mermaid IDs"
+        );
     }
 
     #[test]
     fn rich_stm_with_transitions() {
-        use crate::sim::state_machine::*;
         use crate::model::Span;
+        use crate::sim::state_machine::*;
 
         let sm = StateMachineModel {
             name: "TrafficLight".to_string(),

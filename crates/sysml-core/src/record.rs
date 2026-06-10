@@ -1,9 +1,9 @@
-/// Operational records stored as TOML files that diff cleanly in git.
-///
-/// Records use a three-section envelope format: `[meta]` for identity and
-/// provenance, `[refs]` for qualified-name references into the SysML model,
-/// and `[data]` for domain-specific content.  All maps use [`BTreeMap`] so
-/// that serialized output is deterministic and produces minimal diffs.
+//! Operational records stored as TOML files that diff cleanly in git.
+//!
+//! Records use a three-section envelope format: `[meta]` for identity and
+//! provenance, `[refs]` for qualified-name references into the SysML model,
+//! and `[data]` for domain-specific content.  All maps use [`BTreeMap`] so
+//! that serialized output is deterministic and produces minimal diffs.
 
 use std::collections::BTreeMap;
 use std::fmt;
@@ -311,11 +311,7 @@ fn push_value(out: &mut String, val: &RecordValue) {
 
 /// Write data entries.  Sub-tables are emitted as TOML sub-table headers
 /// (`[data.subkey]`) so the output stays readable.
-fn write_data_section(
-    out: &mut String,
-    map: &BTreeMap<String, RecordValue>,
-    prefix: &str,
-) {
+fn write_data_section(out: &mut String, map: &BTreeMap<String, RecordValue>, prefix: &str) {
     // First pass: scalar / array / inline-table values.
     for (k, v) in map {
         if matches!(v, RecordValue::Table(_)) {
@@ -366,13 +362,11 @@ fn parse_toml_tables(input: &str) -> Result<BTreeMap<String, TomlNode>, RecordEr
 
         // Table header: [foo] or [foo.bar]
         if line.starts_with('[') && !line.starts_with("[[") {
-            let header = line
-                .trim_start_matches('[')
-                .trim_end_matches(']')
-                .trim();
+            let header = line.trim_start_matches('[').trim_end_matches(']').trim();
             if header.is_empty() {
                 return Err(RecordError::ParseError(format!(
-                    "empty table header at line {}", line_no + 1
+                    "empty table header at line {}",
+                    line_no + 1
                 )));
             }
             current_path = header.split('.').map(|s| s.trim().to_string()).collect();
@@ -387,14 +381,13 @@ fn parse_toml_tables(input: &str) -> Result<BTreeMap<String, TomlNode>, RecordEr
             let val_str = line[eq_pos + 1..].trim();
             let value = parse_value(val_str, line_no)?;
 
-            let table = get_table_mut(&mut root, &current_path)
-                .ok_or_else(|| {
-                    RecordError::ParseError(format!(
-                        "cannot find table for path {:?} at line {}",
-                        current_path,
-                        line_no + 1
-                    ))
-                })?;
+            let table = get_table_mut(&mut root, &current_path).ok_or_else(|| {
+                RecordError::ParseError(format!(
+                    "cannot find table for path {:?} at line {}",
+                    current_path,
+                    line_no + 1
+                ))
+            })?;
             table.insert(key, value);
             continue;
         }
@@ -670,8 +663,7 @@ fn toml_node_to_record_value(node: &TomlNode) -> Result<RecordValue, RecordError
         TomlNode::Float(v) => Ok(RecordValue::Float(*v)),
         TomlNode::Bool(b) => Ok(RecordValue::Bool(*b)),
         TomlNode::Array(arr) => {
-            let items: Result<Vec<_>, _> =
-                arr.iter().map(toml_node_to_record_value).collect();
+            let items: Result<Vec<_>, _> = arr.iter().map(toml_node_to_record_value).collect();
             Ok(RecordValue::Array(items?))
         }
         TomlNode::Table(tbl) => {
@@ -682,10 +674,7 @@ fn toml_node_to_record_value(node: &TomlNode) -> Result<RecordValue, RecordError
 }
 
 /// Extract a required string from a parsed TOML table.
-fn require_string(
-    table: &BTreeMap<String, TomlNode>,
-    key: &str,
-) -> Result<String, RecordError> {
+fn require_string(table: &BTreeMap<String, TomlNode>, key: &str) -> Result<String, RecordError> {
     match table.get(key) {
         Some(TomlNode::String(s)) => Ok(s.clone()),
         Some(other) => Err(RecordError::InvalidValue {
@@ -720,9 +709,7 @@ pub fn now_iso8601() -> String {
     // Convert days since 1970-01-01 to year-month-day.
     let (year, month, day) = days_to_ymd(days);
 
-    format!(
-        "{year:04}-{month:02}-{day:02}T{hours:02}:{minutes:02}:{seconds:02}Z"
-    )
+    format!("{year:04}-{month:02}-{day:02}T{hours:02}:{minutes:02}:{seconds:02}Z")
 }
 
 /// Convert days since Unix epoch to (year, month, day).
@@ -754,10 +741,7 @@ fn days_to_ymd(days: u64) -> (u64, u64, u64) {
 pub fn generate_record_id(tool: &str, record_type: &str, author: &str) -> String {
     let ts = now_iso8601();
     // Compact timestamp for the filename portion: remove punctuation.
-    let ts_compact: String = ts
-        .chars()
-        .filter(|c| c.is_ascii_digit())
-        .collect();
+    let ts_compact: String = ts.chars().filter(|c| c.is_ascii_digit()).collect();
 
     let hash = short_hash(&format!("{tool}{record_type}{ts}{author}"));
     format!("{tool}-{record_type}-{ts_compact}-{author}-{hash}")
@@ -925,10 +909,7 @@ info = {alpha = 1, beta = \"two\"}
         match env.data.get("info").unwrap() {
             RecordValue::Table(t) => {
                 assert_eq!(t.get("alpha"), Some(&RecordValue::Integer(1)));
-                assert_eq!(
-                    t.get("beta"),
-                    Some(&RecordValue::String("two".into()))
-                );
+                assert_eq!(t.get("beta"), Some(&RecordValue::String("two".into())));
             }
             other => panic!("expected table, got {other:?}"),
         }
@@ -956,10 +937,7 @@ inner = \"hello\"
         assert_eq!(env.data.get("top"), Some(&RecordValue::Integer(1)));
         match env.data.get("nested").unwrap() {
             RecordValue::Table(t) => {
-                assert_eq!(
-                    t.get("inner"),
-                    Some(&RecordValue::String("hello".into()))
-                );
+                assert_eq!(t.get("inner"), Some(&RecordValue::String("hello".into())));
             }
             other => panic!("expected table, got {other:?}"),
         }
@@ -999,14 +977,11 @@ inner = \"hello\"
     fn record_value_display() {
         assert_eq!(RecordValue::String("hi".into()).to_string(), "hi");
         assert_eq!(RecordValue::Integer(42).to_string(), "42");
-        assert_eq!(RecordValue::Float(3.14).to_string(), "3.14");
+        assert_eq!(RecordValue::Float(1.5).to_string(), "1.5");
         assert_eq!(RecordValue::Float(2.0).to_string(), "2.0");
         assert_eq!(RecordValue::Bool(true).to_string(), "true");
 
-        let arr = RecordValue::Array(vec![
-            RecordValue::Integer(1),
-            RecordValue::Integer(2),
-        ]);
+        let arr = RecordValue::Array(vec![RecordValue::Integer(1), RecordValue::Integer(2)]);
         assert_eq!(arr.to_string(), "[1, 2]");
 
         let mut m = BTreeMap::new();
@@ -1171,10 +1146,7 @@ items = []
 ";
         let env = RecordEnvelope::from_toml_str(toml).unwrap();
         assert_eq!(env.refs.get("empty"), Some(&vec![]));
-        assert_eq!(
-            env.data.get("items"),
-            Some(&RecordValue::Array(vec![]))
-        );
+        assert_eq!(env.data.get("items"), Some(&RecordValue::Array(vec![])));
     }
 
     #[test]

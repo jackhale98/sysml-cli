@@ -1,7 +1,7 @@
-/// Model types extracted from tree-sitter parse tree.
-///
-/// These represent the structural elements of a SysML v2 model
-/// in a form suitable for running validation checks.
+//! Model types extracted from tree-sitter parse tree.
+//!
+//! These represent the structural elements of a SysML v2 model
+//! in a form suitable for running validation checks.
 
 use serde::Serialize;
 
@@ -480,8 +480,12 @@ impl Model {
 
 /// Extract the simple (unqualified) name from a potentially qualified name.
 pub fn simple_name(name: &str) -> &str {
-    name.rsplit("::").next().unwrap_or(name)
-        .rsplit('.').next().unwrap_or(name)
+    name.rsplit("::")
+        .next()
+        .unwrap_or(name)
+        .rsplit('.')
+        .next()
+        .unwrap_or(name)
 }
 
 /// Populate `qualified_name` fields on all definitions and usages by walking

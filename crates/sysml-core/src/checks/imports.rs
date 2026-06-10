@@ -1,4 +1,4 @@
-/// Check for circular import dependencies.
+//! Check for circular import dependencies.
 
 use std::collections::{HashMap, HashSet};
 
@@ -38,7 +38,7 @@ impl Check for ImportCycleCheck {
                 .definitions
                 .iter()
                 .filter(|d| d.kind == DefKind::Package && d.span.contains(&import.span))
-                .last()
+                .next_back()
                 .map(|d| d.name.as_str())
                 .unwrap_or("");
 
@@ -56,10 +56,7 @@ impl Check for ImportCycleCheck {
             }
 
             if !enclosing.is_empty() {
-                package_imports
-                    .entry(enclosing)
-                    .or_default()
-                    .push(target);
+                package_imports.entry(enclosing).or_default().push(target);
             }
         }
 
@@ -78,10 +75,7 @@ impl Check for ImportCycleCheck {
                                 &model.file,
                                 crate::model::Span::default(),
                                 codes::IMPORT_CYCLE,
-                                format!(
-                                    "circular import between `{}` and `{}`",
-                                    pkg, target
-                                ),
+                                format!("circular import between `{}` and `{}`", pkg, target),
                             ));
                         }
                     }
@@ -93,9 +87,9 @@ impl Check for ImportCycleCheck {
         for &start in packages.iter() {
             if has_cycle(&package_imports, start) {
                 // Only report if not already reported as a 2-cycle
-                let already = diagnostics.iter().any(|d| {
-                    d.code == codes::IMPORT_CYCLE && d.message.contains(start)
-                });
+                let already = diagnostics
+                    .iter()
+                    .any(|d| d.code == codes::IMPORT_CYCLE && d.message.contains(start));
                 if !already {
                     diagnostics.push(Diagnostic::warning(
                         &model.file,
@@ -147,8 +141,15 @@ mod tests {
         let model = parse_file("test.sysml", source);
         let check = ImportCycleCheck;
         let diags = check.run(&model);
-        let cycles: Vec<_> = diags.iter().filter(|d| d.code == codes::IMPORT_CYCLE).collect();
-        assert!(cycles.is_empty(), "got: {:?}", cycles.iter().map(|d| &d.message).collect::<Vec<_>>());
+        let cycles: Vec<_> = diags
+            .iter()
+            .filter(|d| d.code == codes::IMPORT_CYCLE)
+            .collect();
+        assert!(
+            cycles.is_empty(),
+            "got: {:?}",
+            cycles.iter().map(|d| &d.message).collect::<Vec<_>>()
+        );
     }
 
     #[test]
@@ -161,7 +162,10 @@ mod tests {
         let model = parse_file("test.sysml", source);
         let check = ImportCycleCheck;
         let diags = check.run(&model);
-        let cycles: Vec<_> = diags.iter().filter(|d| d.code == codes::IMPORT_CYCLE).collect();
+        let cycles: Vec<_> = diags
+            .iter()
+            .filter(|d| d.code == codes::IMPORT_CYCLE)
+            .collect();
         assert!(!cycles.is_empty(), "should detect self-import");
     }
 
@@ -178,7 +182,10 @@ mod tests {
         let model = parse_file("test.sysml", source);
         let check = ImportCycleCheck;
         let diags = check.run(&model);
-        let cycles: Vec<_> = diags.iter().filter(|d| d.code == codes::IMPORT_CYCLE).collect();
+        let cycles: Vec<_> = diags
+            .iter()
+            .filter(|d| d.code == codes::IMPORT_CYCLE)
+            .collect();
         assert!(!cycles.is_empty(), "should detect A→B→A cycle");
     }
 }

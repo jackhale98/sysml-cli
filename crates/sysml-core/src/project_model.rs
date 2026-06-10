@@ -1,8 +1,8 @@
-/// Unified multi-file project model with global definition index and type hierarchy.
-///
-/// `ProjectModel` merges multiple parsed `Model`s into a single queryable
-/// structure. It builds a global definition index, resolves specialization
-/// chains (type hierarchy), and provides project-wide queries.
+//! Unified multi-file project model with global definition index and type hierarchy.
+//!
+//! `ProjectModel` merges multiple parsed `Model`s into a single queryable
+//! structure. It builds a global definition index, resolves specialization
+//! chains (type hierarchy), and provides project-wide queries.
 
 use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
@@ -58,7 +58,10 @@ impl ProjectModel {
                 if let Some(ref st) = def.super_type {
                     let st_simple = simple_name(st).to_string();
                     supertypes.insert(def.name.clone(), st_simple.clone());
-                    subtypes.entry(st_simple).or_default().push(def.name.clone());
+                    subtypes
+                        .entry(st_simple)
+                        .or_default()
+                        .push(def.name.clone());
                 }
             }
         }
@@ -250,10 +253,7 @@ mod tests {
     #[test]
     fn supertype_chain_cycle_detection() {
         // A :> B, B :> A — should not infinite loop
-        let proj = make_project(&[(
-            "test.sysml",
-            "part def A :> B;\npart def B :> A;\n",
-        )]);
+        let proj = make_project(&[("test.sysml", "part def A :> B;\npart def B :> A;\n")]);
         let chain = proj.supertype_chain("A");
         // Should stop after detecting cycle
         assert!(chain.len() <= 2);
@@ -287,7 +287,10 @@ mod tests {
     #[test]
     fn merged_model() {
         let proj = make_project(&[
-            ("a.sysml", "part def Engine { attribute mass : Real = 100; }"),
+            (
+                "a.sysml",
+                "part def Engine { attribute mass : Real = 100; }",
+            ),
             ("b.sysml", "part def Vehicle { part engine : Engine; }"),
         ]);
         let merged = proj.merged_model();

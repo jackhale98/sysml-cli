@@ -1,8 +1,8 @@
-/// Attribute resolution across the SysML v2 part hierarchy.
-///
-/// Walks the composition tree from a root definition, resolving named
-/// attribute values on each part instance. Respects multiplicity (quantity),
-/// inheritance (supertype), and value expressions.
+//! Attribute resolution across the SysML v2 part hierarchy.
+//!
+//! Walks the composition tree from a root definition, resolving named
+//! attribute values on each part instance. Respects multiplicity (quantity),
+//! inheritance (supertype), and value expressions.
 
 use std::collections::HashSet;
 
@@ -117,9 +117,7 @@ fn resolve_children(
 pub fn find_attribute_value(model: &Model, def_name: &str, attr_name: &str) -> Option<f64> {
     // Check direct usages in this definition
     for usage in model.usages_in_def(def_name) {
-        if usage.name == attr_name
-            && matches!(usage.kind.as_str(), "attribute" | "feature")
-        {
+        if usage.name == attr_name && matches!(usage.kind.as_str(), "attribute" | "feature") {
             if let Some(ref expr) = usage.value_expr {
                 if let Ok(v) = expr.trim().parse::<f64>() {
                     return Some(v);

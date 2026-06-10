@@ -1,7 +1,7 @@
-/// CLI argument definitions: Cli struct, Command enum, and all subcommand enums.
+//! CLI argument definitions: Cli struct, Command enum, and all subcommand enums.
 
-use std::path::PathBuf;
 use clap::{Parser, Subcommand};
+use std::path::PathBuf;
 
 #[derive(Parser)]
 #[command(
@@ -57,6 +57,7 @@ pub(crate) struct Cli {
 }
 
 #[derive(Subcommand)]
+#[allow(clippy::large_enum_variant)]
 pub(crate) enum Command {
     /// Lint SysML v2 files (alias for `check --lint-only`).
     #[command(hide = true)]

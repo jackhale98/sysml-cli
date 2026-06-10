@@ -1,9 +1,9 @@
-/// Interactive wizard framework for multi-step CLI flows.
-///
-/// Defines the data model for wizards — the CLI layer provides the actual
-/// terminal interaction using dialoguer. This module is deliberately free of
-/// any I/O or terminal dependencies so it can be tested and used from any
-/// frontend.
+//! Interactive wizard framework for multi-step CLI flows.
+//!
+//! Defines the data model for wizards — the CLI layer provides the actual
+//! terminal interaction using dialoguer. This module is deliberately free of
+//! any I/O or terminal dependencies so it can be tested and used from any
+//! frontend.
 
 use serde::Serialize;
 use std::collections::BTreeMap;
@@ -365,7 +365,13 @@ mod tests {
     #[test]
     fn number_step() {
         let step = WizardStep::number("count", "How many?");
-        assert!(matches!(step.kind, PromptKind::Number { min: None, max: None }));
+        assert!(matches!(
+            step.kind,
+            PromptKind::Number {
+                min: None,
+                max: None
+            }
+        ));
     }
 
     #[test]
@@ -399,8 +405,8 @@ mod tests {
 
     #[test]
     fn number_bounds() {
-        let step = WizardStep::number("weight", "Weight (kg)?")
-            .with_bounds(Some(0.0), Some(1000.0));
+        let step =
+            WizardStep::number("weight", "Weight (kg)?").with_bounds(Some(0.0), Some(1000.0));
         if let PromptKind::Number { min, max } = step.kind {
             assert_eq!(min, Some(0.0));
             assert_eq!(max, Some(1000.0));
@@ -420,8 +426,7 @@ mod tests {
 
     #[test]
     fn choice_option_with_description() {
-        let opt = ChoiceOption::new("val", "Label")
-            .with_description("Some help text");
+        let opt = ChoiceOption::new("val", "Label").with_description("Some help text");
         assert_eq!(opt.value, "val");
         assert_eq!(opt.label, "Label");
         assert_eq!(opt.description.as_deref(), Some("Some help text"));
@@ -558,10 +563,12 @@ mod tests {
                 CALL_COUNT.store(1, Ordering::SeqCst);
                 0
             } else {
-                let i = CALL_COUNT.fetch_add(1, Ordering::SeqCst);
-                i
+                CALL_COUNT.fetch_add(1, Ordering::SeqCst)
             };
-            self.answers.get(idx).cloned().unwrap_or(Some(WizardAnswer::Skipped))
+            self.answers
+                .get(idx)
+                .cloned()
+                .unwrap_or(Some(WizardAnswer::Skipped))
         }
 
         fn is_interactive(&self) -> bool {

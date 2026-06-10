@@ -1,7 +1,7 @@
+use crate::{read_source, Cli};
 use std::path::PathBuf;
 use std::process::ExitCode;
 use sysml_core::parser as sysml_parser;
-use crate::{Cli, read_source};
 
 pub(crate) fn run(cli: &Cli, file_a: &PathBuf, file_b: &PathBuf) -> ExitCode {
     use sysml_core::query;

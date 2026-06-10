@@ -83,7 +83,13 @@ impl SqliteCache {
         let _ = self.conn.execute(
             "INSERT OR REPLACE INTO nodes (qualified_name, kind, file, line, parent)
              VALUES (?1, ?2, ?3, ?4, ?5)",
-            params![node.qualified_name, node.kind, node.file, node.line, node.parent],
+            params![
+                node.qualified_name,
+                node.kind,
+                node.file,
+                node.line,
+                node.parent
+            ],
         );
     }
 
@@ -115,7 +121,11 @@ impl SqliteCache {
     pub fn add_ref_edge(&self, ref_edge: CacheRefEdge) {
         let _ = self.conn.execute(
             "INSERT INTO ref_edges (record_id, qualified_name, ref_kind) VALUES (?1, ?2, ?3)",
-            params![ref_edge.record_id, ref_edge.qualified_name, ref_edge.ref_kind],
+            params![
+                ref_edge.record_id,
+                ref_edge.qualified_name,
+                ref_edge.ref_kind
+            ],
         );
     }
 
@@ -204,7 +214,9 @@ impl SqliteCache {
     pub fn find_records_by_tool(&self, tool: &str) -> Vec<CacheRecord> {
         let mut stmt = self
             .conn
-            .prepare("SELECT id, tool, record_type, created, author, file FROM records WHERE tool = ?1")
+            .prepare(
+                "SELECT id, tool, record_type, created, author, file FROM records WHERE tool = ?1",
+            )
             .unwrap();
         stmt.query_map(params![tool], |row| {
             Ok(CacheRecord {
@@ -225,7 +237,9 @@ impl SqliteCache {
     pub fn find_refs_for_record(&self, record_id: &str) -> Vec<CacheRefEdge> {
         let mut stmt = self
             .conn
-            .prepare("SELECT record_id, qualified_name, ref_kind FROM ref_edges WHERE record_id = ?1")
+            .prepare(
+                "SELECT record_id, qualified_name, ref_kind FROM ref_edges WHERE record_id = ?1",
+            )
             .unwrap();
         stmt.query_map(params![record_id], |row| {
             Ok(CacheRefEdge {
@@ -468,7 +482,10 @@ mod tests {
         let cache = sample_cache();
         let part_defs = cache.find_nodes_by_kind("part def");
         assert_eq!(part_defs.len(), 2);
-        let names: Vec<&str> = part_defs.iter().map(|n| n.qualified_name.as_str()).collect();
+        let names: Vec<&str> = part_defs
+            .iter()
+            .map(|n| n.qualified_name.as_str())
+            .collect();
         assert!(names.contains(&"Vehicle"));
         assert!(names.contains(&"Engine"));
     }

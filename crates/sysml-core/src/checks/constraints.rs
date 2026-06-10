@@ -1,4 +1,4 @@
-/// Checks for constraint definitions missing constraint expressions.
+//! Checks for constraint definitions missing constraint expressions.
 
 use crate::checks::Check;
 use crate::diagnostic::{codes, Diagnostic};

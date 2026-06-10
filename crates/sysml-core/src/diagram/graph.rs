@@ -1,8 +1,8 @@
-/// Format-agnostic diagram intermediate representation.
-///
-/// Aligned with SysML v2 StandardViewDefinitions:
-/// GeneralView, InterconnectionView, ActionFlowView, StateTransitionView,
-/// SequenceView, GridView, BrowserView.
+//! Format-agnostic diagram intermediate representation.
+//!
+//! Aligned with SysML v2 StandardViewDefinitions:
+//! GeneralView, InterconnectionView, ActionFlowView, StateTransitionView,
+//! SequenceView, GridView, BrowserView.
 
 /// The kind of diagram, aligned with SysML v2 StandardViewDefinitions.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -68,6 +68,7 @@ impl DiagramKind {
         }
     }
 
+    #[allow(clippy::should_implement_trait)]
     pub fn from_str(s: &str) -> Option<Self> {
         match s.to_lowercase().as_str() {
             // Canonical SysML v2 standard names
@@ -109,21 +110,17 @@ impl DiagramKind {
 }
 
 /// Layout direction for the diagram.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum LayoutDirection {
+    #[default]
     TopBottom,
     LeftRight,
     BottomTop,
     RightLeft,
 }
 
-impl Default for LayoutDirection {
-    fn default() -> Self {
-        Self::TopBottom
-    }
-}
-
 impl LayoutDirection {
+    #[allow(clippy::should_implement_trait)]
     pub fn from_str(s: &str) -> Option<Self> {
         match s.to_uppercase().as_str() {
             "TB" | "TD" | "TOP-BOTTOM" | "TOP-DOWN" => Some(Self::TopBottom),
@@ -310,8 +307,9 @@ impl DiagramGraph {
         });
         let remaining: std::collections::HashSet<&str> =
             self.nodes.iter().map(|n| n.id.as_str()).collect();
-        self.edges
-            .retain(|e| remaining.contains(e.source.as_str()) || remaining.contains(e.target.as_str()));
+        self.edges.retain(|e| {
+            remaining.contains(e.source.as_str()) || remaining.contains(e.target.as_str())
+        });
         self.subgraphs.iter_mut().for_each(|sg| {
             sg.node_ids.retain(|id| remaining.contains(id.as_str()));
         });
@@ -325,27 +323,69 @@ mod tests {
 
     #[test]
     fn canonical_names_parse() {
-        assert_eq!(DiagramKind::from_str("gv"), Some(DiagramKind::GeneralView(GeneralViewFlavor::Default)));
-        assert_eq!(DiagramKind::from_str("iv"), Some(DiagramKind::InterconnectionView));
-        assert_eq!(DiagramKind::from_str("afv"), Some(DiagramKind::ActionFlowView));
-        assert_eq!(DiagramKind::from_str("stv"), Some(DiagramKind::StateTransitionView));
+        assert_eq!(
+            DiagramKind::from_str("gv"),
+            Some(DiagramKind::GeneralView(GeneralViewFlavor::Default))
+        );
+        assert_eq!(
+            DiagramKind::from_str("iv"),
+            Some(DiagramKind::InterconnectionView)
+        );
+        assert_eq!(
+            DiagramKind::from_str("afv"),
+            Some(DiagramKind::ActionFlowView)
+        );
+        assert_eq!(
+            DiagramKind::from_str("stv"),
+            Some(DiagramKind::StateTransitionView)
+        );
         assert_eq!(DiagramKind::from_str("sv"), Some(DiagramKind::SequenceView));
-        assert_eq!(DiagramKind::from_str("grv"), Some(DiagramKind::GridView(GridViewFlavor::Default)));
+        assert_eq!(
+            DiagramKind::from_str("grv"),
+            Some(DiagramKind::GridView(GridViewFlavor::Default))
+        );
         assert_eq!(DiagramKind::from_str("bv"), Some(DiagramKind::BrowserView));
     }
 
     #[test]
     fn legacy_aliases_parse() {
-        assert_eq!(DiagramKind::from_str("bdd"), Some(DiagramKind::GeneralView(GeneralViewFlavor::Default)));
-        assert_eq!(DiagramKind::from_str("ibd"), Some(DiagramKind::InterconnectionView));
-        assert_eq!(DiagramKind::from_str("stm"), Some(DiagramKind::StateTransitionView));
-        assert_eq!(DiagramKind::from_str("act"), Some(DiagramKind::ActionFlowView));
-        assert_eq!(DiagramKind::from_str("req"), Some(DiagramKind::GridView(GridViewFlavor::Requirements)));
+        assert_eq!(
+            DiagramKind::from_str("bdd"),
+            Some(DiagramKind::GeneralView(GeneralViewFlavor::Default))
+        );
+        assert_eq!(
+            DiagramKind::from_str("ibd"),
+            Some(DiagramKind::InterconnectionView)
+        );
+        assert_eq!(
+            DiagramKind::from_str("stm"),
+            Some(DiagramKind::StateTransitionView)
+        );
+        assert_eq!(
+            DiagramKind::from_str("act"),
+            Some(DiagramKind::ActionFlowView)
+        );
+        assert_eq!(
+            DiagramKind::from_str("req"),
+            Some(DiagramKind::GridView(GridViewFlavor::Requirements))
+        );
         assert_eq!(DiagramKind::from_str("pkg"), Some(DiagramKind::BrowserView));
-        assert_eq!(DiagramKind::from_str("par"), Some(DiagramKind::GeneralView(GeneralViewFlavor::Parametric)));
-        assert_eq!(DiagramKind::from_str("trace"), Some(DiagramKind::GridView(GridViewFlavor::Trace)));
-        assert_eq!(DiagramKind::from_str("alloc"), Some(DiagramKind::GridView(GridViewFlavor::Alloc)));
-        assert_eq!(DiagramKind::from_str("ucd"), Some(DiagramKind::GeneralView(GeneralViewFlavor::UseCase)));
+        assert_eq!(
+            DiagramKind::from_str("par"),
+            Some(DiagramKind::GeneralView(GeneralViewFlavor::Parametric))
+        );
+        assert_eq!(
+            DiagramKind::from_str("trace"),
+            Some(DiagramKind::GridView(GridViewFlavor::Trace))
+        );
+        assert_eq!(
+            DiagramKind::from_str("alloc"),
+            Some(DiagramKind::GridView(GridViewFlavor::Alloc))
+        );
+        assert_eq!(
+            DiagramKind::from_str("ucd"),
+            Some(DiagramKind::GeneralView(GeneralViewFlavor::UseCase))
+        );
     }
 
     #[test]
@@ -363,7 +403,10 @@ mod tests {
 
     #[test]
     fn abbreviations() {
-        assert_eq!(DiagramKind::GeneralView(GeneralViewFlavor::Default).abbreviation(), "gv");
+        assert_eq!(
+            DiagramKind::GeneralView(GeneralViewFlavor::Default).abbreviation(),
+            "gv"
+        );
         assert_eq!(DiagramKind::InterconnectionView.abbreviation(), "iv");
         assert_eq!(DiagramKind::SequenceView.abbreviation(), "sv");
     }

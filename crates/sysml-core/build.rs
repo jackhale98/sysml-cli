@@ -30,7 +30,10 @@ fn main() {
         .warnings(false)
         .compile("tree-sitter-sysml");
 
-    println!("cargo:rerun-if-changed={}", grammar_dir.join("parser.c").display());
+    println!(
+        "cargo:rerun-if-changed={}",
+        grammar_dir.join("parser.c").display()
+    );
 
     // Embed the SysML v2 standard library files.
     let manifest_dir = std::env::var("CARGO_MANIFEST_DIR").unwrap();

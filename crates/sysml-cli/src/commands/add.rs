@@ -1,10 +1,10 @@
-/// Unified `add` command — creates SysML elements interactively or with flags.
+//! Unified `add` command — creates SysML elements interactively or with flags.
 
 use std::path::PathBuf;
 use std::process::ExitCode;
 
-use sysml_core::parser as sysml_parser;
 use sysml_core::codegen::{edit, template};
+use sysml_core::parser as sysml_parser;
 
 use crate::{read_source, select_item};
 
@@ -72,12 +72,12 @@ pub(crate) fn run(
     // When --stdout is set and `file` looks like a kind (not a path), shift args.
     let (eff_file, eff_kind, eff_name) = if stdout || teach {
         match (file, kind, name) {
-            (Some(f), Some(k), None) => {
-                (None, Some(f.to_string_lossy().to_string()), Some(k.to_string()))
-            }
-            (Some(f), None, None) => {
-                (None, Some(f.to_string_lossy().to_string()), None)
-            }
+            (Some(f), Some(k), None) => (
+                None,
+                Some(f.to_string_lossy().to_string()),
+                Some(k.to_string()),
+            ),
+            (Some(f), None, None) => (None, Some(f.to_string_lossy().to_string()), None),
             _ => (
                 file.cloned(),
                 kind.map(|s| s.to_string()),
@@ -98,27 +98,60 @@ pub(crate) fn run(
 
     match (eff_file_ref, eff_kind_ref, eff_name_ref) {
         // No args → interactive wizard
-        (None, None, None) => {
-            run_wizard_mode()
-        }
+        (None, None, None) => run_wizard_mode(),
         // No file but kind+name → stdout mode
-        (None, Some(kind), Some(name)) => {
-            run_stdout(kind, name, extends, is_abstract, short_name, doc,
-                       members, exposes, filter, teach, type_ref, connect, by)
-        }
+        (None, Some(kind), Some(name)) => run_stdout(
+            kind,
+            name,
+            extends,
+            is_abstract,
+            short_name,
+            doc,
+            members,
+            exposes,
+            filter,
+            teach,
+            type_ref,
+            connect,
+            by,
+        ),
         // File but no kind/name → guided file mode
-        (Some(file), None, None) if !stdout => {
-            run_wizard_mode_with_file(file)
-        }
+        (Some(file), None, None) if !stdout => run_wizard_mode_with_file(file),
         // File + kind + name → direct insert
         (Some(file), Some(kind), Some(name)) => {
             if stdout {
-                run_stdout(kind, name, extends, is_abstract, short_name, doc,
-                           members, exposes, filter, teach, type_ref, connect, by)
+                run_stdout(
+                    kind,
+                    name,
+                    extends,
+                    is_abstract,
+                    short_name,
+                    doc,
+                    members,
+                    exposes,
+                    filter,
+                    teach,
+                    type_ref,
+                    connect,
+                    by,
+                )
             } else {
-                run_insert(file, kind, name, type_ref, inside, dry_run,
-                           doc, extends, is_abstract, short_name, members, connect, by,
-                           json_mode)
+                run_insert(
+                    file,
+                    kind,
+                    name,
+                    type_ref,
+                    inside,
+                    dry_run,
+                    doc,
+                    extends,
+                    is_abstract,
+                    short_name,
+                    members,
+                    connect,
+                    by,
+                    json_mode,
+                )
             }
         }
         // Partial args
@@ -148,7 +181,10 @@ fn handle_generated_text(
                 "kind": label,
                 "text": text,
             });
-            println!("{}", serde_json::to_string_pretty(&envelope).unwrap_or_default());
+            println!(
+                "{}",
+                serde_json::to_string_pretty(&envelope).unwrap_or_default()
+            );
         } else {
             print!("{}", text);
         }
@@ -173,7 +209,12 @@ fn handle_generated_text(
         edit::insert_top_level(&source, text.trim())
     };
 
-    let result = match edit::apply_edits(&source, &edit::EditPlan { edits: vec![text_edit] }) {
+    let result = match edit::apply_edits(
+        &source,
+        &edit::EditPlan {
+            edits: vec![text_edit],
+        },
+    ) {
         Ok(r) => r,
         Err(e) => {
             eprintln!("error: {}", e);
@@ -191,7 +232,10 @@ fn handle_generated_text(
                 "diff": edit::diff(&source, &result, &path_str),
                 "inserted_text": text,
             });
-            println!("{}", serde_json::to_string_pretty(&envelope).unwrap_or_default());
+            println!(
+                "{}",
+                serde_json::to_string_pretty(&envelope).unwrap_or_default()
+            );
         } else {
             print!("{}", edit::diff(&source, &result, &path_str));
         }
@@ -207,7 +251,10 @@ fn handle_generated_text(
                 "file": path_str,
                 "element": { "kind": label },
             });
-            println!("{}", serde_json::to_string_pretty(&envelope).unwrap_or_default());
+            println!(
+                "{}",
+                serde_json::to_string_pretty(&envelope).unwrap_or_default()
+            );
         } else {
             eprintln!("Added {} to {}", label, path_str);
         }
@@ -216,6 +263,7 @@ fn handle_generated_text(
 }
 
 /// Print generated SysML to stdout (replaces old `new` command).
+#[allow(clippy::too_many_arguments)]
 fn run_stdout(
     kind: &str,
     name: &str,
@@ -244,7 +292,10 @@ fn run_stdout(
         }
         "satisfy" => {
             if let Some(target) = by.or(type_ref).or(extends) {
-                print!("{}", template::generate_relationship("satisfy", name, target, 0));
+                print!(
+                    "{}",
+                    template::generate_relationship("satisfy", name, target, 0)
+                );
             } else {
                 eprintln!("error: satisfy requires --by <element> (or -t <element>)");
                 return ExitCode::from(1);
@@ -253,7 +304,10 @@ fn run_stdout(
         }
         "verify" => {
             if let Some(target) = by.or(type_ref).or(extends) {
-                print!("{}", template::generate_relationship("verify", name, target, 0));
+                print!(
+                    "{}",
+                    template::generate_relationship("verify", name, target, 0)
+                );
             } else {
                 eprintln!("error: verify requires --by <element> (or -t <element>)");
                 return ExitCode::from(1);
@@ -261,25 +315,34 @@ fn run_stdout(
             return ExitCode::SUCCESS;
         }
         "connection" if connect.is_some() => {
-            print!("{}", template::generate_connection_usage(
-                name, type_ref, connect.unwrap(), 0));
+            print!(
+                "{}",
+                template::generate_connection_usage(name, type_ref, connect.unwrap(), 0)
+            );
             return ExitCode::SUCCESS;
         }
         _ => {}
     }
 
     // Check if this is a definition kind
-    let is_def_kind = kind.contains("def") || kind.contains("package")
-        || kind.contains("pkg") || kind == "requirement" || kind == "req";
+    let is_def_kind = kind.contains("def")
+        || kind.contains("package")
+        || kind.contains("pkg")
+        || kind == "requirement"
+        || kind == "req";
 
     if is_def_kind {
         let def_kind = match template::parse_template_kind(kind) {
             Some(k) => k,
             None => {
                 eprintln!("error: unknown element kind `{}`", kind);
-                eprintln!("  available: part-def, port-def, action-def, state-def, constraint-def,");
+                eprintln!(
+                    "  available: part-def, port-def, action-def, state-def, constraint-def,"
+                );
                 eprintln!("            calc-def, requirement, enum-def, attribute-def, item-def,");
-                eprintln!("            view-def, viewpoint-def, package, use-case, connection-def,");
+                eprintln!(
+                    "            view-def, viewpoint-def, package, use-case, connection-def,"
+                );
                 eprintln!("            flow-def, interface-def, allocation-def");
                 return ExitCode::from(1);
             }
@@ -306,9 +369,7 @@ fn run_stdout(
         print!("{}", generated);
     } else {
         // Usage format: kind name [: type];
-        let t = type_ref
-            .map(|t| format!(" : {}", t))
-            .unwrap_or_default();
+        let t = type_ref.map(|t| format!(" : {}", t)).unwrap_or_default();
         println!("{} {}{};", kind, name, t);
     }
 
@@ -352,8 +413,8 @@ fn parse_members(members: &[String], kind: &str) -> Vec<template::MemberSpec> {
 /// Flow: select file → parse model context → choose what to create →
 /// fill in details with model-aware prompts → preview → write.
 fn run_wizard_mode() -> ExitCode {
-    use sysml_core::interactive::*;
     use crate::wizard::CliWizardRunner;
+    use sysml_core::interactive::*;
 
     let runner = CliWizardRunner::new();
     if !runner.is_interactive() {
@@ -370,11 +431,15 @@ fn run_wizard_mode() -> ExitCode {
             ("file", "Add to an existing file (model-aware)"),
             ("stdout", "Print to terminal (no file context)"),
         ],
-    ).with_explanation("File mode shows available types from your model.");
+    )
+    .with_explanation("File mode shows available types from your model.");
 
     let dest = match runner.run_step(&dest_step) {
         Some(WizardAnswer::String(s)) => s,
-        _ => { eprintln!("Cancelled."); return ExitCode::FAILURE; }
+        _ => {
+            eprintln!("Cancelled.");
+            return ExitCode::FAILURE;
+        }
     };
 
     // Parse model context if a file is selected
@@ -397,8 +462,8 @@ fn run_wizard_mode() -> ExitCode {
 
 /// Guided file mode: `sysml add <file>` with no kind/name.
 fn run_wizard_mode_with_file(file: &PathBuf) -> ExitCode {
-    use sysml_core::interactive::WizardRunner;
     use crate::wizard::CliWizardRunner;
+    use sysml_core::interactive::WizardRunner;
 
     let runner = CliWizardRunner::new();
     if !runner.is_interactive() {
@@ -430,7 +495,9 @@ fn parse_file_context(file: &PathBuf) -> Option<sysml_core::model::Model> {
 
     // Parse all extra files for type context
     for extra in &extra_files {
-        if extra == file { continue; }
+        if extra == file {
+            continue;
+        }
         if let Ok((ext_path, ext_source)) = read_source(extra) {
             let ext_model = sysml_parser::parse_file(&ext_path, &ext_source);
             model.definitions.extend(ext_model.definitions.into_iter());
@@ -441,12 +508,8 @@ fn parse_file_context(file: &PathBuf) -> Option<sysml_core::model::Model> {
     Some(model)
 }
 
-
 /// Get definition names from the model that match a given DefKind.
-fn model_type_options(
-    model: &sysml_core::model::Model,
-    usage_kind: &str,
-) -> Vec<String> {
+fn model_type_options(model: &sysml_core::model::Model, usage_kind: &str) -> Vec<String> {
     use sysml_core::model::DefKind;
     let target = match usage_kind {
         "part" => Some(DefKind::Part),
@@ -459,7 +522,9 @@ fn model_type_options(
         _ => None,
     };
     match target {
-        Some(dk) => model.definitions.iter()
+        Some(dk) => model
+            .definitions
+            .iter()
             .filter(|d| d.kind == dk)
             .map(|d| d.name.clone())
             .collect(),
@@ -470,7 +535,9 @@ fn model_type_options(
 /// Get requirement definition names from the model.
 fn model_requirement_options(model: &sysml_core::model::Model) -> Vec<String> {
     use sysml_core::model::DefKind;
-    model.definitions.iter()
+    model
+        .definitions
+        .iter()
         .filter(|d| d.kind == DefKind::Requirement)
         .map(|d| d.name.clone())
         .collect()
@@ -479,11 +546,19 @@ fn model_requirement_options(model: &sysml_core::model::Model) -> Vec<String> {
 /// Get all non-requirement definition names suitable as satisfy/verify targets.
 fn model_satisfying_options(model: &sysml_core::model::Model) -> Vec<String> {
     use sysml_core::model::DefKind;
-    model.definitions.iter()
-        .filter(|d| matches!(d.kind,
-            DefKind::Part | DefKind::Action | DefKind::Constraint |
-            DefKind::Verification | DefKind::UseCase
-        ))
+    model
+        .definitions
+        .iter()
+        .filter(|d| {
+            matches!(
+                d.kind,
+                DefKind::Part
+                    | DefKind::Action
+                    | DefKind::Constraint
+                    | DefKind::Verification
+                    | DefKind::UseCase
+            )
+        })
         .map(|d| d.name.clone())
         .collect()
 }
@@ -491,7 +566,9 @@ fn model_satisfying_options(model: &sysml_core::model::Model) -> Vec<String> {
 /// Get verification case names from the model.
 fn model_verification_options(model: &sysml_core::model::Model) -> Vec<String> {
     use sysml_core::model::DefKind;
-    model.definitions.iter()
+    model
+        .definitions
+        .iter()
         .filter(|d| d.kind == DefKind::Verification)
         .map(|d| d.name.clone())
         .collect()
@@ -499,19 +576,16 @@ fn model_verification_options(model: &sysml_core::model::Model) -> Vec<String> {
 
 /// Get port usages from the model grouped by parent, formatted as "parent.port".
 fn model_port_endpoints(model: &sysml_core::model::Model) -> Vec<String> {
-    model.usages.iter()
+    model
+        .usages
+        .iter()
         .filter(|u| u.kind == "port")
-        .filter_map(|u| {
-            u.parent_def.as_ref().map(|p| format!("{}.{}", p, u.name))
-        })
+        .filter_map(|u| u.parent_def.as_ref().map(|p| format!("{}.{}", p, u.name)))
         .collect()
 }
 
 /// Get definition names suitable as supertypes for a given definition kind.
-fn model_supertype_options(
-    model: &sysml_core::model::Model,
-    kind: &str,
-) -> Vec<String> {
+fn model_supertype_options(model: &sysml_core::model::Model, kind: &str) -> Vec<String> {
     use sysml_core::model::DefKind;
     let target = match kind {
         "part-def" => Some(DefKind::Part),
@@ -527,7 +601,9 @@ fn model_supertype_options(
         _ => None,
     };
     match target {
-        Some(dk) => model.definitions.iter()
+        Some(dk) => model
+            .definitions
+            .iter()
             .filter(|d| d.kind == dk)
             .map(|d| d.name.clone())
             .collect(),
@@ -545,7 +621,9 @@ fn run_wizard_with_context(
 
     // Show file context if available
     if let Some(m) = model {
-        let def_names: Vec<&str> = m.definitions.iter()
+        let def_names: Vec<&str> = m
+            .definitions
+            .iter()
             .take(15)
             .map(|d| d.name.as_str())
             .collect();
@@ -590,15 +668,22 @@ fn run_wizard_with_context(
 
     let kind = match runner.run_step(&concept_step) {
         Some(WizardAnswer::String(s)) => s,
-        _ => { eprintln!("Cancelled."); return ExitCode::FAILURE; }
+        _ => {
+            eprintln!("Cancelled.");
+            return ExitCode::FAILURE;
+        }
     };
 
     // If "other", ask for the kind string
     let kind = if kind == "other" {
-        let kind_step = WizardStep::string("custom_kind", "SysML kind (e.g. interface-def, flow-def)");
+        let kind_step =
+            WizardStep::string("custom_kind", "SysML kind (e.g. interface-def, flow-def)");
         match runner.run_step(&kind_step) {
             Some(WizardAnswer::String(s)) => s,
-            _ => { eprintln!("Cancelled."); return ExitCode::FAILURE; }
+            _ => {
+                eprintln!("Cancelled.");
+                return ExitCode::FAILURE;
+            }
         }
     } else {
         kind
@@ -607,11 +692,17 @@ fn run_wizard_with_context(
     // Handle special kinds that have their own wizard flow
     match kind.as_str() {
         "import" => {
-            let path_step = WizardStep::string("import_path", "Import path (e.g., Vehicles::* or Sensors::Temp)")
-                .with_explanation("Use :: for nesting, * for wildcard.");
+            let path_step = WizardStep::string(
+                "import_path",
+                "Import path (e.g., Vehicles::* or Sensors::Temp)",
+            )
+            .with_explanation("Use :: for nesting, * for wildcard.");
             let path = match runner.run_step(&path_step) {
                 Some(WizardAnswer::String(s)) if !s.is_empty() => s,
-                _ => { eprintln!("Cancelled."); return ExitCode::FAILURE; }
+                _ => {
+                    eprintln!("Cancelled.");
+                    return ExitCode::FAILURE;
+                }
             };
             let sysml_text = template::generate_import(&path, 0);
             return finish_wizard(runner, target_file, &sysml_text, &path, false);
@@ -623,10 +714,15 @@ fn run_wizard_with_context(
                 if !reqs.is_empty() {
                     let mut choices: Vec<ChoiceOption> = Vec::new();
                     for r in &reqs {
-                        choices.push(ChoiceOption { value: r.clone(), label: r.clone(), description: None });
+                        choices.push(ChoiceOption {
+                            value: r.clone(),
+                            label: r.clone(),
+                            description: None,
+                        });
                     }
                     choices.push(ChoiceOption {
-                        value: "__custom__".into(), label: "(other)".into(),
+                        value: "__custom__".into(),
+                        label: "(other)".into(),
                         description: Some("Enter name manually".into()),
                     });
                     let step = WizardStep {
@@ -642,24 +738,36 @@ fn run_wizard_with_context(
                             let custom = WizardStep::string("req_custom", "Requirement name");
                             match runner.run_step(&custom) {
                                 Some(WizardAnswer::String(s)) if !s.is_empty() => s,
-                                _ => { eprintln!("Cancelled."); return ExitCode::FAILURE; }
+                                _ => {
+                                    eprintln!("Cancelled.");
+                                    return ExitCode::FAILURE;
+                                }
                             }
                         }
                         Some(WizardAnswer::String(s)) if !s.is_empty() => s,
-                        _ => { eprintln!("Cancelled."); return ExitCode::FAILURE; }
+                        _ => {
+                            eprintln!("Cancelled.");
+                            return ExitCode::FAILURE;
+                        }
                     }
                 } else {
                     let step = WizardStep::string("req_name", "Requirement name");
                     match runner.run_step(&step) {
                         Some(WizardAnswer::String(s)) if !s.is_empty() => s,
-                        _ => { eprintln!("Cancelled."); return ExitCode::FAILURE; }
+                        _ => {
+                            eprintln!("Cancelled.");
+                            return ExitCode::FAILURE;
+                        }
                     }
                 }
             } else {
                 let step = WizardStep::string("req_name", "Requirement name");
                 match runner.run_step(&step) {
                     Some(WizardAnswer::String(s)) if !s.is_empty() => s,
-                    _ => { eprintln!("Cancelled."); return ExitCode::FAILURE; }
+                    _ => {
+                        eprintln!("Cancelled.");
+                        return ExitCode::FAILURE;
+                    }
                 }
             };
 
@@ -673,10 +781,15 @@ fn run_wizard_with_context(
                 if !targets.is_empty() {
                     let mut choices: Vec<ChoiceOption> = Vec::new();
                     for t in &targets {
-                        choices.push(ChoiceOption { value: t.clone(), label: t.clone(), description: None });
+                        choices.push(ChoiceOption {
+                            value: t.clone(),
+                            label: t.clone(),
+                            description: None,
+                        });
                     }
                     choices.push(ChoiceOption {
-                        value: "__custom__".into(), label: "(other)".into(),
+                        value: "__custom__".into(),
+                        label: "(other)".into(),
                         description: Some("Enter name manually".into()),
                     });
                     let prompt = if kind == "verify" {
@@ -697,24 +810,37 @@ fn run_wizard_with_context(
                             let custom = WizardStep::string("by_custom", "Element name");
                             match runner.run_step(&custom) {
                                 Some(WizardAnswer::String(s)) if !s.is_empty() => s,
-                                _ => { eprintln!("Cancelled."); return ExitCode::FAILURE; }
+                                _ => {
+                                    eprintln!("Cancelled.");
+                                    return ExitCode::FAILURE;
+                                }
                             }
                         }
                         Some(WizardAnswer::String(s)) if !s.is_empty() => s,
-                        _ => { eprintln!("Cancelled."); return ExitCode::FAILURE; }
+                        _ => {
+                            eprintln!("Cancelled.");
+                            return ExitCode::FAILURE;
+                        }
                     }
                 } else {
-                    let step = WizardStep::string("by_element", "Satisfied/verified by which element?");
+                    let step =
+                        WizardStep::string("by_element", "Satisfied/verified by which element?");
                     match runner.run_step(&step) {
                         Some(WizardAnswer::String(s)) if !s.is_empty() => s,
-                        _ => { eprintln!("Cancelled."); return ExitCode::FAILURE; }
+                        _ => {
+                            eprintln!("Cancelled.");
+                            return ExitCode::FAILURE;
+                        }
                     }
                 }
             } else {
                 let step = WizardStep::string("by_element", "Satisfied/verified by which element?");
                 match runner.run_step(&step) {
                     Some(WizardAnswer::String(s)) if !s.is_empty() => s,
-                    _ => { eprintln!("Cancelled."); return ExitCode::FAILURE; }
+                    _ => {
+                        eprintln!("Cancelled.");
+                        return ExitCode::FAILURE;
+                    }
                 }
             };
 
@@ -725,21 +851,31 @@ fn run_wizard_with_context(
             let name_step = WizardStep::string("conn_name", "Connection name");
             let name = match runner.run_step(&name_step) {
                 Some(WizardAnswer::String(s)) if !s.is_empty() => s,
-                _ => { eprintln!("Cancelled."); return ExitCode::FAILURE; }
+                _ => {
+                    eprintln!("Cancelled.");
+                    return ExitCode::FAILURE;
+                }
             };
 
             // Suggest connection types from model
             let conn_type = if let Some(m) = model {
                 let conn_defs = model_type_options(m, "connection");
                 if !conn_defs.is_empty() {
-                    let mut choices: Vec<ChoiceOption> = vec![
-                        ChoiceOption { value: "".into(), label: "(none)".into(), description: None },
-                    ];
+                    let mut choices: Vec<ChoiceOption> = vec![ChoiceOption {
+                        value: "".into(),
+                        label: "(none)".into(),
+                        description: None,
+                    }];
                     for cd in &conn_defs {
-                        choices.push(ChoiceOption { value: cd.clone(), label: cd.clone(), description: None });
+                        choices.push(ChoiceOption {
+                            value: cd.clone(),
+                            label: cd.clone(),
+                            description: None,
+                        });
                     }
                     choices.push(ChoiceOption {
-                        value: "__custom__".into(), label: "(other)".into(),
+                        value: "__custom__".into(),
+                        label: "(other)".into(),
                         description: Some("Enter type manually".into()),
                     });
                     let step = WizardStep {
@@ -762,14 +898,16 @@ fn run_wizard_with_context(
                         _ => None,
                     }
                 } else {
-                    let step = WizardStep::string("conn_type", "Connection type? (Enter to skip)").optional();
+                    let step = WizardStep::string("conn_type", "Connection type? (Enter to skip)")
+                        .optional();
                     match runner.run_step(&step) {
                         Some(WizardAnswer::String(s)) if !s.is_empty() => Some(s),
                         _ => None,
                     }
                 }
             } else {
-                let step = WizardStep::string("conn_type", "Connection type? (Enter to skip)").optional();
+                let step =
+                    WizardStep::string("conn_type", "Connection type? (Enter to skip)").optional();
                 match runner.run_step(&step) {
                     Some(WizardAnswer::String(s)) if !s.is_empty() => Some(s),
                     _ => None,
@@ -782,34 +920,51 @@ fn run_wizard_with_context(
                 if !ports.is_empty() {
                     eprintln!("Available ports: {}", ports.join(", "));
                 }
-                let step = WizardStep::string("endpoints", "Connect endpoints (e.g., a.portOut to b.portIn)");
+                let step = WizardStep::string(
+                    "endpoints",
+                    "Connect endpoints (e.g., a.portOut to b.portIn)",
+                );
                 match runner.run_step(&step) {
                     Some(WizardAnswer::String(s)) if !s.is_empty() => s,
-                    _ => { eprintln!("Cancelled."); return ExitCode::FAILURE; }
+                    _ => {
+                        eprintln!("Cancelled.");
+                        return ExitCode::FAILURE;
+                    }
                 }
             } else {
-                let step = WizardStep::string("endpoints", "Connect endpoints (e.g., a.portOut to b.portIn)");
+                let step = WizardStep::string(
+                    "endpoints",
+                    "Connect endpoints (e.g., a.portOut to b.portIn)",
+                );
                 match runner.run_step(&step) {
                     Some(WizardAnswer::String(s)) if !s.is_empty() => s,
-                    _ => { eprintln!("Cancelled."); return ExitCode::FAILURE; }
+                    _ => {
+                        eprintln!("Cancelled.");
+                        return ExitCode::FAILURE;
+                    }
                 }
             };
 
-            let sysml_text = template::generate_connection_usage(
-                &name, conn_type.as_deref(), &endpoints, 0);
+            let sysml_text =
+                template::generate_connection_usage(&name, conn_type.as_deref(), &endpoints, 0);
             return finish_wizard(runner, target_file, &sysml_text, &name, true);
         }
         _ => {}
     }
 
-    let is_def = kind.contains("def") || kind.contains("package") || kind.contains("pkg")
+    let is_def = kind.contains("def")
+        || kind.contains("package")
+        || kind.contains("pkg")
         || kind == "requirement";
 
     // Name
     let name_step = WizardStep::string("name", "Name");
     let name = match runner.run_step(&name_step) {
         Some(WizardAnswer::String(s)) if !s.is_empty() => s,
-        _ => { eprintln!("Cancelled."); return ExitCode::FAILURE; }
+        _ => {
+            eprintln!("Cancelled.");
+            return ExitCode::FAILURE;
+        }
     };
 
     // Doc (optional)
@@ -835,22 +990,25 @@ fn run_wizard_with_context(
 
     // For enum-def — prompt for enum members
     let enum_members = if kind == "enum-def" {
-        let members_step = WizardStep::string("enum_members", "Enum members (comma-separated, e.g., red,green,blue)")
-            .with_explanation("Comma-separated list.").optional();
+        let members_step = WizardStep::string(
+            "enum_members",
+            "Enum members (comma-separated, e.g., red,green,blue)",
+        )
+        .with_explanation("Comma-separated list.")
+        .optional();
         match runner.run_step(&members_step) {
-            Some(WizardAnswer::String(s)) if !s.is_empty() => {
-                s.split(',')
-                    .map(|m| template::MemberSpec {
-                        usage_kind: "enum".to_string(),
-                        name: m.trim().to_string(),
-                        type_ref: None,
-                        direction: None,
-                        multiplicity: None,
-                        raw_line: false,
-                    })
-                    .filter(|m| !m.name.is_empty())
-                    .collect()
-            }
+            Some(WizardAnswer::String(s)) if !s.is_empty() => s
+                .split(',')
+                .map(|m| template::MemberSpec {
+                    usage_kind: "enum".to_string(),
+                    name: m.trim().to_string(),
+                    type_ref: None,
+                    direction: None,
+                    multiplicity: None,
+                    raw_line: false,
+                })
+                .filter(|m| !m.name.is_empty())
+                .collect(),
             _ => Vec::new(),
         }
     } else {
@@ -878,7 +1036,8 @@ fn run_wizard_with_context(
             return ExitCode::FAILURE;
         }
     } else {
-        let t = type_ref.as_deref()
+        let t = type_ref
+            .as_deref()
             .map(|t| format!(" : {}", t))
             .unwrap_or_default();
         format!("{} {}{};", kind, name, t)
@@ -964,14 +1123,21 @@ fn wizard_extends_prompt(
     if let Some(m) = model {
         let supertypes = model_supertype_options(m, kind);
         if !supertypes.is_empty() {
-            let mut choice_options: Vec<ChoiceOption> = vec![
-                ChoiceOption { value: "".into(), label: "(none)".into(), description: Some("No supertype".into()) },
-            ];
+            let mut choice_options: Vec<ChoiceOption> = vec![ChoiceOption {
+                value: "".into(),
+                label: "(none)".into(),
+                description: Some("No supertype".into()),
+            }];
             for st in &supertypes {
-                choice_options.push(ChoiceOption { value: st.clone(), label: st.clone(), description: None });
+                choice_options.push(ChoiceOption {
+                    value: st.clone(),
+                    label: st.clone(),
+                    description: None,
+                });
             }
             choice_options.push(ChoiceOption {
-                value: "__custom__".into(), label: "(other)".into(),
+                value: "__custom__".into(),
+                label: "(other)".into(),
                 description: Some("Enter a type name manually".into()),
             });
             let step = WizardStep {
@@ -1013,14 +1179,21 @@ fn wizard_type_ref_prompt(
     if let Some(m) = model {
         let available_types = model_type_options(m, kind);
         if !available_types.is_empty() {
-            let mut choice_options: Vec<ChoiceOption> = vec![
-                ChoiceOption { value: "".into(), label: "(none)".into(), description: Some("No type reference".into()) },
-            ];
+            let mut choice_options: Vec<ChoiceOption> = vec![ChoiceOption {
+                value: "".into(),
+                label: "(none)".into(),
+                description: Some("No type reference".into()),
+            }];
             for t in &available_types {
-                choice_options.push(ChoiceOption { value: t.clone(), label: t.clone(), description: None });
+                choice_options.push(ChoiceOption {
+                    value: t.clone(),
+                    label: t.clone(),
+                    description: None,
+                });
             }
             choice_options.push(ChoiceOption {
-                value: "__custom__".into(), label: "(other)".into(),
+                value: "__custom__".into(),
+                label: "(other)".into(),
                 description: Some("Enter a type name manually".into()),
             });
             let step = WizardStep {
@@ -1044,8 +1217,7 @@ fn wizard_type_ref_prompt(
             };
         }
     }
-    let step = WizardStep::string("type_ref", "Type reference? (Enter to skip)")
-        .optional();
+    let step = WizardStep::string("type_ref", "Type reference? (Enter to skip)").optional();
     match runner.run_step(&step) {
         Some(WizardAnswer::String(s)) if !s.is_empty() => Some(s),
         _ => None,
@@ -1053,7 +1225,6 @@ fn wizard_type_ref_prompt(
 }
 
 /// Insert element into a file (replaces old `edit add` command).
-#[allow(clippy::too_many_arguments)]
 #[allow(clippy::too_many_arguments)]
 fn run_insert(
     file: &PathBuf,
@@ -1080,9 +1251,7 @@ fn run_insert(
     // Handle special kinds.
     // Always use indent=0 — insert_member handles indentation for nested insertion.
     let text = match kind {
-        "import" => {
-            template::generate_import(name, 0)
-        }
+        "import" => template::generate_import(name, 0),
         "satisfy" => {
             let target = by.or(type_ref).or(extends).unwrap_or("TODO");
             template::generate_relationship("satisfy", name, target, 0)
@@ -1096,8 +1265,11 @@ fn run_insert(
         }
         _ => {
             // Standard definition or usage generation
-            let is_def_kind = kind.contains("def") || kind.contains("package")
-                || kind.contains("pkg") || kind == "requirement" || kind == "req";
+            let is_def_kind = kind.contains("def")
+                || kind.contains("package")
+                || kind.contains("pkg")
+                || kind == "requirement"
+                || kind == "req";
             if is_def_kind {
                 match template::parse_template_kind(kind) {
                     Some(def_kind) => {
@@ -1123,22 +1295,25 @@ fn run_insert(
                     }
                 }
             } else {
-                let t = type_ref
-                    .map(|t| format!(" : {}", t))
-                    .unwrap_or_default();
+                let t = type_ref.map(|t| format!(" : {}", t)).unwrap_or_default();
                 format!("{} {}{};", kind, name, t)
             }
         }
     };
 
     // Determine where to insert
-    let is_usage_like = !kind.contains("def") && !kind.contains("package")
-        && !kind.contains("pkg") && kind != "requirement" && kind != "req"
+    let is_usage_like = !kind.contains("def")
+        && !kind.contains("package")
+        && !kind.contains("pkg")
+        && kind != "requirement"
+        && kind != "req"
         && kind != "import";
     let target_parent: Option<String> = if let Some(parent) = inside {
         Some(parent.to_string())
     } else if is_usage_like {
-        let defs_with_body: Vec<&str> = model.definitions.iter()
+        let defs_with_body: Vec<&str> = model
+            .definitions
+            .iter()
             .filter(|d| d.body_end_byte.is_some())
             .map(|d| d.name.as_str())
             .collect();
@@ -1168,7 +1343,12 @@ fn run_insert(
         edit::insert_top_level(&source, text.trim())
     };
 
-    let result = match edit::apply_edits(&source, &edit::EditPlan { edits: vec![text_edit] }) {
+    let result = match edit::apply_edits(
+        &source,
+        &edit::EditPlan {
+            edits: vec![text_edit],
+        },
+    ) {
         Ok(r) => r,
         Err(e) => {
             eprintln!("error: {}", e);
@@ -1190,7 +1370,10 @@ fn run_insert(
                 "diff": edit::diff(&source, &result, &path_str),
                 "inserted_text": text,
             });
-            println!("{}", serde_json::to_string_pretty(&envelope).unwrap_or_default());
+            println!(
+                "{}",
+                serde_json::to_string_pretty(&envelope).unwrap_or_default()
+            );
         } else {
             print!("{}", edit::diff(&source, &result, &path_str));
         }
@@ -1210,7 +1393,10 @@ fn run_insert(
                     "parent": target_parent.clone(),
                 },
             });
-            println!("{}", serde_json::to_string_pretty(&envelope).unwrap_or_default());
+            println!(
+                "{}",
+                serde_json::to_string_pretty(&envelope).unwrap_or_default()
+            );
         } else {
             eprintln!("Added `{}` to {}", name, path_str);
 
@@ -1218,7 +1404,7 @@ fn run_insert(
             let refs_to_check: Vec<&str> = [type_ref, extends]
                 .iter()
                 .filter_map(|r| *r)
-                .filter(|r| !r.contains("::"))  // Skip already-qualified refs
+                .filter(|r| !r.contains("::")) // Skip already-qualified refs
                 .collect();
             if !refs_to_check.is_empty() {
                 let updated = std::fs::read_to_string(file).unwrap_or_default();
@@ -1226,7 +1412,10 @@ fn run_insert(
                 for tr in refs_to_check {
                     let defined = updated_model.definitions.iter().any(|d| d.name == tr);
                     if !defined {
-                        eprintln!("  hint: `{}` is not defined in this file. You may need:", tr);
+                        eprintln!(
+                            "  hint: `{}` is not defined in this file. You may need:",
+                            tr
+                        );
                         eprintln!("    sysml add {} import '...::{}'", path_str, tr);
                     }
                 }

@@ -1,4 +1,4 @@
-/// Rollup command: compute attribute rollups over the part hierarchy.
+//! Rollup command: compute attribute rollups over the part hierarchy.
 
 use std::path::PathBuf;
 use std::process::ExitCode;
@@ -27,16 +27,21 @@ pub fn run(cli: &Cli, kind: &RollupCommand) -> ExitCode {
             limit,
             method,
         } => run_budget(cli, files, root, attr, *limit, method),
-        RollupCommand::Sensitivity {
+        RollupCommand::Sensitivity { files, root, attr } => run_sensitivity(cli, files, root, attr),
+        RollupCommand::Sweep {
             files,
             root,
             attr,
-        } => run_sensitivity(cli, files, root, attr),
-        RollupCommand::Sweep {
-            files, root, attr, param, from, to, steps,
+            param,
+            from,
+            to,
+            steps,
         } => run_sweep(cli, files, root, attr, param, *from, *to, *steps),
         RollupCommand::WhatIf {
-            files, root, attr, scenarios,
+            files,
+            root,
+            attr,
+            scenarios,
         } => run_what_if(cli, files, root, attr, scenarios),
         RollupCommand::Query { files, attr } => run_query(cli, files, attr),
     }
@@ -75,7 +80,10 @@ fn run_compute(cli: &Cli, files: &[PathBuf], root: &str, attr: &str, method: &st
         return ExitCode::FAILURE;
     };
     let Some(agg) = AggregationMethod::from_str(method) else {
-        eprintln!("error: unknown aggregation method `{}`. Use: sum, rss, product, min, max", method);
+        eprintln!(
+            "error: unknown aggregation method `{}`. Use: sum, rss, product, min, max",
+            method
+        );
         return ExitCode::FAILURE;
     };
     if model.find_def(root).is_none() {
@@ -196,7 +204,10 @@ fn run_sensitivity(cli: &Cli, files: &[PathBuf], root: &str, attr: &str) -> Exit
             println!("{}", serde_json::to_string_pretty(&items).unwrap());
         }
         _ => {
-            println!("Sensitivity: {} for {} (total: {:.4})", attr, root, result.total);
+            println!(
+                "Sensitivity: {} for {} (total: {:.4})",
+                attr, root, result.total
+            );
             println!("{:30} {:>12} {:>8}", "Component", "Value", "%");
             println!("{}", "-".repeat(52));
             if result.own_value != 0.0 {
@@ -205,7 +216,12 @@ fn run_sensitivity(cli: &Cli, files: &[PathBuf], root: &str, attr: &str) -> Exit
                 } else {
                     0.0
                 };
-                println!("{:30} {:>12.4} {:>7.1}%", format!("{} (own)", root), result.own_value, pct);
+                println!(
+                    "{:30} {:>12.4} {:>7.1}%",
+                    format!("{} (own)", root),
+                    result.own_value,
+                    pct
+                );
             }
             for (path, subtotal, pct) in &flat {
                 println!("{:30} {:>12.4} {:>7.1}%", path, subtotal, pct);
@@ -304,6 +320,7 @@ fn contribution_to_json(c: &sysml_core::sim::rollup::Contribution) -> serde_json
     })
 }
 
+#[allow(clippy::too_many_arguments)]
 fn run_sweep(
     cli: &Cli,
     files: &[PathBuf],
@@ -346,7 +363,10 @@ fn run_sweep(
         }
         _ => {
             println!("Sweep: {} for {} (varying {})", attr, root, param);
-            println!("  Sensitivity: {:.4} (d_total / d_param)", result.sensitivity);
+            println!(
+                "  Sensitivity: {:.4} (d_total / d_param)",
+                result.sensitivity
+            );
             println!();
             println!("{:>12} {:>12}", param, format!("total_{}", attr));
             println!("{}", "-".repeat(26));
@@ -420,11 +440,20 @@ fn run_what_if(
             println!("{}", serde_json::to_string_pretty(&json).unwrap());
         }
         _ => {
-            println!("What-if: {} for {} (baseline: {:.4})", attr, root, result.baseline);
+            println!(
+                "What-if: {} for {} (baseline: {:.4})",
+                attr, root, result.baseline
+            );
             println!();
-            println!("{:20} {:>12} {:>12} {:>8}", "Scenario", "Total", "Delta", "%");
+            println!(
+                "{:20} {:>12} {:>12} {:>8}",
+                "Scenario", "Total", "Delta", "%"
+            );
             println!("{}", "-".repeat(54));
-            println!("{:20} {:>12.4} {:>12} {:>8}", "(baseline)", result.baseline, "-", "-");
+            println!(
+                "{:20} {:>12.4} {:>12} {:>8}",
+                "(baseline)", result.baseline, "-", "-"
+            );
             for s in &result.scenarios {
                 println!(
                     "{:20} {:>12.4} {:>+12.4} {:>+7.1}%",

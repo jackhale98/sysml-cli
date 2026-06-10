@@ -1,12 +1,12 @@
-/// Top-level `remove` command — remove an element from a SysML file.
+//! Top-level `remove` command — remove an element from a SysML file.
 
 use std::path::PathBuf;
 use std::process::ExitCode;
 
 use serde::Serialize;
 
-use sysml_core::parser as sysml_parser;
 use sysml_core::codegen::edit;
+use sysml_core::parser as sysml_parser;
 
 use crate::{read_source, Cli};
 
@@ -45,7 +45,12 @@ pub(crate) fn run(cli: &Cli, file: &PathBuf, name: &str, dry_run: bool) -> ExitC
         }
     };
 
-    let result = match edit::apply_edits(&source, &edit::EditPlan { edits: vec![text_edit] }) {
+    let result = match edit::apply_edits(
+        &source,
+        &edit::EditPlan {
+            edits: vec![text_edit],
+        },
+    ) {
         Ok(r) => r,
         Err(e) => {
             eprintln!("error: {}", e);
@@ -66,7 +71,10 @@ pub(crate) fn run(cli: &Cli, file: &PathBuf, name: &str, dry_run: bool) -> ExitC
                 bytes_removed,
                 diff: Some(edit::diff(&source, &result, &path_str)),
             };
-            println!("{}", serde_json::to_string_pretty(&envelope).unwrap_or_default());
+            println!(
+                "{}",
+                serde_json::to_string_pretty(&envelope).unwrap_or_default()
+            );
         } else {
             print!("{}", edit::diff(&source, &result, &path_str));
         }
@@ -84,7 +92,10 @@ pub(crate) fn run(cli: &Cli, file: &PathBuf, name: &str, dry_run: bool) -> ExitC
                 bytes_removed,
                 diff: None,
             };
-            println!("{}", serde_json::to_string_pretty(&envelope).unwrap_or_default());
+            println!(
+                "{}",
+                serde_json::to_string_pretty(&envelope).unwrap_or_default()
+            );
         } else {
             eprintln!("Removed `{}` from {}", name, path_str);
         }

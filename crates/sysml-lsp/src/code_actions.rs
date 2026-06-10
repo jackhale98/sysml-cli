@@ -1,6 +1,5 @@
 use tower_lsp::lsp_types::{
-    self, CodeAction, CodeActionKind, NumberOrString, Position, Range, TextEdit, Url,
-    WorkspaceEdit,
+    self, CodeAction, CodeActionKind, NumberOrString, Position, Range, TextEdit, Url, WorkspaceEdit,
 };
 
 use std::collections::HashMap;
@@ -165,12 +164,15 @@ mod tests {
     use super::*;
     use tower_lsp::lsp_types::DiagnosticSeverity;
 
-    fn make_diag(code: &str, message: &str, line: u32, start_col: u32, end_col: u32) -> lsp_types::Diagnostic {
+    fn make_diag(
+        code: &str,
+        message: &str,
+        line: u32,
+        start_col: u32,
+        end_col: u32,
+    ) -> lsp_types::Diagnostic {
         lsp_types::Diagnostic {
-            range: Range::new(
-                Position::new(line, start_col),
-                Position::new(line, end_col),
-            ),
+            range: Range::new(Position::new(line, start_col), Position::new(line, end_col)),
             severity: Some(DiagnosticSeverity::WARNING),
             code: Some(NumberOrString::String(code.to_string())),
             source: Some("sysml".to_string()),
@@ -182,7 +184,9 @@ mod tests {
     #[test]
     fn extracts_did_you_mean() {
         assert_eq!(
-            extract_did_you_mean("type `Vehicel` is not defined\nSuggestion: did you mean `Vehicle`?"),
+            extract_did_you_mean(
+                "type `Vehicel` is not defined\nSuggestion: did you mean `Vehicle`?"
+            ),
             Some("Vehicle".to_string())
         );
     }
@@ -197,7 +201,10 @@ mod tests {
 
     #[test]
     fn extracts_backtick_name() {
-        assert_eq!(extract_backtick_name("part def `Vehicle` is unused"), Some("Vehicle"));
+        assert_eq!(
+            extract_backtick_name("part def `Vehicle` is unused"),
+            Some("Vehicle")
+        );
         assert_eq!(extract_backtick_name("no backticks here"), None);
     }
 
@@ -207,7 +214,9 @@ mod tests {
         let diags = vec![make_diag(
             "W004",
             "type `Vehicel` is not defined\nSuggestion: did you mean `Vehicle`?",
-            1, 15, 22,
+            1,
+            15,
+            22,
         )];
         let actions = code_actions(&uri, &diags, None, None);
         assert_eq!(actions.len(), 1);
@@ -229,7 +238,10 @@ mod tests {
             ..Default::default()
         };
         let actions = code_actions(&uri, &[diag], Some(source), None);
-        let remove: Vec<_> = actions.iter().filter(|a| a.title.contains("Remove")).collect();
+        let remove: Vec<_> = actions
+            .iter()
+            .filter(|a| a.title.contains("Remove"))
+            .collect();
         assert_eq!(remove.len(), 1);
         assert!(remove[0].title.contains("Unused"));
         // The edit should delete the entire first line
@@ -263,8 +275,8 @@ mod tests {
 
     #[test]
     fn integration_with_real_diagnostics() {
-        use sysml_core::parser::parse_file;
         use crate::diagnostics::compute_diagnostics;
+        use sysml_core::parser::parse_file;
 
         let source = "part def Vehicle;\npart car : Vehicel;\n";
         let model = parse_file("test.sysml", source);

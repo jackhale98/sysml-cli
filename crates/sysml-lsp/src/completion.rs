@@ -25,9 +25,8 @@ pub fn detect_context(source: &str, offset: usize) -> CompletionFilter {
     let trimmed = before.trim_end();
 
     // Check for member access: "something."
-    if trimmed.ends_with('.') {
+    if let Some(prefix) = trimmed.strip_suffix('.') {
         // Extract the name before the dot
-        let prefix = &trimmed[..trimmed.len() - 1];
         let name: String = prefix
             .chars()
             .rev()
@@ -91,7 +90,10 @@ pub fn completions(
     if let CompletionFilter::MemberAccess(ref parent) = filter {
         return member_completions(model, parent);
     }
-    let is_type_position = matches!(filter, CompletionFilter::TypePosition | CompletionFilter::Specialization);
+    let is_type_position = matches!(
+        filter,
+        CompletionFilter::TypePosition | CompletionFilter::Specialization
+    );
     let mut seen = HashSet::new();
     let mut items = Vec::new();
 
@@ -105,9 +107,10 @@ pub fn completions(
                 label: def.name.clone(),
                 kind: Some(def_kind_to_completion_kind(def.kind)),
                 detail: Some(def.kind.label().to_string()),
-                documentation: def.doc.as_ref().map(|d| {
-                    tower_lsp::lsp_types::Documentation::String(d.clone())
-                }),
+                documentation: def
+                    .doc
+                    .as_ref()
+                    .map(|d| tower_lsp::lsp_types::Documentation::String(d.clone())),
                 ..Default::default()
             });
         }
@@ -123,9 +126,10 @@ pub fn completions(
                 label: loc.name.clone(),
                 kind: Some(def_kind_to_completion_kind(loc.kind)),
                 detail: Some(loc.kind.label().to_string()),
-                documentation: loc.doc.as_ref().map(|d| {
-                    tower_lsp::lsp_types::Documentation::String(d.clone())
-                }),
+                documentation: loc
+                    .doc
+                    .as_ref()
+                    .map(|d| tower_lsp::lsp_types::Documentation::String(d.clone())),
                 ..Default::default()
             });
         }
@@ -140,9 +144,10 @@ pub fn completions(
                         label: def.name.clone(),
                         kind: Some(def_kind_to_completion_kind(def.kind)),
                         detail: Some(format!("{} (stdlib)", def.kind.label())),
-                        documentation: def.doc.as_ref().map(|d| {
-                            tower_lsp::lsp_types::Documentation::String(d.clone())
-                        }),
+                        documentation: def
+                            .doc
+                            .as_ref()
+                            .map(|d| tower_lsp::lsp_types::Documentation::String(d.clone())),
                         ..Default::default()
                     });
                 }
@@ -180,7 +185,10 @@ fn member_completions(model: &Model, parent_name: &str) -> Vec<CompletionItem> {
                     items.push(CompletionItem {
                         label: usage.name.clone(),
                         kind: Some(CompletionItemKind::PROPERTY),
-                        detail: Some(format!("{} (inherited)", usage.type_ref.as_deref().unwrap_or(""))),
+                        detail: Some(format!(
+                            "{} (inherited)",
+                            usage.type_ref.as_deref().unwrap_or("")
+                        )),
                         ..Default::default()
                     });
                 }
@@ -231,7 +239,11 @@ mod tests {
         let model = parse_file("test.sysml", source);
         let items = completions(&model, &[], &CompletionFilter::All);
         let names: Vec<_> = items.iter().map(|i| i.label.as_str()).collect();
-        assert!(names.contains(&"ScalarValues"), "stdlib should provide ScalarValues, got: {:?}", names.iter().take(20).collect::<Vec<_>>());
+        assert!(
+            names.contains(&"ScalarValues"),
+            "stdlib should provide ScalarValues, got: {:?}",
+            names.iter().take(20).collect::<Vec<_>>()
+        );
     }
 
     #[test]
@@ -298,9 +310,21 @@ mod tests {
     fn member_access_shows_children() {
         let source = "part def Vehicle { part engine : Engine; attribute mass : Real; }\n";
         let model = parse_file("test.sysml", source);
-        let items = completions(&model, &[], &CompletionFilter::MemberAccess("Vehicle".to_string()));
+        let items = completions(
+            &model,
+            &[],
+            &CompletionFilter::MemberAccess("Vehicle".to_string()),
+        );
         let names: Vec<_> = items.iter().map(|i| i.label.as_str()).collect();
-        assert!(names.contains(&"engine"), "should include part member: {:?}", names);
-        assert!(names.contains(&"mass"), "should include attribute member: {:?}", names);
+        assert!(
+            names.contains(&"engine"),
+            "should include part member: {:?}",
+            names
+        );
+        assert!(
+            names.contains(&"mass"),
+            "should include attribute member: {:?}",
+            names
+        );
     }
 }

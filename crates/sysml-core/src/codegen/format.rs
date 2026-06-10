@@ -1,8 +1,8 @@
-/// CST-aware SysML v2 source formatter.
-///
-/// Uses tree-sitter to determine the correct indentation level for each line
-/// based on the syntactic structure, rather than naive brace counting.
-/// This handles comments, string literals, and multi-line expressions correctly.
+//! CST-aware SysML v2 source formatter.
+//!
+//! Uses tree-sitter to determine the correct indentation level for each line
+//! based on the syntactic structure, rather than naive brace counting.
+//! This handles comments, string literals, and multi-line expressions correctly.
 
 use tree_sitter::{Node, Parser};
 
@@ -207,7 +207,8 @@ mod tests {
 
     #[test]
     fn format_state_machine() {
-        let source = "state def SM {\nstate idle;\nstate active;\ntransition first idle then active;\n}\n";
+        let source =
+            "state def SM {\nstate idle;\nstate active;\ntransition first idle then active;\n}\n";
         let opts = FormatOptions::default();
         let result = format_source(source, &opts);
         assert!(result.contains("    state idle;"));

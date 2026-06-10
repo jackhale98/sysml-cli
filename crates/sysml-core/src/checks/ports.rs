@@ -1,4 +1,4 @@
-/// Checks for port type and direction compatibility on connections.
+//! Checks for port type and direction compatibility on connections.
 
 use std::collections::HashMap;
 
@@ -66,8 +66,8 @@ impl Check for PortConnectionCheck {
                     (Direction::Out, Direction::In) => true,
                     (Direction::In, Direction::Out) => true,
                     (Direction::InOut, _) | (_, Direction::InOut) => true,
-                    (Direction::In, Direction::In) => false,   // both consuming
-                    (Direction::Out, Direction::Out) => false,  // both producing
+                    (Direction::In, Direction::In) => false, // both consuming
+                    (Direction::Out, Direction::Out) => false, // both producing
                 };
                 if !compatible {
                     diagnostics.push(Diagnostic::warning(

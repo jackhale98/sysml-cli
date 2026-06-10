@@ -1,4 +1,4 @@
-/// Generate Markdown documentation from SysML v2 models.
+//! Generate Markdown documentation from SysML v2 models.
 
 use std::path::PathBuf;
 use std::process::ExitCode;
@@ -99,17 +99,21 @@ fn generate_markdown(model: &Model, root: Option<&str>) -> String {
                 out.push_str(&format!("{}\n\n", doc));
             }
             // List children
-            let children: Vec<_> = model.definitions.iter()
+            let children: Vec<_> = model
+                .definitions
+                .iter()
                 .filter(|d| d.parent_def.as_deref() == Some(&pkg.name))
                 .collect();
             if !children.is_empty() {
                 out.push_str("| Element | Kind | Description |\n");
                 out.push_str("|---------|------|-------------|\n");
                 for child in &children {
-                    out.push_str(&format!("| `{}` | {} | {} |\n",
+                    out.push_str(&format!(
+                        "| `{}` | {} | {} |\n",
                         child.name,
                         child.kind.label(),
-                        child.doc.as_deref().unwrap_or("")));
+                        child.doc.as_deref().unwrap_or("")
+                    ));
                 }
                 out.push('\n');
             }
@@ -135,11 +139,16 @@ fn generate_markdown(model: &Model, root: Option<&str>) -> String {
                 out.push_str("| Member | Kind | Type | Multiplicity |\n");
                 out.push_str("|--------|------|------|--------------|\n");
                 for m in &members {
-                    out.push_str(&format!("| `{}` | {} | {} | {} |\n",
+                    out.push_str(&format!(
+                        "| `{}` | {} | {} | {} |\n",
                         m.name,
                         m.kind,
                         m.type_ref.as_deref().unwrap_or("-"),
-                        m.multiplicity.as_ref().map(|mu| mu.to_string()).unwrap_or_else(|| "-".to_string())));
+                        m.multiplicity
+                            .as_ref()
+                            .map(|mu| mu.to_string())
+                            .unwrap_or_else(|| "-".to_string())
+                    ));
                 }
                 out.push('\n');
             }
@@ -181,9 +190,11 @@ fn generate_markdown(model: &Model, root: Option<&str>) -> String {
             out.push_str("| Requirement | Satisfied By |\n");
             out.push_str("|-------------|-------------|\n");
             for sat in &model.satisfactions {
-                out.push_str(&format!("| `{}` | {} |\n",
+                out.push_str(&format!(
+                    "| `{}` | {} |\n",
                     sat.requirement,
-                    sat.by.as_deref().unwrap_or("-")));
+                    sat.by.as_deref().unwrap_or("-")
+                ));
             }
             out.push('\n');
         }

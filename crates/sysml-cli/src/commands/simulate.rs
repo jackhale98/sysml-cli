@@ -1,7 +1,7 @@
 use std::path::PathBuf;
 use std::process::ExitCode;
 
-use crate::{Cli, SimulateCommand, read_source, parse_bindings, select_item, prompt_events};
+use crate::{parse_bindings, prompt_events, read_source, select_item, Cli, SimulateCommand};
 
 pub(crate) fn run(cli: &Cli, kind: &SimulateCommand) -> ExitCode {
     match kind {
@@ -27,12 +27,7 @@ pub(crate) fn run(cli: &Cli, kind: &SimulateCommand) -> ExitCode {
     }
 }
 
-fn run_sim_eval(
-    cli: &Cli,
-    file: &PathBuf,
-    bindings: &[String],
-    name: Option<&str>,
-) -> ExitCode {
+fn run_sim_eval(cli: &Cli, file: &PathBuf, bindings: &[String], name: Option<&str>) -> ExitCode {
     use sysml_core::sim::constraint_eval::*;
     use sysml_core::sim::eval;
 
@@ -62,14 +57,19 @@ fn run_sim_eval(
         if let Some(n) = name {
             eprintln!("error: no constraint or calculation named `{}` found", n);
             // Suggest available items
-            let available: Vec<&str> = constraints.iter().map(|c| c.name.as_str())
+            let available: Vec<&str> = constraints
+                .iter()
+                .map(|c| c.name.as_str())
                 .chain(calcs.iter().map(|c| c.name.as_str()))
                 .collect();
             if !available.is_empty() {
                 eprintln!("  available: {}", available.join(", "));
             }
         } else {
-            eprintln!("error: no constraints or calculations found in `{}`", path_str);
+            eprintln!(
+                "error: no constraints or calculations found in `{}`",
+                path_str
+            );
         }
         return ExitCode::from(1);
     }
@@ -170,7 +170,10 @@ fn run_sim_state_machine(
         &machines[0]
     } else {
         // Interactive selection
-        match select_item("state machine", &machines.iter().map(|m| m.name.as_str()).collect::<Vec<_>>()) {
+        match select_item(
+            "state machine",
+            &machines.iter().map(|m| m.name.as_str()).collect::<Vec<_>>(),
+        ) {
             Some(idx) => &machines[idx],
             None => return ExitCode::from(1),
         }
@@ -253,7 +256,10 @@ fn run_sim_action_flow(
     } else if actions.len() == 1 {
         &actions[0]
     } else {
-        match select_item("action", &actions.iter().map(|a| a.name.as_str()).collect::<Vec<_>>()) {
+        match select_item(
+            "action",
+            &actions.iter().map(|a| a.name.as_str()).collect::<Vec<_>>(),
+        ) {
             Some(idx) => &actions[idx],
             None => return ExitCode::from(1),
         }

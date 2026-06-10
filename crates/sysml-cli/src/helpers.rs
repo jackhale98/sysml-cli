@@ -1,4 +1,4 @@
-/// Shared helper functions for the CLI.
+//! Shared helper functions for the CLI.
 
 use std::path::PathBuf;
 use std::process::ExitCode;
@@ -44,10 +44,8 @@ pub(crate) fn collect_files_recursive(dir: &PathBuf, files: &mut Vec<PathBuf>) {
             if path.is_dir() {
                 collect_files_recursive(&path, files);
             } else if let Some(ext) = path.extension() {
-                if ext == "sysml" || ext == "kerml" {
-                    if !files.contains(&path) {
-                        files.push(path);
-                    }
+                if (ext == "sysml" || ext == "kerml") && !files.contains(&path) {
+                    files.push(path);
                 }
             }
         }
@@ -70,11 +68,7 @@ pub(crate) fn select_item(kind: &str, items: &[&str]) -> Option<usize> {
     }
 
     eprintln!("Multiple {}s found. Select one:", kind);
-    match FuzzySelect::new()
-        .items(items)
-        .default(0)
-        .interact_opt()
-    {
+    match FuzzySelect::new().items(items).default(0).interact_opt() {
         Ok(Some(idx)) => Some(idx),
         Ok(None) => {
             eprintln!("No selection made.");
@@ -96,9 +90,7 @@ pub(crate) fn prompt_events(available_signals: &[String]) -> Vec<String> {
     use std::io::IsTerminal;
 
     if !std::io::stderr().is_terminal() {
-        eprintln!(
-            "error: this state machine requires events. Use --events to specify them."
-        );
+        eprintln!("error: this state machine requires events. Use --events to specify them.");
         eprintln!("  available signals: {}", available_signals.join(", "));
         return Vec::new();
     }
@@ -111,10 +103,7 @@ pub(crate) fn prompt_events(available_signals: &[String]) -> Vec<String> {
     eprintln!("  (select [done] when finished)");
 
     loop {
-        let selection = FuzzySelect::new()
-            .items(&items)
-            .default(0)
-            .interact_opt();
+        let selection = FuzzySelect::new().items(&items).default(0).interact_opt();
 
         match selection {
             Ok(Some(idx)) if idx < available_signals.len() => {
@@ -273,7 +262,10 @@ pub(crate) fn generate_completions(shell: &str) {
         "elvish" => Shell::Elvish,
         "powershell" | "ps" => Shell::PowerShell,
         other => {
-            eprintln!("error: unknown shell `{}`. Use: bash, zsh, fish, elvish, powershell", other);
+            eprintln!(
+                "error: unknown shell `{}`. Use: bash, zsh, fish, elvish, powershell",
+                other
+            );
             return;
         }
     };

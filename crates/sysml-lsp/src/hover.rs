@@ -45,8 +45,15 @@ pub fn hover_info(model: &Model, name: &str) -> Option<String> {
         // Find numeric attribute names on this def and its children
         let attr_names: Vec<String> = members
             .iter()
-            .filter(|u| matches!(u.kind.as_str(), "attribute" | "feature") && u.value_expr.is_some())
-            .filter(|u| u.value_expr.as_ref().and_then(|e| e.trim().parse::<f64>().ok()).is_some())
+            .filter(|u| {
+                matches!(u.kind.as_str(), "attribute" | "feature") && u.value_expr.is_some()
+            })
+            .filter(|u| {
+                u.value_expr
+                    .as_ref()
+                    .and_then(|e| e.trim().parse::<f64>().ok())
+                    .is_some()
+            })
             .map(|u| u.name.clone())
             .collect();
         for attr in &attr_names {
@@ -91,7 +98,8 @@ mod tests {
 
     #[test]
     fn hover_def_with_doc_and_members() {
-        let source = "part def Vehicle {\n    doc /* A motor vehicle. */\n    part engine : Engine;\n}\n";
+        let source =
+            "part def Vehicle {\n    doc /* A motor vehicle. */\n    part engine : Engine;\n}\n";
         let model = parse_file("test.sysml", source);
         let info = hover_info(&model, "Vehicle");
         assert!(info.is_some());
@@ -103,11 +111,7 @@ mod tests {
             "should show doc: {}",
             text
         );
-        assert!(
-            text.contains("`engine`"),
-            "should show member: {}",
-            text
-        );
+        assert!(text.contains("`engine`"), "should show member: {}", text);
         assert!(
             text.contains("`Engine`"),
             "should show member type: {}",
@@ -127,18 +131,13 @@ mod tests {
 
     #[test]
     fn hover_usage() {
-        let source =
-            "part def Engine;\npart def Vehicle {\n    part engine : Engine;\n}\n";
+        let source = "part def Engine;\npart def Vehicle {\n    part engine : Engine;\n}\n";
         let model = parse_file("test.sysml", source);
         let info = hover_usage_info(&model, "engine");
         assert!(info.is_some());
         let text = info.unwrap();
         assert!(text.contains("**part**"), "should show kind: {}", text);
-        assert!(
-            text.contains("`Engine`"),
-            "should show type ref: {}",
-            text
-        );
+        assert!(text.contains("`Engine`"), "should show type ref: {}", text);
         assert!(
             text.contains("In `Vehicle`"),
             "should show parent: {}",

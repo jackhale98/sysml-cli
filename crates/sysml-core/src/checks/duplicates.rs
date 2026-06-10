@@ -1,4 +1,4 @@
-/// Check for duplicate definition names within the same file.
+//! Check for duplicate definition names within the same file.
 
 use std::collections::HashMap;
 

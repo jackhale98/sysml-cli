@@ -4,7 +4,10 @@ use sysml_core::codegen::format::{format_source, FormatOptions};
 
 /// Format a SysML source using editor-provided options.
 /// Returns None if the source is already correctly formatted.
-pub fn format_document(source: &str, editor_opts: Option<&FormattingOptions>) -> Option<Vec<TextEdit>> {
+pub fn format_document(
+    source: &str,
+    editor_opts: Option<&FormattingOptions>,
+) -> Option<Vec<TextEdit>> {
     let opts = if let Some(eo) = editor_opts {
         FormatOptions {
             indent_width: eo.tab_size as usize,

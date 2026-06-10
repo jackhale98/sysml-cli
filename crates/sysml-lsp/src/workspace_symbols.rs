@@ -6,15 +6,10 @@ use crate::state::DefLocation;
 
 /// Filter workspace definitions by a query string (case-insensitive substring match).
 #[allow(deprecated)] // SymbolInformation::deprecated field
-pub fn workspace_symbols(
-    query: &str,
-    defs: &[DefLocation],
-) -> Vec<SymbolInformation> {
+pub fn workspace_symbols(query: &str, defs: &[DefLocation]) -> Vec<SymbolInformation> {
     let query_lower = query.to_lowercase();
     defs.iter()
-        .filter(|loc| {
-            query.is_empty() || loc.name.to_lowercase().contains(&query_lower)
-        })
+        .filter(|loc| query.is_empty() || loc.name.to_lowercase().contains(&query_lower))
         .filter_map(|loc| {
             let uri = Url::parse(&loc.uri).ok()?;
             Some(SymbolInformation {

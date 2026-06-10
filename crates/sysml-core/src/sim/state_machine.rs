@@ -1,4 +1,4 @@
-/// State machine model types for simulation.
+//! State machine model types for simulation.
 
 use crate::model::Span;
 use crate::sim::expr::Expr;

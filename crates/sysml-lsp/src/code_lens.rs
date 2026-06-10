@@ -79,7 +79,11 @@ fn verification_lens_title(model: &Model, name: &str) -> Option<String> {
     if verifies == 0 {
         None
     } else {
-        Some(format!("✓ verifies {} requirement{}", verifies, if verifies == 1 { "" } else { "s" }))
+        Some(format!(
+            "✓ verifies {} requirement{}",
+            verifies,
+            if verifies == 1 { "" } else { "s" }
+        ))
     }
 }
 
@@ -88,7 +92,12 @@ fn usages_lens_title(model: &Model, name: &str, label: &str) -> Option<String> {
     if count == 0 {
         None
     } else {
-        Some(format!("↳ {} {}{}", count, label, if count == 1 { "" } else { "s" }))
+        Some(format!(
+            "↳ {} {}{}",
+            count,
+            label,
+            if count == 1 { "" } else { "s" }
+        ))
     }
 }
 
@@ -99,7 +108,7 @@ fn count_typed_usages(model: &Model, type_name: &str) -> usize {
         .filter(|u| {
             u.type_ref
                 .as_deref()
-                .map_or(false, |t| simple_name(t) == type_name)
+                .is_some_and(|t| simple_name(t) == type_name)
         })
         .count()
 }
@@ -121,9 +130,12 @@ mod tests {
             lenses.iter().any(|l| l
                 .command
                 .as_ref()
-                .map_or(false, |c| c.title.contains("1 satisfy"))),
+                .is_some_and(|c| c.title.contains("1 satisfy"))),
             "lens count not as expected: {:?}",
-            lenses.iter().filter_map(|l| l.command.as_ref().map(|c| &c.title)).collect::<Vec<_>>()
+            lenses
+                .iter()
+                .filter_map(|l| l.command.as_ref().map(|c| &c.title))
+                .collect::<Vec<_>>()
         );
     }
 
@@ -136,9 +148,12 @@ mod tests {
             lenses.iter().any(|l| l
                 .command
                 .as_ref()
-                .map_or(false, |c| c.title.contains("unreferenced"))),
+                .is_some_and(|c| c.title.contains("unreferenced"))),
             "should mark unreferenced requirement: {:?}",
-            lenses.iter().filter_map(|l| l.command.as_ref().map(|c| &c.title)).collect::<Vec<_>>()
+            lenses
+                .iter()
+                .filter_map(|l| l.command.as_ref().map(|c| &c.title))
+                .collect::<Vec<_>>()
         );
     }
 
@@ -154,9 +169,12 @@ mod tests {
             lenses.iter().any(|l| l
                 .command
                 .as_ref()
-                .map_or(false, |c| c.title.contains("1 usage"))),
+                .is_some_and(|c| c.title.contains("1 usage"))),
             "Engine should report 1 usage: {:?}",
-            lenses.iter().filter_map(|l| l.command.as_ref().map(|c| &c.title)).collect::<Vec<_>>()
+            lenses
+                .iter()
+                .filter_map(|l| l.command.as_ref().map(|c| &c.title))
+                .collect::<Vec<_>>()
         );
     }
 
@@ -170,6 +188,6 @@ mod tests {
         assert!(lenses.iter().all(|l| l
             .command
             .as_ref()
-            .map_or(true, |c| !c.title.contains("Unused"))));
+            .is_none_or(|c| !c.title.contains("Unused"))));
     }
 }

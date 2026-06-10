@@ -1,7 +1,7 @@
-/// Unit conversion system for engineering quantities.
-///
-/// Provides conversion between common engineering units used in SysML models.
-/// Supports mass, length, time, force, power, energy, temperature, and currency.
+//! Unit conversion system for engineering quantities.
+//!
+//! Provides conversion between common engineering units used in SysML models.
+//! Supports mass, length, time, force, power, energy, temperature, and currency.
 
 use std::collections::HashMap;
 use std::sync::OnceLock;

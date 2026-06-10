@@ -1,7 +1,7 @@
-/// Model query functions for filtering and inspecting SysML v2 elements.
-///
-/// These functions provide the logic behind CLI commands like `list`, `show`,
-/// `trace`, `interfaces`, `stats`, `deps`, `diff`, `allocation`, and `coverage`.
+//! Model query functions for filtering and inspecting SysML v2 elements.
+//!
+//! These functions provide the logic behind CLI commands like `list`, `show`,
+//! `trace`, `interfaces`, `stats`, `deps`, `diff`, `allocation`, and `coverage`.
 
 use crate::model::*;
 use serde::Serialize;
@@ -212,7 +212,10 @@ pub fn filter_from_view(model: &Model, view_name: &str) -> Option<ListFilter> {
 
     // Apply expose scope — if an expose targets "Foo::*", set parent=Foo
     for expose in &view.exposes {
-        if let Some(base) = expose.strip_suffix("::*").or_else(|| expose.strip_suffix("::**")) {
+        if let Some(base) = expose
+            .strip_suffix("::*")
+            .or_else(|| expose.strip_suffix("::**"))
+        {
             filter.parent = Some(base.to_string());
             break;
         }
@@ -239,17 +242,37 @@ pub fn parse_kind_filter(s: &str) -> Option<KindFilter> {
         "ports" | "port" => Some(KindFilter::Both(DefKind::Port, "port".to_string())),
         "actions" | "action" => Some(KindFilter::Both(DefKind::Action, "action".to_string())),
         "states" | "state" => Some(KindFilter::Both(DefKind::State, "state".to_string())),
-        "requirements" | "requirement" => Some(KindFilter::Both(DefKind::Requirement, "requirement".to_string())),
-        "constraints" | "constraint" => Some(KindFilter::Both(DefKind::Constraint, "constraint".to_string())),
-        "connections" | "connection" => Some(KindFilter::Both(DefKind::Connection, "connection".to_string())),
-        "interfaces" | "interface" => Some(KindFilter::Both(DefKind::Interface, "interface".to_string())),
+        "requirements" | "requirement" => Some(KindFilter::Both(
+            DefKind::Requirement,
+            "requirement".to_string(),
+        )),
+        "constraints" | "constraint" => Some(KindFilter::Both(
+            DefKind::Constraint,
+            "constraint".to_string(),
+        )),
+        "connections" | "connection" => Some(KindFilter::Both(
+            DefKind::Connection,
+            "connection".to_string(),
+        )),
+        "interfaces" | "interface" => Some(KindFilter::Both(
+            DefKind::Interface,
+            "interface".to_string(),
+        )),
         "flows" | "flow" => Some(KindFilter::Both(DefKind::Flow, "flow".to_string())),
-        "calculations" | "calcs" | "calc" => Some(KindFilter::Both(DefKind::Calc, "calc".to_string())),
+        "calculations" | "calcs" | "calc" => {
+            Some(KindFilter::Both(DefKind::Calc, "calc".to_string()))
+        }
         "views" | "view" => Some(KindFilter::Both(DefKind::View, "view".to_string())),
-        "viewpoints" | "viewpoint" => Some(KindFilter::Both(DefKind::Viewpoint, "viewpoint".to_string())),
+        "viewpoints" | "viewpoint" => Some(KindFilter::Both(
+            DefKind::Viewpoint,
+            "viewpoint".to_string(),
+        )),
         "enums" | "enum" => Some(KindFilter::Both(DefKind::Enum, "enum".to_string())),
         "packages" | "package" => Some(KindFilter::DefKind(DefKind::Package)),
-        "attributes" | "attrs" | "attribute" | "attr" => Some(KindFilter::Both(DefKind::Attribute, "attribute".to_string())),
+        "attributes" | "attrs" | "attribute" | "attr" => Some(KindFilter::Both(
+            DefKind::Attribute,
+            "attribute".to_string(),
+        )),
         "items" | "item" => Some(KindFilter::Both(DefKind::Item, "item".to_string())),
 
         // Definition-only filters (suffix -def)
@@ -699,10 +722,16 @@ pub struct UsageChange {
 /// Compute semantic diff between two models.
 pub fn model_diff(old: &Model, new: &Model) -> ModelDiff {
     // Definitions
-    let old_defs: HashMap<&str, &Definition> =
-        old.definitions.iter().map(|d| (d.name.as_str(), d)).collect();
-    let new_defs: HashMap<&str, &Definition> =
-        new.definitions.iter().map(|d| (d.name.as_str(), d)).collect();
+    let old_defs: HashMap<&str, &Definition> = old
+        .definitions
+        .iter()
+        .map(|d| (d.name.as_str(), d))
+        .collect();
+    let new_defs: HashMap<&str, &Definition> = new
+        .definitions
+        .iter()
+        .map(|d| (d.name.as_str(), d))
+        .collect();
 
     let mut added_defs = Vec::new();
     let mut removed_defs = Vec::new();
@@ -1089,8 +1118,10 @@ pub fn coverage_report(model: &Model) -> CoverageReport {
     };
 
     // Weighted overall score
-    let overall_score =
-        documented_pct * 0.25 + typed_usages_pct * 0.25 + req_satisfaction_pct * 0.25 + req_verification_pct * 0.25;
+    let overall_score = documented_pct * 0.25
+        + typed_usages_pct * 0.25
+        + req_satisfaction_pct * 0.25
+        + req_verification_pct * 0.25;
 
     CoverageReport {
         undocumented_defs,
@@ -1336,8 +1367,12 @@ mod tests {
         );
         let ports = list_ports(&model);
         assert_eq!(ports.len(), 2);
-        assert!(ports.iter().any(|p| p.name == "fuelIn" && p.owner == "Vehicle"));
-        assert!(ports.iter().any(|p| p.name == "fuelOut" && p.owner == "Station"));
+        assert!(ports
+            .iter()
+            .any(|p| p.name == "fuelIn" && p.owner == "Vehicle"));
+        assert!(ports
+            .iter()
+            .any(|p| p.name == "fuelOut" && p.owner == "Station"));
     }
 
     #[test]
@@ -1363,12 +1398,24 @@ mod tests {
     #[test]
     fn parse_kind_filter_values() {
         // Plural and singular both return Both (defs + usages)
-        assert_eq!(parse_kind_filter("parts"), Some(KindFilter::Both(DefKind::Part, "part".to_string())));
-        assert_eq!(parse_kind_filter("port"), Some(KindFilter::Both(DefKind::Port, "port".to_string())));
+        assert_eq!(
+            parse_kind_filter("parts"),
+            Some(KindFilter::Both(DefKind::Part, "part".to_string()))
+        );
+        assert_eq!(
+            parse_kind_filter("port"),
+            Some(KindFilter::Both(DefKind::Port, "port".to_string()))
+        );
         // Suffix -def restricts to definitions only
-        assert_eq!(parse_kind_filter("part-def"), Some(KindFilter::DefKind(DefKind::Part)));
+        assert_eq!(
+            parse_kind_filter("part-def"),
+            Some(KindFilter::DefKind(DefKind::Part))
+        );
         // Suffix -usage restricts to usages only
-        assert_eq!(parse_kind_filter("part-usage"), Some(KindFilter::UsageKind("part".to_string())));
+        assert_eq!(
+            parse_kind_filter("part-usage"),
+            Some(KindFilter::UsageKind("part".to_string()))
+        );
         assert_eq!(parse_kind_filter("all"), Some(KindFilter::All));
         assert_eq!(parse_kind_filter("nonsense"), None);
     }
@@ -1393,8 +1440,14 @@ mod tests {
         let stats = model_stats(&model);
         assert_eq!(stats.total_definitions, 3);
         assert_eq!(stats.total_usages, 2);
-        assert!(stats.def_counts.iter().any(|(k, c)| k == "part def" && *c == 2));
-        assert!(stats.def_counts.iter().any(|(k, c)| k == "port def" && *c == 1));
+        assert!(stats
+            .def_counts
+            .iter()
+            .any(|(k, c)| k == "part def" && *c == 2));
+        assert!(stats
+            .def_counts
+            .iter()
+            .any(|(k, c)| k == "port def" && *c == 1));
     }
 
     #[test]
@@ -1427,7 +1480,11 @@ mod tests {
         "#,
         );
         let stats = model_stats(&model);
-        assert!(stats.max_nesting_depth >= 1, "depth={}", stats.max_nesting_depth);
+        assert!(
+            stats.max_nesting_depth >= 1,
+            "depth={}",
+            stats.max_nesting_depth
+        );
     }
 
     // ================================================================
@@ -1447,7 +1504,9 @@ mod tests {
         );
         let deps = dependency_analysis(&model, "Engine");
         assert!(
-            deps.referenced_by.iter().any(|r| r.name == "engine" && r.relationship == "type_ref"),
+            deps.referenced_by
+                .iter()
+                .any(|r| r.name == "engine" && r.relationship == "type_ref"),
             "expected engine type_ref, got {:?}",
             deps.referenced_by
         );
@@ -1464,7 +1523,9 @@ mod tests {
         );
         let deps = dependency_analysis(&model, "Base");
         assert!(
-            deps.referenced_by.iter().any(|r| r.name == "Derived" && r.relationship == "specializes"),
+            deps.referenced_by
+                .iter()
+                .any(|r| r.name == "Derived" && r.relationship == "specializes"),
             "got {:?}",
             deps.referenced_by
         );
@@ -1517,13 +1578,22 @@ mod tests {
         let diff = model_diff(&old, &new);
         assert_eq!(diff.changed_defs.len(), 1);
         assert_eq!(diff.changed_defs[0].name, "Vehicle");
-        assert!(diff.changed_defs[0].changes.iter().any(|c| c.contains("super_type")));
+        assert!(diff.changed_defs[0]
+            .changes
+            .iter()
+            .any(|c| c.contains("super_type")));
     }
 
     #[test]
     fn diff_detects_added_usage() {
-        let old = parse_file("old.sysml", "part def Vehicle {\n    part engine : Engine;\n}\n");
-        let new = parse_file("new.sysml", "part def Vehicle {\n    part engine : Engine;\n    part wheels : Wheel;\n}\n");
+        let old = parse_file(
+            "old.sysml",
+            "part def Vehicle {\n    part engine : Engine;\n}\n",
+        );
+        let new = parse_file(
+            "new.sysml",
+            "part def Vehicle {\n    part engine : Engine;\n    part wheels : Wheel;\n}\n",
+        );
         let diff = model_diff(&old, &new);
         assert!(
             diff.added_usages.iter().any(|u| u.name == "wheels"),
@@ -1574,12 +1644,16 @@ mod tests {
         );
         let report = allocation_report(&model);
         assert!(
-            report.unallocated_sources.contains(&"ShipOrder".to_string()),
+            report
+                .unallocated_sources
+                .contains(&"ShipOrder".to_string()),
             "got {:?}",
             report.unallocated_sources
         );
         assert!(
-            report.unallocated_targets.contains(&"Warehouse".to_string()),
+            report
+                .unallocated_targets
+                .contains(&"Warehouse".to_string()),
             "got {:?}",
             report.unallocated_targets
         );
@@ -1633,18 +1707,33 @@ mod tests {
 
     #[test]
     fn get_enum_choices_returns_members() {
-        let model = parse_file("test.sysml", r#"
+        let model = parse_file(
+            "test.sysml",
+            r#"
             enum def Color {
                 enum red;
                 enum green;
                 enum blue;
             }
-        "#);
+        "#,
+        );
         let choices = get_enum_choices(&model, "Color");
         let names: Vec<&str> = choices.iter().map(|(n, _)| n.as_str()).collect();
-        assert!(names.contains(&"red"), "Should contain red, got {:?}", names);
-        assert!(names.contains(&"green"), "Should contain green, got {:?}", names);
-        assert!(names.contains(&"blue"), "Should contain blue, got {:?}", names);
+        assert!(
+            names.contains(&"red"),
+            "Should contain red, got {:?}",
+            names
+        );
+        assert!(
+            names.contains(&"green"),
+            "Should contain green, got {:?}",
+            names
+        );
+        assert!(
+            names.contains(&"blue"),
+            "Should contain blue, got {:?}",
+            names
+        );
     }
 
     #[test]

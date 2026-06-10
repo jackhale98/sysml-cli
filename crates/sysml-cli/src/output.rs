@@ -1,4 +1,4 @@
-/// Output formatting for diagnostics and simulation results.
+//! Output formatting for diagnostics and simulation results.
 
 use sysml_core::diagnostic::{Diagnostic, Severity};
 
@@ -40,21 +40,17 @@ pub fn print_summary(diagnostics: &[Diagnostic]) {
     if errors + warnings + notes == 0 {
         eprintln!("No issues found.");
     } else {
-        let parts: Vec<String> = [
-            (errors, "error"),
-            (warnings, "warning"),
-            (notes, "note"),
-        ]
-        .iter()
-        .filter(|(count, _)| *count > 0)
-        .map(|(count, label)| {
-            if *count == 1 {
-                format!("{} {}", count, label)
-            } else {
-                format!("{} {}s", count, label)
-            }
-        })
-        .collect();
+        let parts: Vec<String> = [(errors, "error"), (warnings, "warning"), (notes, "note")]
+            .iter()
+            .filter(|(count, _)| *count > 0)
+            .map(|(count, label)| {
+                if *count == 1 {
+                    format!("{} {}", count, label)
+                } else {
+                    format!("{} {}s", count, label)
+                }
+            })
+            .collect();
 
         eprintln!("Found {}.", parts.join(", "));
     }

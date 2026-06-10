@@ -1,12 +1,12 @@
-/// Flags top-level public-visible definitions that lack a documentation comment.
-///
-/// SysML v2 supports `doc /* ... */` blocks attached to any definition. For
-/// large engineering models, missing documentation on public top-level
-/// definitions makes the model harder for downstream readers and reviewers.
-///
-/// Only fires for non-nested definitions of kinds that are typically the
-/// "outward-facing" surface of a model: part, action, state, requirement,
-/// interface, use case, port, item, calc, enumeration.
+//! Flags top-level public-visible definitions that lack a documentation comment.
+//!
+//! SysML v2 supports `doc /* ... */` blocks attached to any definition. For
+//! large engineering models, missing documentation on public top-level
+//! definitions makes the model harder for downstream readers and reviewers.
+//!
+//! Only fires for non-nested definitions of kinds that are typically the
+//! "outward-facing" surface of a model: part, action, state, requirement,
+//! interface, use case, port, item, calc, enumeration.
 
 use crate::checks::Check;
 use crate::diagnostic::{codes, Diagnostic};
@@ -97,8 +97,9 @@ mod tests {
         let model = parse_file("test.sysml", source);
         let diags = MissingDocCheck.run(&model);
         assert!(
-            diags.iter().any(|d| d.code == codes::MISSING_DOC
-                && d.message.contains("Vehicle")),
+            diags
+                .iter()
+                .any(|d| d.code == codes::MISSING_DOC && d.message.contains("Vehicle")),
             "undocumented part should warn: {:?}",
             diags.iter().map(|d| &d.message).collect::<Vec<_>>()
         );
@@ -114,8 +115,7 @@ mod tests {
         "#;
         let model = parse_file("test.sysml", source);
         let diags = MissingDocCheck.run(&model);
-        let nested_warning =
-            diags.iter().any(|d| d.message.contains("Engine"));
+        let nested_warning = diags.iter().any(|d| d.message.contains("Engine"));
         assert!(
             !nested_warning,
             "nested undocumented part def should not warn (only top-level): {:?}",
@@ -129,7 +129,10 @@ mod tests {
         let source = "package Sample;\n";
         let model = parse_file("test.sysml", source);
         let diags = MissingDocCheck.run(&model);
-        assert!(diags.is_empty(), "packages are exempt from missing-doc check");
+        assert!(
+            diags.is_empty(),
+            "packages are exempt from missing-doc check"
+        );
     }
 
     #[test]

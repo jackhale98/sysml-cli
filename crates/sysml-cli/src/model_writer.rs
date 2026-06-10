@@ -1,4 +1,4 @@
-/// Model file writing utilities with tree-sitter validation.
+//! Model file writing utilities with tree-sitter validation.
 
 use std::io;
 use std::path::Path;
@@ -18,7 +18,10 @@ pub fn write_to_model(file: &Path, sysml_text: &str, inside: Option<&str>) -> io
     if let Err(errors) = validate_generated(sysml_text) {
         return Err(io::Error::new(
             io::ErrorKind::InvalidData,
-            format!("Generated SysML has syntax errors:\n  {}", errors.join("\n  ")),
+            format!(
+                "Generated SysML has syntax errors:\n  {}",
+                errors.join("\n  ")
+            ),
         ));
     }
 
@@ -33,8 +36,13 @@ pub fn write_to_model(file: &Path, sysml_text: &str, inside: Option<&str>) -> io
         edit::insert_top_level(&source, sysml_text.trim())
     };
 
-    let result = edit::apply_edits(&source, &edit::EditPlan { edits: vec![text_edit] })
-        .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e.to_string()))?;
+    let result = edit::apply_edits(
+        &source,
+        &edit::EditPlan {
+            edits: vec![text_edit],
+        },
+    )
+    .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e.to_string()))?;
 
     std::fs::write(file, result)
 }
@@ -58,7 +66,12 @@ pub fn select_target_file(model_root: &Path) -> Option<std::path::PathBuf> {
 
     let labels: Vec<String> = files
         .iter()
-        .map(|f| f.strip_prefix(model_root).unwrap_or(f).to_string_lossy().to_string())
+        .map(|f| {
+            f.strip_prefix(model_root)
+                .unwrap_or(f)
+                .to_string_lossy()
+                .to_string()
+        })
         .collect();
 
     match FuzzySelect::new()
@@ -84,7 +97,9 @@ pub fn select_parent_def(file: &Path) -> Option<String> {
     let source = std::fs::read_to_string(file).ok()?;
     let model = sysml_parser::parse_file(&file.to_string_lossy(), &source);
 
-    let defs_with_body: Vec<&str> = model.definitions.iter()
+    let defs_with_body: Vec<&str> = model
+        .definitions
+        .iter()
         .filter(|d| d.body_end_byte.is_some())
         .map(|d| d.name.as_str())
         .collect();

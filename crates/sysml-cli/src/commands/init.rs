@@ -36,7 +36,10 @@ pub(crate) fn run(_cli: &Cli, force: bool) -> ExitCode {
     // Auto-detect libraries/ directory
     let lib_dir = cwd.join("libraries");
     if lib_dir.is_dir() && has_sysml_files(&lib_dir) {
-        config.project.library_paths.push(std::path::PathBuf::from("libraries/"));
+        config
+            .project
+            .library_paths
+            .push(std::path::PathBuf::from("libraries/"));
     }
 
     // Auto-detect SysML v2 standard library submodule
@@ -75,10 +78,7 @@ pub(crate) fn run(_cli: &Cli, force: bool) -> ExitCode {
 
     println!("Initialized SysML project in {}", config_path.display());
     if config.project.model_root != Path::new(".") {
-        println!(
-            "  model_root = \"{}\"",
-            config.project.model_root.display()
-        );
+        println!("  model_root = \"{}\"", config.project.model_root.display());
     }
     if let Some(ref stdlib) = config.project.stdlib_path {
         println!("  stdlib_path = \"{}\"", stdlib.display());

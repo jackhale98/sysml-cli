@@ -1,9 +1,9 @@
-/// Project configuration parsed from `.sysml/config.toml`.
-///
-/// Provides typed access to project settings including name, model root,
-/// library paths, and default output options. Includes a hand-written TOML
-/// parser for the limited config format we support (no nested tables, no
-/// arrays of tables).
+//! Project configuration parsed from `.sysml/config.toml`.
+//!
+//! Provides typed access to project settings including name, model root,
+//! library paths, and default output options. Includes a hand-written TOML
+//! parser for the limited config format we support (no nested tables, no
+//! arrays of tables).
 
 use serde::{Deserialize, Serialize};
 use std::fmt;
@@ -51,7 +51,7 @@ impl From<std::io::Error> for ConfigError {
 // ---------------------------------------------------------------------------
 
 /// Top-level project configuration.
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Default)]
 pub struct ProjectConfig {
     #[serde(default)]
     pub project: ProjectSection,
@@ -116,16 +116,6 @@ fn default_format() -> String {
     "text".to_string()
 }
 
-impl Default for ProjectConfig {
-    fn default() -> Self {
-        Self {
-            project: ProjectSection::default(),
-            defaults: DefaultsSection::default(),
-            pipelines: Vec::new(),
-        }
-    }
-}
-
 impl Default for ProjectSection {
     fn default() -> Self {
         Self {
@@ -168,7 +158,10 @@ impl ProjectConfig {
         let mut out = String::new();
 
         out.push_str("[project]\n");
-        out.push_str(&format!("name = {}\n", quote_toml_string(&self.project.name)));
+        out.push_str(&format!(
+            "name = {}\n",
+            quote_toml_string(&self.project.name)
+        ));
         out.push_str(&format!(
             "model_root = {}\n",
             quote_toml_string(&self.project.model_root.to_string_lossy())
@@ -321,59 +314,49 @@ fn parse_toml_config(input: &str) -> Result<ProjectConfig, ConfigError> {
 
         match (section, key) {
             ("project", "name") => {
-                config.project.name = parse_string_value(value).map_err(|e| {
-                    ConfigError::Parse(format!("line {}: {e}", line_no + 1))
-                })?;
+                config.project.name = parse_string_value(value)
+                    .map_err(|e| ConfigError::Parse(format!("line {}: {e}", line_no + 1)))?;
             }
             ("project", "model_root") => {
-                let s = parse_string_value(value).map_err(|e| {
-                    ConfigError::Parse(format!("line {}: {e}", line_no + 1))
-                })?;
+                let s = parse_string_value(value)
+                    .map_err(|e| ConfigError::Parse(format!("line {}: {e}", line_no + 1)))?;
                 config.project.model_root = PathBuf::from(s);
             }
             ("project", "library_paths") => {
                 config.project.library_paths = parse_string_array(value)
-                    .map_err(|e| {
-                        ConfigError::Parse(format!("line {}: {e}", line_no + 1))
-                    })?
+                    .map_err(|e| ConfigError::Parse(format!("line {}: {e}", line_no + 1)))?
                     .into_iter()
                     .map(PathBuf::from)
                     .collect();
             }
             ("project", "stdlib_path") => {
-                let s = parse_string_value(value).map_err(|e| {
-                    ConfigError::Parse(format!("line {}: {e}", line_no + 1))
-                })?;
+                let s = parse_string_value(value)
+                    .map_err(|e| ConfigError::Parse(format!("line {}: {e}", line_no + 1)))?;
                 config.project.stdlib_path = Some(PathBuf::from(s));
             }
             ("defaults", "author") => {
-                config.defaults.author = parse_string_value(value).map_err(|e| {
-                    ConfigError::Parse(format!("line {}: {e}", line_no + 1))
-                })?;
+                config.defaults.author = parse_string_value(value)
+                    .map_err(|e| ConfigError::Parse(format!("line {}: {e}", line_no + 1)))?;
             }
             ("defaults", "output_dir") => {
-                let s = parse_string_value(value).map_err(|e| {
-                    ConfigError::Parse(format!("line {}: {e}", line_no + 1))
-                })?;
+                let s = parse_string_value(value)
+                    .map_err(|e| ConfigError::Parse(format!("line {}: {e}", line_no + 1)))?;
                 config.defaults.output_dir = PathBuf::from(s);
             }
             ("defaults", "format") => {
-                config.defaults.format = parse_string_value(value).map_err(|e| {
-                    ConfigError::Parse(format!("line {}: {e}", line_no + 1))
-                })?;
+                config.defaults.format = parse_string_value(value)
+                    .map_err(|e| ConfigError::Parse(format!("line {}: {e}", line_no + 1)))?;
             }
             ("pipeline", "name") => {
                 if let Some(ref mut p) = current_pipeline {
-                    p.name = parse_string_value(value).map_err(|e| {
-                        ConfigError::Parse(format!("line {}: {e}", line_no + 1))
-                    })?;
+                    p.name = parse_string_value(value)
+                        .map_err(|e| ConfigError::Parse(format!("line {}: {e}", line_no + 1)))?;
                 }
             }
             ("pipeline", "steps") => {
                 if let Some(ref mut p) = current_pipeline {
-                    p.steps = parse_string_array(value).map_err(|e| {
-                        ConfigError::Parse(format!("line {}: {e}", line_no + 1))
-                    })?;
+                    p.steps = parse_string_array(value)
+                        .map_err(|e| ConfigError::Parse(format!("line {}: {e}", line_no + 1)))?;
                 }
             }
             (sec, k) => {
@@ -721,7 +704,10 @@ name = "Brake\"System"
 
     #[test]
     fn strip_comment_preserves_hashes_in_strings() {
-        assert_eq!(strip_comment(r#"name = "a#b" # real comment"#), r#"name = "a#b" "#);
+        assert_eq!(
+            strip_comment(r#"name = "a#b" # real comment"#),
+            r#"name = "a#b" "#
+        );
     }
 
     #[test]
@@ -745,10 +731,10 @@ steps = ["lint *.sysml", "trace --check *.sysml"]
         let cfg = ProjectConfig::from_toml_str(toml).unwrap();
         assert_eq!(cfg.pipelines.len(), 1);
         assert_eq!(cfg.pipelines[0].name, "ci");
-        assert_eq!(cfg.pipelines[0].steps, vec![
-            "lint *.sysml",
-            "trace --check *.sysml",
-        ]);
+        assert_eq!(
+            cfg.pipelines[0].steps,
+            vec!["lint *.sysml", "trace --check *.sysml",]
+        );
     }
 
     #[test]
@@ -771,7 +757,10 @@ steps = ["coverage --check --min-score 80 *.sysml", "report dashboard *.sysml"]
         assert_eq!(cfg.pipelines[0].steps.len(), 2);
         assert_eq!(cfg.pipelines[1].name, "nightly");
         assert_eq!(cfg.pipelines[1].steps.len(), 2);
-        assert_eq!(cfg.pipelines[1].steps[0], "coverage --check --min-score 80 *.sysml");
+        assert_eq!(
+            cfg.pipelines[1].steps[0],
+            "coverage --check --min-score 80 *.sysml"
+        );
     }
 
     #[test]
@@ -826,7 +815,10 @@ steps = []
             pipelines: vec![
                 PipelineConfig {
                     name: "ci".to_string(),
-                    steps: vec!["lint *.sysml".to_string(), "fmt --check *.sysml".to_string()],
+                    steps: vec![
+                        "lint *.sysml".to_string(),
+                        "fmt --check *.sysml".to_string(),
+                    ],
                 },
                 PipelineConfig {
                     name: "deploy".to_string(),

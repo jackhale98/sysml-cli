@@ -1,4 +1,4 @@
-/// Diagnostic types for sysml-cli validation results.
+//! Diagnostic types for sysml-cli validation results.
 
 use crate::model::Span;
 use serde::Serialize;

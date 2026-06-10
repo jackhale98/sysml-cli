@@ -1,8 +1,8 @@
-/// Indexes SysML model files and TOML records into the cache.
-///
-/// The [`Indexer`] walks a parsed [`Model`] and populates a [`Cache`] with
-/// nodes (definitions and usages) and edges (relationships).  It also scans
-/// a records directory for `.toml` files and indexes them.
+//! Indexes SysML model files and TOML records into the cache.
+//!
+//! The [`Indexer`] walks a parsed [`Model`] and populates a [`Cache`] with
+//! nodes (definitions and usages) and edges (relationships).  It also scans
+//! a records directory for `.toml` files and indexes them.
 
 use std::collections::HashMap;
 use std::path::Path;
@@ -33,9 +33,10 @@ impl Indexer {
                 .cloned()
                 .unwrap_or_else(|| def.name.clone());
 
-            let parent = def.parent_def.as_ref().and_then(|p| {
-                qualified_names.get(p.as_str()).cloned()
-            });
+            let parent = def
+                .parent_def
+                .as_ref()
+                .and_then(|p| qualified_names.get(p.as_str()).cloned());
 
             cache.add_node(CacheNode {
                 qualified_name: qn,
@@ -64,9 +65,10 @@ impl Indexer {
             if usage.name.is_empty() {
                 continue;
             }
-            let parent_qn = usage.parent_def.as_ref().and_then(|p| {
-                qualified_names.get(p.as_str()).cloned()
-            });
+            let parent_qn = usage
+                .parent_def
+                .as_ref()
+                .and_then(|p| qualified_names.get(p.as_str()).cloned());
 
             let qn = match &parent_qn {
                 Some(pqn) => format!("{}::{}", pqn, usage.name),
@@ -104,10 +106,7 @@ impl Indexer {
 
         // Satisfactions
         for sat in &model.satisfactions {
-            let source = sat
-                .by
-                .clone()
-                .unwrap_or_default();
+            let source = sat.by.clone().unwrap_or_default();
             if !source.is_empty() {
                 cache.add_edge(CacheEdge {
                     source,
@@ -596,7 +595,10 @@ mod tests {
 
         // Check qualified name of a nested definition
         let vehicle = cache.find_node("VehicleModel::Vehicle");
-        assert!(vehicle.is_some(), "Vehicle should have qualified name VehicleModel::Vehicle");
+        assert!(
+            vehicle.is_some(),
+            "Vehicle should have qualified name VehicleModel::Vehicle"
+        );
         let vehicle = vehicle.unwrap();
         assert_eq!(vehicle.kind, "part def");
         assert_eq!(vehicle.file, "vehicle.sysml");
@@ -612,7 +614,10 @@ mod tests {
 
         // Usage "engine" is under Vehicle, which is under VehicleModel
         let engine = cache.find_node("VehicleModel::Vehicle::engine");
-        assert!(engine.is_some(), "engine usage should have fully qualified name");
+        assert!(
+            engine.is_some(),
+            "engine usage should have fully qualified name"
+        );
         let engine = engine.unwrap();
         assert_eq!(engine.kind, "part");
         assert_eq!(engine.parent.as_deref(), Some("VehicleModel::Vehicle"));

@@ -8,7 +8,10 @@ use crate::convert::span_to_range;
 /// Run all lint checks on a model and return LSP diagnostics.
 /// `workspace_names` are definitions known from other workspace files,
 /// injected into `model.resolved_imports` so cross-file types aren't flagged as unresolved.
-pub fn compute_diagnostics(model: &Model, workspace_names: &[String]) -> Vec<lsp_types::Diagnostic> {
+pub fn compute_diagnostics(
+    model: &Model,
+    workspace_names: &[String],
+) -> Vec<lsp_types::Diagnostic> {
     // Clone model so we can populate resolved_imports for cross-file awareness
     let mut model = model.clone();
     for name in workspace_names {

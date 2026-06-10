@@ -1,22 +1,20 @@
-use tower_lsp::lsp_types::{
-    SemanticToken, SemanticTokenType, SemanticTokensLegend,
-};
+use tower_lsp::lsp_types::{SemanticToken, SemanticTokenType, SemanticTokensLegend};
 use tree_sitter::{Parser, Query, QueryCursor, StreamingIterator};
 
 use sysml_core::parser::get_language;
 
 /// The token types we emit, in legend order.
 pub const TOKEN_TYPES: &[SemanticTokenType] = &[
-    SemanticTokenType::COMMENT,      // 0
-    SemanticTokenType::STRING,       // 1
-    SemanticTokenType::NUMBER,       // 2
-    SemanticTokenType::KEYWORD,      // 3
-    SemanticTokenType::TYPE,         // 4
-    SemanticTokenType::VARIABLE,     // 5
-    SemanticTokenType::OPERATOR,     // 6
-    SemanticTokenType::NAMESPACE,    // 7
-    SemanticTokenType::DECORATOR,    // 8 - for @metadata
-    SemanticTokenType::MODIFIER,     // 9 - visibility/abstract
+    SemanticTokenType::COMMENT,   // 0
+    SemanticTokenType::STRING,    // 1
+    SemanticTokenType::NUMBER,    // 2
+    SemanticTokenType::KEYWORD,   // 3
+    SemanticTokenType::TYPE,      // 4
+    SemanticTokenType::VARIABLE,  // 5
+    SemanticTokenType::OPERATOR,  // 6
+    SemanticTokenType::NAMESPACE, // 7
+    SemanticTokenType::DECORATOR, // 8 - for @metadata
+    SemanticTokenType::MODIFIER,  // 9 - visibility/abstract
 ];
 
 pub fn legend() -> SemanticTokensLegend {
@@ -97,12 +95,7 @@ pub fn semantic_tokens(source: &str) -> Vec<SemanticToken> {
                 if let Some(line) = lines.get(start.row) {
                     let len = line.len().saturating_sub(start.column) as u32;
                     if len > 0 {
-                        raw_tokens.push((
-                            start.row as u32,
-                            start.column as u32,
-                            len,
-                            token_type,
-                        ));
+                        raw_tokens.push((start.row as u32, start.column as u32, len, token_type));
                     }
                 }
                 for row in (start.row + 1)..end.row {
@@ -173,10 +166,7 @@ mod tests {
     fn simple_definition_tokens() {
         let source = "part def Vehicle;\n";
         let tokens = semantic_tokens(source);
-        assert!(
-            !tokens.is_empty(),
-            "should produce tokens for a definition"
-        );
+        assert!(!tokens.is_empty(), "should produce tokens for a definition");
         let has_keyword = tokens.iter().any(|t| t.token_type == 3);
         let has_type = tokens.iter().any(|t| t.token_type == 4);
         assert!(has_keyword, "should have keyword tokens");
@@ -206,7 +196,10 @@ mod tests {
         assert!(!tokens.is_empty());
         assert_eq!(tokens[0].delta_line, 0);
         let has_newline_delta = tokens.iter().any(|t| t.delta_line > 0);
-        assert!(has_newline_delta, "should have delta_line > 0 for second line tokens");
+        assert!(
+            has_newline_delta,
+            "should have delta_line > 0 for second line tokens"
+        );
     }
 
     #[test]
@@ -235,6 +228,9 @@ mod tests {
         let source = "package Vehicles {\n}\n";
         let tokens = semantic_tokens(source);
         let has_namespace = tokens.iter().any(|t| t.token_type == 7);
-        assert!(has_namespace, "should have namespace token for package name");
+        assert!(
+            has_namespace,
+            "should have namespace token for package name"
+        );
     }
 }

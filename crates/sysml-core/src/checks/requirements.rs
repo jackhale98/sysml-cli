@@ -1,4 +1,4 @@
-/// Checks for unsatisfied and unverified requirements.
+//! Checks for unsatisfied and unverified requirements.
 
 use crate::checks::Check;
 use crate::diagnostic::{codes, Diagnostic};

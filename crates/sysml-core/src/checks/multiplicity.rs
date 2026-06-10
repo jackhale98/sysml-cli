@@ -1,9 +1,9 @@
-/// Check for multiplicity constraint violations.
-///
-/// Validates that multiplicity bounds are well-formed:
-/// - Lower bound <= upper bound (when both specified)
-/// - Bounds are non-negative
-/// - Upper bound is not zero (empty collections are suspicious)
+//! Check for multiplicity constraint violations.
+//!
+//! Validates that multiplicity bounds are well-formed:
+//! - Lower bound <= upper bound (when both specified)
+//! - Bounds are non-negative
+//! - Upper bound is not zero (empty collections are suspicious)
 
 use crate::checks::Check;
 use crate::diagnostic::{codes, Diagnostic};
@@ -90,8 +90,11 @@ mod tests {
         let model = parse_file("test.sysml", source);
         let check = MultiplicityCheck;
         let diags = check.run(&model);
-        assert!(diags.is_empty(), "valid multiplicities should produce no warnings: {:?}",
-            diags.iter().map(|d| &d.message).collect::<Vec<_>>());
+        assert!(
+            diags.is_empty(),
+            "valid multiplicities should produce no warnings: {:?}",
+            diags.iter().map(|d| &d.message).collect::<Vec<_>>()
+        );
     }
 
     #[test]
@@ -101,7 +104,9 @@ mod tests {
         let check = MultiplicityCheck;
         let diags = check.run(&model);
         assert!(
-            diags.iter().any(|d| d.code == codes::MULTIPLICITY_VIOLATION && d.message.contains("exceeds")),
+            diags
+                .iter()
+                .any(|d| d.code == codes::MULTIPLICITY_VIOLATION && d.message.contains("exceeds")),
             "should warn about lower > upper"
         );
     }

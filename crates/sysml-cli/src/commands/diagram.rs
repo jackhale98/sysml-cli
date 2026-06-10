@@ -3,8 +3,9 @@ use std::process::ExitCode;
 
 use sysml_core::parser as sysml_parser;
 
-use crate::{Cli, read_source};
+use crate::{read_source, Cli};
 
+#[allow(clippy::too_many_arguments)]
 pub(crate) fn run(
     _cli: &Cli,
     file: &PathBuf,

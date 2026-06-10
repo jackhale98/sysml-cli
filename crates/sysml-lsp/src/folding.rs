@@ -67,7 +67,10 @@ mod tests {
             "package P {\n    part def Vehicle {\n        part engine : Engine;\n    }\n}\n";
         let model = parse_file("test.sysml", source);
         let folds = folding_ranges(&model);
-        assert!(folds.len() >= 2, "should have folds for package and part def");
+        assert!(
+            folds.len() >= 2,
+            "should have folds for package and part def"
+        );
     }
 
     #[test]
@@ -75,7 +78,10 @@ mod tests {
         let source = "part def Vehicle {\n    part engine : Engine;\n}\n";
         let model = parse_file("test.sysml", source);
         let folds = folding_ranges(&model);
-        assert_eq!(folds[0].collapsed_text.as_deref(), Some("part def Vehicle { ... }"));
+        assert_eq!(
+            folds[0].collapsed_text.as_deref(),
+            Some("part def Vehicle { ... }")
+        );
     }
 
     #[test]

@@ -1,4 +1,4 @@
-/// Action flow execution engine.
+//! Action flow execution engine.
 
 use crate::sim::action_flow::*;
 use crate::sim::eval;
@@ -87,11 +87,7 @@ pub fn execute_action(model: &ActionModel, config: &ActionExecConfig) -> ActionE
     state
 }
 
-fn execute_step(
-    action_step: &ActionStep,
-    state: &mut ActionExecState,
-    config: &ActionExecConfig,
-) {
+fn execute_step(action_step: &ActionStep, state: &mut ActionExecState, config: &ActionExecConfig) {
     if state.step >= config.max_steps {
         state.status = ActionExecStatus::MaxSteps;
         return;
@@ -154,9 +150,7 @@ fn execute_step(
                     break;
                 }
             }
-            let target = taken
-                .cloned()
-                .unwrap_or_else(|| "none".to_string());
+            let target = taken.cloned().unwrap_or_else(|| "none".to_string());
             state.trace.push(ActionExecStep {
                 step: state.step,
                 kind: "decide".to_string(),
@@ -243,8 +237,7 @@ fn execute_step(
                     state.status = ActionExecStatus::MaxSteps;
                     break;
                 }
-                let cond_result =
-                    eval::evaluate_constraint(condition, &state.env).unwrap_or(false);
+                let cond_result = eval::evaluate_constraint(condition, &state.env).unwrap_or(false);
                 if !cond_result {
                     break;
                 }
@@ -320,14 +313,14 @@ pub fn format_action_trace_text(state: &ActionExecState) -> String {
     lines.push(String::new());
 
     for step in &state.trace {
-        lines.push(format!("  Step {}: [{}] {}", step.step, step.kind, step.description));
+        lines.push(format!(
+            "  Step {}: [{}] {}",
+            step.step, step.kind, step.description
+        ));
     }
 
     lines.push(String::new());
-    lines.push(format!(
-        "Status: {} ({} steps)",
-        state.status, state.step
-    ));
+    lines.push(format!("Status: {} ({} steps)", state.status, state.step));
 
     if !state.env.is_empty() {
         lines.push(String::new());
@@ -513,7 +506,10 @@ mod tests {
         };
         let result = execute_action(&model, &ActionExecConfig::default());
         assert_eq!(result.status, ActionExecStatus::Completed);
-        assert_eq!(result.trace[0].description, "send SignalA via port1 to receiver");
+        assert_eq!(
+            result.trace[0].description,
+            "send SignalA via port1 to receiver"
+        );
     }
 
     #[test]

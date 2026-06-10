@@ -1,7 +1,7 @@
-/// Qualified name representation for SysML v2 model elements.
-///
-/// A qualified name is a `::` separated path such as `Package::SubPackage::Element`.
-/// It uniquely identifies an element within a model namespace hierarchy.
+//! Qualified name representation for SysML v2 model elements.
+//!
+//! A qualified name is a `::` separated path such as `Package::SubPackage::Element`.
+//! It uniquely identifies an element within a model namespace hierarchy.
 
 use std::fmt;
 use std::str::FromStr;
@@ -32,7 +32,10 @@ impl QualifiedName {
     ///
     /// Panics if `segments` is empty.
     pub fn new(segments: Vec<String>) -> Self {
-        assert!(!segments.is_empty(), "QualifiedName must have at least one segment");
+        assert!(
+            !segments.is_empty(),
+            "QualifiedName must have at least one segment"
+        );
         Self { segments }
     }
 
@@ -150,21 +153,13 @@ impl QualifiedName {
                 let prefix = &parts[..parts.len() - 1];
                 // Must be strictly longer than the prefix (i.e. an actual descendant).
                 self.segments.len() > prefix.len()
-                    && self
-                        .segments
-                        .iter()
-                        .zip(prefix.iter())
-                        .all(|(a, b)| a == b)
+                    && self.segments.iter().zip(prefix.iter()).all(|(a, b)| a == b)
             }
             "*" => {
                 let prefix = &parts[..parts.len() - 1];
                 // Exactly one level deeper than the prefix.
                 self.segments.len() == prefix.len() + 1
-                    && self
-                        .segments
-                        .iter()
-                        .zip(prefix.iter())
-                        .all(|(a, b)| a == b)
+                    && self.segments.iter().zip(prefix.iter()).all(|(a, b)| a == b)
             }
             _ => {
                 // Exact match — no wildcard.

@@ -1,7 +1,7 @@
-/// Flags `requirement def` declarations that are never referenced by a
-/// satisfy/verify relationship anywhere in the model. Distinct from W002/W003
-/// which target requirement *usages*; this check targets *definitions* that
-/// were authored but never wired into traceability.
+//! Flags `requirement def` declarations that are never referenced by a
+//! satisfy/verify relationship anywhere in the model. Distinct from W002/W003
+//! which target requirement *usages*; this check targets *definitions* that
+//! were authored but never wired into traceability.
 
 use std::collections::HashSet;
 
@@ -87,8 +87,9 @@ mod tests {
         let model = parse_file("test.sysml", source);
         let diags = OrphanedRequirementCheck.run(&model);
         assert!(
-            diags.iter().any(|d| d.code == codes::ORPHANED_REQUIREMENT
-                && d.message.contains("MaxMass")),
+            diags
+                .iter()
+                .any(|d| d.code == codes::ORPHANED_REQUIREMENT && d.message.contains("MaxMass")),
             "unreferenced requirement should warn: {:?}",
             diags.iter().map(|d| &d.message).collect::<Vec<_>>()
         );

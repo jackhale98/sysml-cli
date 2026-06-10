@@ -51,10 +51,7 @@ impl WorldState {
                 span: def.span.clone(),
                 doc: def.doc.clone(),
                 super_type: def.super_type.clone(),
-                qualified_name: def
-                    .qualified_name
-                    .as_ref()
-                    .map(|qn| qn.to_string()),
+                qualified_name: def.qualified_name.as_ref().map(|qn| qn.to_string()),
             };
             self.workspace_defs.insert(def.name.clone(), loc);
         }

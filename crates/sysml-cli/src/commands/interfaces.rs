@@ -3,7 +3,7 @@ use std::process::ExitCode;
 
 use sysml_core::parser as sysml_parser;
 
-use crate::{Cli, read_source};
+use crate::{read_source, Cli};
 
 pub(crate) fn run(cli: &Cli, files: &[PathBuf], unconnected_only: bool) -> ExitCode {
     use sysml_core::query;
@@ -67,10 +67,7 @@ pub(crate) fn run(cli: &Cli, files: &[PathBuf], unconnected_only: bool) -> ExitC
                 .map(|d| d.label().to_string())
                 .unwrap_or_else(|| "-".to_string());
             let t = p.type_ref.as_deref().unwrap_or("-");
-            println!(
-                "  {:<15} {:<15} {:<15} {:<10}",
-                p.name, p.owner, t, dir
-            );
+            println!("  {:<15} {:<15} {:<15} {:<10}", p.name, p.owner, t, dir);
         }
         if !cli.quiet {
             eprintln!("{} port(s) found.", ports.len());

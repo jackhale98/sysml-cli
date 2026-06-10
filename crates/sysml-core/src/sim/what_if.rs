@@ -1,8 +1,8 @@
-/// What-if analysis and parametric sweep for rollup calculations.
-///
-/// Enables exploring how changes to individual attributes affect
-/// rollup totals. Supports named scenarios with overrides and
-/// parametric sweeps across a range of values.
+//! What-if analysis and parametric sweep for rollup calculations.
+//!
+//! Enables exploring how changes to individual attributes affect
+//! rollup totals. Supports named scenarios with overrides and
+//! parametric sweeps across a range of values.
 
 use crate::model::Model;
 use crate::sim::resolve::{resolve_attribute_tree, AttributeNode};
@@ -155,10 +155,8 @@ fn evaluate_with_overrides(
     for (path, value) in overrides {
         apply_override_to_tree(&mut tree.children, path, *value);
         // Check if override is for root's own value
-        if !path.contains('.') {
-            if path == attr || path == root {
-                tree.own_value = Some(*value);
-            }
+        if !path.contains('.') && (path == attr || path == root) {
+            tree.own_value = Some(*value);
         }
     }
 
@@ -205,7 +203,11 @@ fn aggregate_tree(nodes: &[AttributeNode], method: AggregationMethod) -> f64 {
             sum_sq.sqrt()
         }
         AggregationMethod::Product => {
-            if values.is_empty() { 0.0 } else { values.iter().product() }
+            if values.is_empty() {
+                0.0
+            } else {
+                values.iter().product()
+            }
         }
         AggregationMethod::Min => values.iter().copied().fold(f64::INFINITY, f64::min),
         AggregationMethod::Max => values.iter().copied().fold(f64::NEG_INFINITY, f64::max),
@@ -235,9 +237,7 @@ mod tests {
     #[test]
     fn what_if_baseline() {
         let model = vehicle_model();
-        let result = evaluate_what_if(
-            &model, "Vehicle", "mass", AggregationMethod::Sum, &[],
-        );
+        let result = evaluate_what_if(&model, "Vehicle", "mass", AggregationMethod::Sum, &[]);
         // 20 + 180 + 250 + 4*12.5 = 500
         assert_eq!(result.baseline, 500.0);
         assert!(result.scenarios.is_empty());
@@ -251,7 +251,11 @@ mod tests {
             overrides: vec![("engine".to_string(), 150.0)],
         }];
         let result = evaluate_what_if(
-            &model, "Vehicle", "mass", AggregationMethod::Sum, &scenarios,
+            &model,
+            "Vehicle",
+            "mass",
+            AggregationMethod::Sum,
+            &scenarios,
         );
         assert_eq!(result.baseline, 500.0);
         assert_eq!(result.scenarios.len(), 1);
@@ -274,7 +278,11 @@ mod tests {
             },
         ];
         let result = evaluate_what_if(
-            &model, "Vehicle", "mass", AggregationMethod::Sum, &scenarios,
+            &model,
+            "Vehicle",
+            "mass",
+            AggregationMethod::Sum,
+            &scenarios,
         );
         assert!(result.scenarios[0].total < result.baseline);
         assert!(result.scenarios[1].total > result.baseline);
@@ -289,9 +297,7 @@ mod tests {
             end: 300.0,
             steps: 5,
         };
-        let result = evaluate_sweep(
-            &model, "Vehicle", "mass", AggregationMethod::Sum, &config,
-        );
+        let result = evaluate_sweep(&model, "Vehicle", "mass", AggregationMethod::Sum, &config);
         assert_eq!(result.points.len(), 5);
         // First point: engine=100, total = 20 + 100 + 250 + 50 = 420
         assert_eq!(result.points[0].0, 100.0);
@@ -312,9 +318,7 @@ mod tests {
             end: 200.0,
             steps: 1,
         };
-        let result = evaluate_sweep(
-            &model, "Vehicle", "mass", AggregationMethod::Sum, &config,
-        );
+        let result = evaluate_sweep(&model, "Vehicle", "mass", AggregationMethod::Sum, &config);
         assert_eq!(result.points.len(), 1);
     }
 }

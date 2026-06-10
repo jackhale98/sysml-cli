@@ -1,7 +1,7 @@
-/// Interactive REPL for exploring SysML v2 models.
-///
-/// Provides stateful navigation, relationship queries, and filtering
-/// that go beyond what batch CLI commands offer.
+//! Interactive REPL for exploring SysML v2 models.
+//!
+//! Provides stateful navigation, relationship queries, and filtering
+//! that go beyond what batch CLI commands offer.
 
 use std::path::PathBuf;
 use std::process::ExitCode;
@@ -18,8 +18,13 @@ pub fn run(files: &[PathBuf]) -> ExitCode {
     }
 
     let mut model = load_model(&files);
-    println!("sysml repl v{} — {} definitions, {} usages loaded from {} file(s)",
-        env!("CARGO_PKG_VERSION"), model.definitions.len(), model.usages.len(), files.len());
+    println!(
+        "sysml repl v{} — {} definitions, {} usages loaded from {} file(s)",
+        env!("CARGO_PKG_VERSION"),
+        model.definitions.len(),
+        model.usages.len(),
+        files.len()
+    );
     println!("Type 'help' for commands, 'quit' to exit.\n");
 
     let mut rl = match DefaultEditor::new() {
@@ -47,8 +52,12 @@ pub fn run(files: &[PathBuf]) -> ExitCode {
                 let _ = rl.add_history_entry(line);
                 if line == "reload" {
                     model = load_model(&files);
-                    println!("Reloaded: {} definitions, {} usages from {} file(s)",
-                        model.definitions.len(), model.usages.len(), files.len());
+                    println!(
+                        "Reloaded: {} definitions, {} usages from {} file(s)",
+                        model.definitions.len(),
+                        model.usages.len(),
+                        files.len()
+                    );
                     continue;
                 }
                 if !dispatch(&model, line, &mut context) {
@@ -112,8 +121,7 @@ fn dispatch(model: &Model, input: &str, ctx: &mut ReplContext) -> bool {
             if args.is_empty() || args == ".." || args == "/" {
                 ctx.focus = None;
                 println!("Focus cleared.");
-            } else if model.find_def(args).is_some()
-                || model.usages.iter().any(|u| u.name == args)
+            } else if model.find_def(args).is_some() || model.usages.iter().any(|u| u.name == args)
             {
                 ctx.focus = Some(args.to_string());
                 cmd_show(model, args);
@@ -126,10 +134,16 @@ fn dispatch(model: &Model, input: &str, ctx: &mut ReplContext) -> bool {
         "list" | "ls" => cmd_list(model, args, &ctx.focus),
 
         "defs" => {
-            let pat = if args.is_empty() { None } else { Some(args.to_lowercase()) };
+            let pat = if args.is_empty() {
+                None
+            } else {
+                Some(args.to_lowercase())
+            };
             for def in &model.definitions {
                 if let Some(ref p) = pat {
-                    if !def.kind.label().contains(p.as_str()) && !def.name.to_lowercase().contains(p.as_str()) {
+                    if !def.kind.label().contains(p.as_str())
+                        && !def.name.to_lowercase().contains(p.as_str())
+                    {
                         continue;
                     }
                 }
@@ -138,8 +152,15 @@ fn dispatch(model: &Model, input: &str, ctx: &mut ReplContext) -> bool {
                         continue;
                     }
                 }
-                println!("  {:14} {}{}", def.kind.label(), def.name,
-                    def.super_type.as_ref().map(|s| format!(" :> {}", s)).unwrap_or_default());
+                println!(
+                    "  {:14} {}{}",
+                    def.kind.label(),
+                    def.name,
+                    def.super_type
+                        .as_ref()
+                        .map(|s| format!(" :> {}", s))
+                        .unwrap_or_default()
+                );
             }
         }
 
@@ -161,9 +182,13 @@ fn dispatch(model: &Model, input: &str, ctx: &mut ReplContext) -> bool {
             for usage in &model.usages {
                 if let Some(ref tr) = usage.type_ref {
                     if simple_name(tr) == type_name {
-                        println!("  {:14} {} : {} (in {})",
-                            usage.kind, usage.name, tr,
-                            usage.parent_def.as_deref().unwrap_or("?"));
+                        println!(
+                            "  {:14} {} : {} (in {})",
+                            usage.kind,
+                            usage.name,
+                            tr,
+                            usage.parent_def.as_deref().unwrap_or("?")
+                        );
                         count += 1;
                     }
                 }
@@ -239,16 +264,25 @@ fn dispatch(model: &Model, input: &str, ctx: &mut ReplContext) -> bool {
             if name.is_empty() {
                 // Show all connections
                 for conn in &model.connections {
-                    println!("  {} → {}{}", conn.source, conn.target,
-                        conn.name.as_ref().map(|n| format!(" ({})", n)).unwrap_or_default());
+                    println!(
+                        "  {} → {}{}",
+                        conn.source,
+                        conn.target,
+                        conn.name
+                            .as_ref()
+                            .map(|n| format!(" ({})", n))
+                            .unwrap_or_default()
+                    );
                 }
                 println!("({} connections)", model.connections.len());
             } else {
                 // Show connections involving this element
                 let mut count = 0;
                 for conn in &model.connections {
-                    if simple_name(&conn.source) == name || simple_name(&conn.target) == name
-                        || conn.source.contains(name) || conn.target.contains(name)
+                    if simple_name(&conn.source) == name
+                        || simple_name(&conn.target) == name
+                        || conn.source.contains(name)
+                        || conn.target.contains(name)
                     {
                         println!("  {} → {}", conn.source, conn.target);
                         count += 1;
@@ -261,7 +295,11 @@ fn dispatch(model: &Model, input: &str, ctx: &mut ReplContext) -> bool {
         }
 
         "flows" => {
-            let name = if args.is_empty() { ctx.focus.as_deref().unwrap_or("") } else { args };
+            let name = if args.is_empty() {
+                ctx.focus.as_deref().unwrap_or("")
+            } else {
+                args
+            };
             let mut count = 0;
             for flow in &model.flows {
                 if name.is_empty()
@@ -270,40 +308,57 @@ fn dispatch(model: &Model, input: &str, ctx: &mut ReplContext) -> bool {
                     || flow.source.contains(name)
                     || flow.target.contains(name)
                 {
-                    println!("  {} → {}{}",
-                        flow.source, flow.target,
-                        flow.item_type.as_ref().map(|t| format!(" ({})", t)).unwrap_or_default());
+                    println!(
+                        "  {} → {}{}",
+                        flow.source,
+                        flow.target,
+                        flow.item_type
+                            .as_ref()
+                            .map(|t| format!(" ({})", t))
+                            .unwrap_or_default()
+                    );
                     count += 1;
                 }
             }
             if count == 0 {
-                println!("No flows{}.", if name.is_empty() { "".to_string() } else { format!(" involving `{}`", name) });
+                println!(
+                    "No flows{}.",
+                    if name.is_empty() {
+                        "".to_string()
+                    } else {
+                        format!(" involving `{}`", name)
+                    }
+                );
             }
         }
 
         "trace" => cmd_trace(model, args),
 
         "satisfy" | "satisfactions" => {
-            let name = if args.is_empty() { ctx.focus.as_deref().unwrap_or("") } else { args };
+            let name = if args.is_empty() {
+                ctx.focus.as_deref().unwrap_or("")
+            } else {
+                args
+            };
             for sat in &model.satisfactions {
-                if name.is_empty()
-                    || sat.requirement == name
-                    || sat.by.as_deref() == Some(name)
-                {
-                    println!("  satisfy {} by {}",
+                if name.is_empty() || sat.requirement == name || sat.by.as_deref() == Some(name) {
+                    println!(
+                        "  satisfy {} by {}",
                         sat.requirement,
-                        sat.by.as_deref().unwrap_or("?"));
+                        sat.by.as_deref().unwrap_or("?")
+                    );
                 }
             }
         }
 
         "verify" | "verifications" => {
-            let name = if args.is_empty() { ctx.focus.as_deref().unwrap_or("") } else { args };
+            let name = if args.is_empty() {
+                ctx.focus.as_deref().unwrap_or("")
+            } else {
+                args
+            };
             for ver in &model.verifications {
-                if name.is_empty()
-                    || ver.requirement == name
-                    || ver.by == name
-                {
+                if name.is_empty() || ver.requirement == name || ver.by == name {
                     println!("  verify {} by {}", ver.requirement, ver.by);
                 }
             }
@@ -332,7 +387,10 @@ fn dispatch(model: &Model, input: &str, ctx: &mut ReplContext) -> bool {
             let mut count = 0;
             for def in &model.definitions {
                 if def.name.to_lowercase().contains(&pat)
-                    || def.doc.as_ref().map_or(false, |d| d.to_lowercase().contains(&pat))
+                    || def
+                        .doc
+                        .as_ref()
+                        .is_some_and(|d| d.to_lowercase().contains(&pat))
                 {
                     println!("  {:14} {}", def.kind.label(), def.name);
                     count += 1;
@@ -340,11 +398,22 @@ fn dispatch(model: &Model, input: &str, ctx: &mut ReplContext) -> bool {
             }
             for usage in &model.usages {
                 if usage.name.to_lowercase().contains(&pat)
-                    || usage.type_ref.as_ref().map_or(false, |t| t.to_lowercase().contains(&pat))
+                    || usage
+                        .type_ref
+                        .as_ref()
+                        .is_some_and(|t| t.to_lowercase().contains(&pat))
                 {
-                    println!("  {:14} {}{} (in {})", usage.kind, usage.name,
-                        usage.type_ref.as_ref().map(|t| format!(" : {}", t)).unwrap_or_default(),
-                        usage.parent_def.as_deref().unwrap_or("?"));
+                    println!(
+                        "  {:14} {}{} (in {})",
+                        usage.kind,
+                        usage.name,
+                        usage
+                            .type_ref
+                            .as_ref()
+                            .map(|t| format!(" : {}", t))
+                            .unwrap_or_default(),
+                        usage.parent_def.as_deref().unwrap_or("?")
+                    );
                     count += 1;
                 }
             }
@@ -393,7 +462,7 @@ fn dispatch(model: &Model, input: &str, ctx: &mut ReplContext) -> bool {
                 println!("Usage: rollup <root_def> <attribute>");
                 return true;
             };
-            use sysml_core::sim::rollup::{evaluate_rollup, AggregationMethod, format_rollup_text};
+            use sysml_core::sim::rollup::{evaluate_rollup, format_rollup_text, AggregationMethod};
             if model.find_def(root).is_none() {
                 println!("Definition `{}` not found.", root);
                 return true;
@@ -475,23 +544,40 @@ fn cmd_show(model: &Model, name: &str) {
         if !members.is_empty() {
             println!("  Members ({}):", members.len());
             for u in &members {
-                println!("    {} {}{}{}",
-                    u.kind, u.name,
-                    u.type_ref.as_ref().map(|t| format!(" : {}", t)).unwrap_or_default(),
-                    u.multiplicity.as_ref().map(|m| format!(" {}", m)).unwrap_or_default());
+                println!(
+                    "    {} {}{}{}",
+                    u.kind,
+                    u.name,
+                    u.type_ref
+                        .as_ref()
+                        .map(|t| format!(" : {}", t))
+                        .unwrap_or_default(),
+                    u.multiplicity
+                        .as_ref()
+                        .map(|m| format!(" {}", m))
+                        .unwrap_or_default()
+                );
             }
         }
         // Show relationships
-        let sats: Vec<_> = model.satisfactions.iter()
+        let sats: Vec<_> = model
+            .satisfactions
+            .iter()
             .filter(|s| s.by.as_deref() == Some(name) || s.requirement == name)
             .collect();
         if !sats.is_empty() {
             println!("  Satisfactions:");
             for s in &sats {
-                println!("    satisfy {} by {}", s.requirement, s.by.as_deref().unwrap_or("?"));
+                println!(
+                    "    satisfy {} by {}",
+                    s.requirement,
+                    s.by.as_deref().unwrap_or("?")
+                );
             }
         }
-        let vers: Vec<_> = model.verifications.iter()
+        let vers: Vec<_> = model
+            .verifications
+            .iter()
             .filter(|v| v.by == name || v.requirement == name)
             .collect();
         if !vers.is_empty() {
@@ -523,7 +609,11 @@ fn cmd_show(model: &Model, name: &str) {
 }
 
 fn cmd_list(model: &Model, args: &str, focus: &Option<String>) {
-    let kind_filter = if args.is_empty() { None } else { Some(args.to_lowercase()) };
+    let kind_filter = if args.is_empty() {
+        None
+    } else {
+        Some(args.to_lowercase())
+    };
     let mut count = 0;
 
     for def in &model.definitions {
@@ -537,8 +627,15 @@ fn cmd_list(model: &Model, args: &str, focus: &Option<String>) {
                 continue;
             }
         }
-        println!("  {:14} {}{}", def.kind.label(), def.name,
-            def.super_type.as_ref().map(|s| format!(" :> {}", s)).unwrap_or_default());
+        println!(
+            "  {:14} {}{}",
+            def.kind.label(),
+            def.name,
+            def.super_type
+                .as_ref()
+                .map(|s| format!(" :> {}", s))
+                .unwrap_or_default()
+        );
         count += 1;
     }
     for usage in &model.usages {
@@ -552,9 +649,17 @@ fn cmd_list(model: &Model, args: &str, focus: &Option<String>) {
                 continue;
             }
         }
-        println!("  {:14} {}{} (in {})", usage.kind, usage.name,
-            usage.type_ref.as_ref().map(|t| format!(" : {}", t)).unwrap_or_default(),
-            usage.parent_def.as_deref().unwrap_or("?"));
+        println!(
+            "  {:14} {}{} (in {})",
+            usage.kind,
+            usage.name,
+            usage
+                .type_ref
+                .as_ref()
+                .map(|t| format!(" : {}", t))
+                .unwrap_or_default(),
+            usage.parent_def.as_deref().unwrap_or("?")
+        );
         count += 1;
     }
     println!("({} elements)", count);
@@ -607,11 +712,13 @@ fn cmd_usages(model: &Model, args: &str, focus: &Option<String>) {
                 continue;
             }
         }
-        println!("  {:14} {} : {} (in {})",
+        println!(
+            "  {:14} {} : {} (in {})",
             usage.kind,
             usage.name,
             usage.type_ref.as_deref().unwrap_or("-"),
-            usage.parent_def.as_deref().unwrap_or("?"));
+            usage.parent_def.as_deref().unwrap_or("?")
+        );
         count += 1;
     }
     println!("({} usages)", count);
@@ -624,9 +731,16 @@ fn cmd_trace(model: &Model, args: &str) {
         return;
     }
 
-    let filter = if args.is_empty() { None } else { Some(args.to_lowercase()) };
+    let filter = if args.is_empty() {
+        None
+    } else {
+        Some(args.to_lowercase())
+    };
 
-    println!("{:25} {:20} {:20}", "Requirement", "Satisfied By", "Verified By");
+    println!(
+        "{:25} {:20} {:20}",
+        "Requirement", "Satisfied By", "Verified By"
+    );
     println!("{}", "-".repeat(67));
     let mut shown = 0;
     for t in &trace {
@@ -638,8 +752,16 @@ fn cmd_trace(model: &Model, args: &str) {
                 continue;
             }
         }
-        let sat = if t.satisfied_by.is_empty() { "-".to_string() } else { t.satisfied_by.join(", ") };
-        let ver = if t.verified_by.is_empty() { "-".to_string() } else { t.verified_by.join(", ") };
+        let sat = if t.satisfied_by.is_empty() {
+            "-".to_string()
+        } else {
+            t.satisfied_by.join(", ")
+        };
+        let ver = if t.verified_by.is_empty() {
+            "-".to_string()
+        } else {
+            t.verified_by.join(", ")
+        };
         println!("{:25} {:20} {:20}", t.requirement, sat, ver);
         shown += 1;
     }

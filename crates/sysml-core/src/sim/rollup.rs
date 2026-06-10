@@ -1,7 +1,7 @@
-/// Generic rollup engine for SysML v2 part hierarchies.
-///
-/// Aggregates attribute values across the composition tree using
-/// configurable methods: sum, RSS, product, min, max.
+//! Generic rollup engine for SysML v2 part hierarchies.
+//!
+//! Aggregates attribute values across the composition tree using
+//! configurable methods: sum, RSS, product, min, max.
 
 use crate::model::Model;
 use crate::sim::resolve::{resolve_attribute_tree, AttributeNode};
@@ -22,6 +22,7 @@ pub enum AggregationMethod {
 }
 
 impl AggregationMethod {
+    #[allow(clippy::should_implement_trait)]
     pub fn from_str(s: &str) -> Option<Self> {
         match s.to_lowercase().as_str() {
             "sum" => Some(Self::Sum),
@@ -89,8 +90,7 @@ pub fn evaluate_rollup(
 ) -> RollupResult {
     let tree = resolve_attribute_tree(model, root_def, attribute_name);
     let own = tree.own_value.unwrap_or(0.0);
-    let (child_total, contributions) =
-        aggregate_children(&tree.children, method, &[]);
+    let (child_total, contributions) = aggregate_children(&tree.children, method, &[]);
     let total = own + child_total;
 
     // Compute percentages
@@ -119,8 +119,7 @@ fn aggregate_children(
         path.push(child.name.clone());
 
         let own = child.own_value.unwrap_or(0.0);
-        let (child_sum, child_contribs) =
-            aggregate_children(&child.children, method, &path);
+        let (child_sum, child_contribs) = aggregate_children(&child.children, method, &path);
         let subtotal = (own + child_sum) * child.quantity as f64;
 
         values.push(subtotal);
@@ -184,10 +183,7 @@ pub fn format_rollup_text(result: &RollupResult) -> String {
         result.root, "total:", result.total
     ));
     if result.own_value != 0.0 {
-        out.push_str(&format!(
-            "    (own) {:>38} {:.4}\n",
-            "", result.own_value
-        ));
+        out.push_str(&format!("    (own) {:>38} {:.4}\n", "", result.own_value));
     }
     for c in &result.contributions {
         format_contribution(&mut out, c, 2);
@@ -209,7 +205,13 @@ fn format_contribution(out: &mut String, c: &Contribution, indent: usize) {
     };
     out.push_str(&format!(
         "{}{} : {} {} {:>8} => {:.4} ({:.1}%)\n",
-        prefix, c.name(), c.definition, qty_str, own_str, c.subtotal, c.percentage
+        prefix,
+        c.name(),
+        c.definition,
+        qty_str,
+        own_str,
+        c.subtotal,
+        c.percentage
     ));
     for child in &c.children {
         format_contribution(out, child, indent + 1);

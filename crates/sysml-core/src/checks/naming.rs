@@ -1,12 +1,12 @@
-/// Enforces canonical SysML v2 naming conventions:
-///   - Definition names start with an uppercase letter (`PartDef`, `Vehicle`).
-///   - Usage names start with a lowercase letter (`myCar`, `engine`).
-///   - Package names start with an uppercase letter.
-///
-/// Skipped for names containing only digits, only underscores, or short
-/// names like single-letter generics (`T`). Also skipped when the first
-/// character is a single underscore (a convention for "intentionally
-/// anonymous").
+//! Enforces canonical SysML v2 naming conventions:
+//!   - Definition names start with an uppercase letter (`PartDef`, `Vehicle`).
+//!   - Usage names start with a lowercase letter (`myCar`, `engine`).
+//!   - Package names start with an uppercase letter.
+//!
+//! Skipped for names containing only digits, only underscores, or short
+//! names like single-letter generics (`T`). Also skipped when the first
+//! character is a single underscore (a convention for "intentionally
+//! anonymous").
 
 use crate::checks::Check;
 use crate::diagnostic::{codes, Diagnostic};
@@ -19,9 +19,7 @@ fn first_alpha(name: &str) -> Option<char> {
 }
 
 fn is_intentionally_skipped(name: &str) -> bool {
-    name.starts_with('_')
-        || name.is_empty()
-        || name.chars().all(|c| !c.is_alphabetic())
+    name.starts_with('_') || name.is_empty() || name.chars().all(|c| !c.is_alphabetic())
 }
 
 impl Check for NamingConventionCheck {
@@ -50,10 +48,7 @@ impl Check for NamingConventionCheck {
                                 def.name
                             ),
                         )
-                        .with_suggestion(format!(
-                            "rename to `{}`",
-                            capitalize(&def.name)
-                        )),
+                        .with_suggestion(format!("rename to `{}`", capitalize(&def.name))),
                     );
                 }
             }
@@ -88,10 +83,7 @@ impl Check for NamingConventionCheck {
                                 u.name
                             ),
                         )
-                        .with_suggestion(format!(
-                            "rename to `{}`",
-                            decapitalize(&u.name)
-                        )),
+                        .with_suggestion(format!("rename to `{}`", decapitalize(&u.name))),
                     );
                 }
             }
@@ -139,8 +131,9 @@ mod tests {
         let model = parse_file("test.sysml", source);
         let diags = NamingConventionCheck.run(&model);
         assert!(
-            diags.iter().any(|d| d.code == codes::NAMING_CONVENTION
-                && d.message.contains("vehicle")),
+            diags
+                .iter()
+                .any(|d| d.code == codes::NAMING_CONVENTION && d.message.contains("vehicle")),
             "lowercase definition name should warn: {:?}",
             diags.iter().map(|d| &d.message).collect::<Vec<_>>()
         );
@@ -184,7 +177,7 @@ mod tests {
     }
 
     #[test]
-    fn underscore_names_are_skipped () {
+    fn underscore_names_are_skipped() {
         let source = "part def _Anonymous;\n";
         let model = parse_file("test.sysml", source);
         let diags = NamingConventionCheck.run(&model);

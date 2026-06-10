@@ -1,11 +1,11 @@
-/// Flags port usages that exist inside a part definition but never appear
-/// as an endpoint of any connection.  In a properly-wired model, every port
-/// declared inside a `part def` should either be:
-///   - connected via a `connect ... to ...` or `flow from ... to ...`
-///   - explicitly marked as part of the public interface (no body)
-///
-/// Ports declared inside `port def`/`interface def` themselves (which define
-/// the structure of a port, not instances of one) are exempt.
+//! Flags port usages that exist inside a part definition but never appear
+//! as an endpoint of any connection.  In a properly-wired model, every port
+//! declared inside a `part def` should either be:
+//!   - connected via a `connect ... to ...` or `flow from ... to ...`
+//!   - explicitly marked as part of the public interface (no body)
+//!
+//! Ports declared inside `port def`/`interface def` themselves (which define
+//! the structure of a port, not instances of one) are exempt.
 
 use std::collections::HashSet;
 
@@ -109,8 +109,9 @@ mod tests {
         let model = parse_file("test.sysml", source);
         let diags = UnboundPortCheck.run(&model);
         assert!(
-            diags.iter().any(|d| d.code == codes::UNBOUND_PORT
-                && d.message.contains("unused")),
+            diags
+                .iter()
+                .any(|d| d.code == codes::UNBOUND_PORT && d.message.contains("unused")),
             "unconnected port should warn: {:?}",
             diags.iter().map(|d| &d.message).collect::<Vec<_>>()
         );

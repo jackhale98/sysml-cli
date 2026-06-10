@@ -18,10 +18,7 @@ use crate::convert::span_to_range;
 
 /// Build document links for a single file, using a workspace name → file
 /// table (typically `Model::file` from each parsed workspace model).
-pub fn document_links(
-    model: &Model,
-    name_to_file: &HashMap<String, String>,
-) -> Vec<DocumentLink> {
+pub fn document_links(model: &Model, name_to_file: &HashMap<String, String>) -> Vec<DocumentLink> {
     let mut links = Vec::new();
 
     // Import statements
@@ -107,7 +104,10 @@ mod tests {
         assert!(
             !links.is_empty(),
             "expected at least one document link, got {:?}",
-            links.iter().map(|l| l.target.as_ref().map(|u| u.as_str().to_string())).collect::<Vec<_>>()
+            links
+                .iter()
+                .map(|l| l.target.as_ref().map(|u| u.as_str().to_string()))
+                .collect::<Vec<_>>()
         );
     }
 

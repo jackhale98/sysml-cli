@@ -1,11 +1,11 @@
-/// Performance index cache for SysML models.
-///
-/// This is never the source of truth -- always rebuildable from model files
-/// and records.  Designed to be gitignored (`.sysml/cache.db`).
-///
-/// The current implementation uses in-memory data structures.  A future
-/// version will swap in an SQLite backend via `rusqlite` without changing
-/// the public API.
+//! Performance index cache for SysML models.
+//!
+//! This is never the source of truth -- always rebuildable from model files
+//! and records.  Designed to be gitignored (`.sysml/cache.db`).
+//!
+//! The current implementation uses in-memory data structures.  A future
+//! version will swap in an SQLite backend via `rusqlite` without changing
+//! the public API.
 
 use serde::Serialize;
 
@@ -115,7 +115,9 @@ impl Cache {
 
     /// Return the first node whose qualified name matches exactly.
     pub fn find_node<'a>(&'a self, qualified_name: &str) -> Option<&'a CacheNode> {
-        self.nodes.iter().find(|n| n.qualified_name == qualified_name)
+        self.nodes
+            .iter()
+            .find(|n| n.qualified_name == qualified_name)
     }
 
     // -- edge queries -------------------------------------------------------
@@ -360,7 +362,10 @@ mod tests {
         let cache = sample_cache();
         let part_defs = cache.find_nodes_by_kind("part def");
         assert_eq!(part_defs.len(), 2);
-        let names: Vec<&str> = part_defs.iter().map(|n| n.qualified_name.as_str()).collect();
+        let names: Vec<&str> = part_defs
+            .iter()
+            .map(|n| n.qualified_name.as_str())
+            .collect();
         assert!(names.contains(&"Vehicle"));
         assert!(names.contains(&"Engine"));
     }

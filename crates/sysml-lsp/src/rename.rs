@@ -119,9 +119,11 @@ fn rfind_word_in(text: &str, word: &str) -> Option<usize> {
 }
 
 fn is_word_boundary(text: &str, pos: usize, len: usize) -> bool {
-    let before_ok = pos == 0 || !text.as_bytes()[pos - 1].is_ascii_alphanumeric() && text.as_bytes()[pos - 1] != b'_';
+    let before_ok = pos == 0
+        || !text.as_bytes()[pos - 1].is_ascii_alphanumeric() && text.as_bytes()[pos - 1] != b'_';
     let after = pos + len;
-    let after_ok = after >= text.len() || !text.as_bytes()[after].is_ascii_alphanumeric() && text.as_bytes()[after] != b'_';
+    let after_ok = after >= text.len()
+        || !text.as_bytes()[after].is_ascii_alphanumeric() && text.as_bytes()[after] != b'_';
     before_ok && after_ok
 }
 
@@ -179,7 +181,10 @@ pub fn prepare_rename(
                 if abs_start <= offset && offset < abs_end {
                     let start = crate::convert::offset_to_position(source, abs_start);
                     let end = crate::convert::offset_to_position(source, abs_end);
-                    return Some((def.name.clone(), tower_lsp::lsp_types::Range::new(start, end)));
+                    return Some((
+                        def.name.clone(),
+                        tower_lsp::lsp_types::Range::new(start, end),
+                    ));
                 }
             }
         }
@@ -195,7 +200,10 @@ pub fn prepare_rename(
                 if abs_start <= offset && offset < abs_end {
                     let start = crate::convert::offset_to_position(source, abs_start);
                     let end = crate::convert::offset_to_position(source, abs_end);
-                    return Some((usage.name.clone(), tower_lsp::lsp_types::Range::new(start, end)));
+                    return Some((
+                        usage.name.clone(),
+                        tower_lsp::lsp_types::Range::new(start, end),
+                    ));
                 }
             }
         }
@@ -309,7 +317,12 @@ mod tests {
         let model = parse_file("test.sysml", source);
         let occs = find_occurrences(&model, source, "Engine");
         // Should find "Engine" def on line 2, NOT "Engine" inside "EngineController"
-        assert_eq!(occs.len(), 1, "should only match whole word, got {:?}", occs);
+        assert_eq!(
+            occs.len(),
+            1,
+            "should only match whole word, got {:?}",
+            occs
+        );
         assert_eq!(&source[occs[0].start_byte..occs[0].end_byte], "Engine");
     }
 }

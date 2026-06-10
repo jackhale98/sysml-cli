@@ -3,7 +3,7 @@ use std::process::ExitCode;
 
 use sysml_core::parser as sysml_parser;
 
-use crate::{Cli, read_source};
+use crate::{read_source, Cli};
 
 #[allow(clippy::too_many_arguments)]
 pub(crate) fn run(
@@ -25,25 +25,30 @@ pub(crate) fn run(
     let files = &files[..];
 
     use sysml_core::model::{DefKind, Visibility};
-    use sysml_core::query::{self, KindFilter, ListFilter, parse_kind_filter};
+    use sysml_core::query::{self, parse_kind_filter, KindFilter, ListFilter};
 
-    let kind_filter = kind.and_then(|k| parse_kind_filter(k).or_else(|| {
-        // Fallback for extra aliases not in parse_kind_filter
-        Some(match k {
-            "use-cases" => KindFilter::DefKind(DefKind::UseCase),
-            "verifications" => KindFilter::DefKind(DefKind::Verification),
-            "allocations" => KindFilter::DefKind(DefKind::Allocation),
-            "ref" => KindFilter::UsageKind("ref".to_string()),
-            other => KindFilter::UsageKind(other.to_string()),
+    let kind_filter = kind.and_then(|k| {
+        parse_kind_filter(k).or_else(|| {
+            // Fallback for extra aliases not in parse_kind_filter
+            Some(match k {
+                "use-cases" => KindFilter::DefKind(DefKind::UseCase),
+                "verifications" => KindFilter::DefKind(DefKind::Verification),
+                "allocations" => KindFilter::DefKind(DefKind::Allocation),
+                "ref" => KindFilter::UsageKind("ref".to_string()),
+                other => KindFilter::UsageKind(other.to_string()),
+            })
         })
-    }));
+    });
 
     let vis_filter = visibility.map(|v| match v {
         "public" | "pub" => Visibility::Public,
         "private" | "priv" => Visibility::Private,
         "protected" | "prot" => Visibility::Protected,
         _ => {
-            eprintln!("warning: unknown visibility `{}`, expected: public, private, protected", v);
+            eprintln!(
+                "warning: unknown visibility `{}`, expected: public, private, protected",
+                v
+            );
             Visibility::Public
         }
     });
@@ -91,7 +96,10 @@ pub(crate) fn run(
                     filter.parent = view_filter.parent;
                 }
             } else {
-                eprintln!("warning: view definition `{}` not found in `{}`", vn, path_str);
+                eprintln!(
+                    "warning: view definition `{}` not found in `{}`",
+                    vn, path_str
+                );
             }
         }
 

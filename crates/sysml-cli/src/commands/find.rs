@@ -1,4 +1,4 @@
-/// Find command: search model elements by name pattern.
+//! Find command: search model elements by name pattern.
 
 use std::path::PathBuf;
 use std::process::ExitCode;
@@ -32,7 +32,10 @@ pub fn run(cli: &Cli, files: &[PathBuf], pattern: &str, kind: &str) -> ExitCode 
         if show_defs {
             for def in &model.definitions {
                 let matches = def.name.to_lowercase().contains(&pat_lower)
-                    || def.doc.as_ref().map_or(false, |d| d.to_lowercase().contains(&pat_lower));
+                    || def
+                        .doc
+                        .as_ref()
+                        .is_some_and(|d| d.to_lowercase().contains(&pat_lower));
                 if matches {
                     text_lines.push(format!(
                         "  {:14} {:30} {}:{}",
@@ -55,7 +58,10 @@ pub fn run(cli: &Cli, files: &[PathBuf], pattern: &str, kind: &str) -> ExitCode 
         if show_usages {
             for usage in &model.usages {
                 let matches = usage.name.to_lowercase().contains(&pat_lower)
-                    || usage.type_ref.as_ref().map_or(false, |t| t.to_lowercase().contains(&pat_lower));
+                    || usage
+                        .type_ref
+                        .as_ref()
+                        .is_some_and(|t| t.to_lowercase().contains(&pat_lower));
                 if matches {
                     text_lines.push(format!(
                         "  {:14} {:30} {}:{}",
@@ -63,7 +69,11 @@ pub fn run(cli: &Cli, files: &[PathBuf], pattern: &str, kind: &str) -> ExitCode 
                         format!(
                             "{}{}",
                             usage.name,
-                            usage.type_ref.as_ref().map(|t| format!(" : {}", t)).unwrap_or_default()
+                            usage
+                                .type_ref
+                                .as_ref()
+                                .map(|t| format!(" : {}", t))
+                                .unwrap_or_default()
                         ),
                         path_str,
                         usage.span.start_row,

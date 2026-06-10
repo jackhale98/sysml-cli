@@ -1,4 +1,4 @@
-/// Action flow model types for simulation.
+//! Action flow model types for simulation.
 
 use crate::model::Span;
 use crate::sim::expr::Expr;
@@ -16,15 +16,9 @@ pub struct ActionModel {
 #[derive(Debug, Clone, Serialize)]
 pub enum ActionStep {
     /// Named action reference (perform / inline usage).
-    Perform {
-        name: String,
-        span: Span,
-    },
+    Perform { name: String, span: Span },
     /// Sequential sub-actions connected by `then`.
-    Sequence {
-        steps: Vec<ActionStep>,
-        span: Span,
-    },
+    Sequence { steps: Vec<ActionStep>, span: Span },
     /// Fork (parallel execution).
     Fork {
         name: Option<String>,
@@ -32,10 +26,7 @@ pub enum ActionStep {
         span: Span,
     },
     /// Join (synchronize parallel branches).
-    Join {
-        name: Option<String>,
-        span: Span,
-    },
+    Join { name: Option<String>, span: Span },
     /// Decision node.
     Decide {
         name: Option<String>,
@@ -43,10 +34,7 @@ pub enum ActionStep {
         span: Span,
     },
     /// Merge node.
-    Merge {
-        name: Option<String>,
-        span: Span,
-    },
+    Merge { name: Option<String>, span: Span },
     /// If/else conditional action.
     IfAction {
         condition: Expr,
@@ -81,19 +69,11 @@ pub enum ActionStep {
         span: Span,
     },
     /// Accept action: `accept Signal` or `accept when condition`.
-    Accept {
-        signal: Option<String>,
-        span: Span,
-    },
+    Accept { signal: Option<String>, span: Span },
     /// Terminate action: `terminate` or `terminate name;`
-    Terminate {
-        target: Option<String>,
-        span: Span,
-    },
+    Terminate { target: Option<String>, span: Span },
     /// Done / terminal node.
-    Done {
-        span: Span,
-    },
+    Done { span: Span },
 }
 
 /// A branch in a decide node.

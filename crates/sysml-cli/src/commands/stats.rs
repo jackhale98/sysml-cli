@@ -1,7 +1,7 @@
+use crate::{read_source, Cli};
 use std::path::PathBuf;
 use std::process::ExitCode;
 use sysml_core::parser as sysml_parser;
-use crate::{Cli, read_source};
 
 pub(crate) fn run(cli: &Cli, files: &[PathBuf]) -> ExitCode {
     let (files, _) = crate::files_or_project(files);
@@ -63,7 +63,10 @@ pub(crate) fn run(cli: &Cli, files: &[PathBuf]) -> ExitCode {
         println!("Imports:          {}", stats.import_count);
         println!("Max nesting:      {}", stats.max_nesting_depth);
         println!();
-        println!("Documentation:    {}/{} ({:.0}%)", stats.doc_coverage.documented, stats.doc_coverage.total, stats.doc_coverage.percentage);
+        println!(
+            "Documentation:    {}/{} ({:.0}%)",
+            stats.doc_coverage.documented, stats.doc_coverage.total, stats.doc_coverage.percentage
+        );
     }
     ExitCode::SUCCESS
 }

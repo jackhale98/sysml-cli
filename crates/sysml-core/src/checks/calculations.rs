@@ -1,4 +1,4 @@
-/// Checks for calculation definitions missing return statements.
+//! Checks for calculation definitions missing return statements.
 
 use crate::checks::Check;
 use crate::diagnostic::{codes, Diagnostic};
@@ -30,10 +30,7 @@ impl Check for CalcReturnCheck {
                     &model.file,
                     def.span.clone(),
                     codes::CALC_NO_RETURN,
-                    format!(
-                        "calc def `{}` has a body but no return statement",
-                        def.name,
-                    ),
+                    format!("calc def `{}` has a body but no return statement", def.name,),
                 ));
             }
         }

@@ -1,4 +1,4 @@
-/// State machine simulation engine.
+//! State machine simulation engine.
 
 use crate::sim::eval;
 use crate::sim::expr::Env;
@@ -188,9 +188,7 @@ pub fn step(
         let trigger_ok = match &transition.trigger {
             None => true, // No trigger = always available
             Some(Trigger::Completion) => true,
-            Some(Trigger::Signal(signal)) => {
-                event.map_or(false, |e| e == signal)
-            }
+            Some(Trigger::Signal(signal)) => event.is_some_and(|e| e == signal),
         };
 
         if !trigger_ok {

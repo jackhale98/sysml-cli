@@ -1,13 +1,13 @@
-/// Top-level `rename` command — rename an element and update all references.
-/// With --project, renames across all files in the project.
+//! Top-level `rename` command — rename an element and update all references.
+//! With --project, renames across all files in the project.
 
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::process::ExitCode;
 
 use serde::Serialize;
 
-use sysml_core::parser as sysml_parser;
 use sysml_core::codegen::edit;
+use sysml_core::parser as sysml_parser;
 
 use crate::{read_source, Cli};
 
@@ -81,7 +81,10 @@ pub(crate) fn run(
                 }],
                 edits: plan.edits.len(),
             };
-            println!("{}", serde_json::to_string_pretty(&envelope).unwrap_or_default());
+            println!(
+                "{}",
+                serde_json::to_string_pretty(&envelope).unwrap_or_default()
+            );
         } else {
             print!("{}", edit::diff(&source, &result, &path_str));
         }
@@ -104,7 +107,10 @@ pub(crate) fn run(
                 }],
                 edits: plan.edits.len(),
             };
-            println!("{}", serde_json::to_string_pretty(&envelope).unwrap_or_default());
+            println!(
+                "{}",
+                serde_json::to_string_pretty(&envelope).unwrap_or_default()
+            );
         } else {
             eprintln!("Renamed `{}` to `{}` in {}", old_name, new_name, path_str);
         }
@@ -114,13 +120,13 @@ pub(crate) fn run(
 
 fn run_project_wide(
     cli: &Cli,
-    start_file: &PathBuf,
+    start_file: &Path,
     old_name: &str,
     new_name: &str,
     dry_run: bool,
 ) -> ExitCode {
     // Discover all project files
-    let (files, _) = crate::files_or_project(&[start_file.clone()]);
+    let (files, _) = crate::files_or_project(std::slice::from_ref(&start_file.to_path_buf()));
     if files.is_empty() {
         eprintln!("error: no SysML files found in project.");
         return ExitCode::FAILURE;
@@ -210,9 +216,16 @@ fn run_project_wide(
             files: summaries,
             edits: total_replacements,
         };
-        println!("{}", serde_json::to_string_pretty(&envelope).unwrap_or_default());
+        println!(
+            "{}",
+            serde_json::to_string_pretty(&envelope).unwrap_or_default()
+        );
     } else if changed_count == 0 {
-        eprintln!("No occurrences of `{}` found in {} file(s).", old_name, files.len());
+        eprintln!(
+            "No occurrences of `{}` found in {} file(s).",
+            old_name,
+            files.len()
+        );
     } else if !dry_run {
         eprintln!(
             "Renamed `{}` to `{}`: {} replacement(s) across {} file(s).",

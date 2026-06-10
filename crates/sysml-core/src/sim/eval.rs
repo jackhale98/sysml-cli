@@ -1,4 +1,4 @@
-/// Expression evaluator for the simulation engine.
+//! Expression evaluator for the simulation engine.
 
 use crate::sim::expr::*;
 
@@ -24,8 +24,7 @@ pub fn evaluate(expr: &Expr, env: &Env) -> Result<Value, EvalError> {
         }
 
         Expr::FunctionCall { name, args } => {
-            let values: Result<Vec<Value>, _> =
-                args.iter().map(|a| evaluate(a, env)).collect();
+            let values: Result<Vec<Value>, _> = args.iter().map(|a| evaluate(a, env)).collect();
             eval_function(name, &values?)
         }
     }
@@ -34,9 +33,12 @@ pub fn evaluate(expr: &Expr, env: &Env) -> Result<Value, EvalError> {
 /// Evaluate a constraint expression, expecting a boolean result.
 pub fn evaluate_constraint(expr: &Expr, env: &Env) -> Result<bool, EvalError> {
     let result = evaluate(expr, env)?;
-    result
-        .as_bool()
-        .ok_or_else(|| EvalError::new(format!("constraint did not evaluate to bool, got {}", result)))
+    result.as_bool().ok_or_else(|| {
+        EvalError::new(format!(
+            "constraint did not evaluate to bool, got {}",
+            result
+        ))
+    })
 }
 
 /// Evaluate a calc expression, expecting a numeric result.
@@ -80,23 +82,39 @@ fn eval_binary(op: BinOp, lhs: &Value, rhs: &Value) -> Result<Value, EvalError> 
 
         // Logical operators
         (BinOp::And, a, b) => {
-            let la = a.as_bool().ok_or_else(|| EvalError::new(format!("cannot apply `and` to {}", a)))?;
-            let lb = b.as_bool().ok_or_else(|| EvalError::new(format!("cannot apply `and` to {}", b)))?;
+            let la = a
+                .as_bool()
+                .ok_or_else(|| EvalError::new(format!("cannot apply `and` to {}", a)))?;
+            let lb = b
+                .as_bool()
+                .ok_or_else(|| EvalError::new(format!("cannot apply `and` to {}", b)))?;
             Ok(Value::Bool(la && lb))
         }
         (BinOp::Or, a, b) => {
-            let la = a.as_bool().ok_or_else(|| EvalError::new(format!("cannot apply `or` to {}", a)))?;
-            let lb = b.as_bool().ok_or_else(|| EvalError::new(format!("cannot apply `or` to {}", b)))?;
+            let la = a
+                .as_bool()
+                .ok_or_else(|| EvalError::new(format!("cannot apply `or` to {}", a)))?;
+            let lb = b
+                .as_bool()
+                .ok_or_else(|| EvalError::new(format!("cannot apply `or` to {}", b)))?;
             Ok(Value::Bool(la || lb))
         }
         (BinOp::Xor, a, b) => {
-            let la = a.as_bool().ok_or_else(|| EvalError::new(format!("cannot apply `xor` to {}", a)))?;
-            let lb = b.as_bool().ok_or_else(|| EvalError::new(format!("cannot apply `xor` to {}", b)))?;
+            let la = a
+                .as_bool()
+                .ok_or_else(|| EvalError::new(format!("cannot apply `xor` to {}", a)))?;
+            let lb = b
+                .as_bool()
+                .ok_or_else(|| EvalError::new(format!("cannot apply `xor` to {}", b)))?;
             Ok(Value::Bool(la ^ lb))
         }
         (BinOp::Implies, a, b) => {
-            let la = a.as_bool().ok_or_else(|| EvalError::new(format!("cannot apply `implies` to {}", a)))?;
-            let lb = b.as_bool().ok_or_else(|| EvalError::new(format!("cannot apply `implies` to {}", b)))?;
+            let la = a
+                .as_bool()
+                .ok_or_else(|| EvalError::new(format!("cannot apply `implies` to {}", a)))?;
+            let lb = b
+                .as_bool()
+                .ok_or_else(|| EvalError::new(format!("cannot apply `implies` to {}", b)))?;
             Ok(Value::Bool(!la || lb))
         }
 
@@ -111,7 +129,9 @@ fn eval_unary(op: UnOp, val: &Value) -> Result<Value, EvalError> {
     match (op, val) {
         (UnOp::Neg, Value::Number(n)) => Ok(Value::Number(-n)),
         (UnOp::Not, v) => {
-            let b = v.as_bool().ok_or_else(|| EvalError::new(format!("cannot apply `not` to {}", v)))?;
+            let b = v
+                .as_bool()
+                .ok_or_else(|| EvalError::new(format!("cannot apply `not` to {}", v)))?;
             Ok(Value::Bool(!b))
         }
         _ => Err(EvalError::new(format!("cannot apply `{}` to {}", op, val))),
@@ -227,11 +247,19 @@ fn eval_function(name: &str, args: &[Value]) -> Result<Value, EvalError> {
             let value = require_number(name, &args[0])?;
             let from = match &args[1] {
                 Value::String(s) => s.clone(),
-                _ => return Err(EvalError::new("convert: second argument must be a unit string")),
+                _ => {
+                    return Err(EvalError::new(
+                        "convert: second argument must be a unit string",
+                    ))
+                }
             };
             let to = match &args[2] {
                 Value::String(s) => s.clone(),
-                _ => return Err(EvalError::new("convert: third argument must be a unit string")),
+                _ => {
+                    return Err(EvalError::new(
+                        "convert: third argument must be a unit string",
+                    ))
+                }
             };
             crate::sim::units::convert(value, &from, &to).map(Value::Number)
         }
@@ -390,11 +418,19 @@ mod tests {
     #[test]
     fn eval_and() {
         assert_eq!(
-            evaluate(&binop(BinOp::And, bool_lit(true), bool_lit(false)), &empty_env()).unwrap(),
+            evaluate(
+                &binop(BinOp::And, bool_lit(true), bool_lit(false)),
+                &empty_env()
+            )
+            .unwrap(),
             Value::Bool(false)
         );
         assert_eq!(
-            evaluate(&binop(BinOp::And, bool_lit(true), bool_lit(true)), &empty_env()).unwrap(),
+            evaluate(
+                &binop(BinOp::And, bool_lit(true), bool_lit(true)),
+                &empty_env()
+            )
+            .unwrap(),
             Value::Bool(true)
         );
     }
@@ -402,7 +438,11 @@ mod tests {
     #[test]
     fn eval_or() {
         assert_eq!(
-            evaluate(&binop(BinOp::Or, bool_lit(false), bool_lit(true)), &empty_env()).unwrap(),
+            evaluate(
+                &binop(BinOp::Or, bool_lit(false), bool_lit(true)),
+                &empty_env()
+            )
+            .unwrap(),
             Value::Bool(true)
         );
     }
@@ -411,12 +451,20 @@ mod tests {
     fn eval_implies() {
         // true implies false = false
         assert_eq!(
-            evaluate(&binop(BinOp::Implies, bool_lit(true), bool_lit(false)), &empty_env()).unwrap(),
+            evaluate(
+                &binop(BinOp::Implies, bool_lit(true), bool_lit(false)),
+                &empty_env()
+            )
+            .unwrap(),
             Value::Bool(false)
         );
         // false implies anything = true
         assert_eq!(
-            evaluate(&binop(BinOp::Implies, bool_lit(false), bool_lit(false)), &empty_env()).unwrap(),
+            evaluate(
+                &binop(BinOp::Implies, bool_lit(false), bool_lit(false)),
+                &empty_env()
+            )
+            .unwrap(),
             Value::Bool(true)
         );
     }
@@ -479,11 +527,19 @@ mod tests {
     #[test]
     fn eval_min_max() {
         assert_eq!(
-            evaluate(&call("min", vec![num(3.0), num(1.0), num(5.0)]), &empty_env()).unwrap(),
+            evaluate(
+                &call("min", vec![num(3.0), num(1.0), num(5.0)]),
+                &empty_env()
+            )
+            .unwrap(),
             Value::Number(1.0)
         );
         assert_eq!(
-            evaluate(&call("max", vec![num(3.0), num(1.0), num(5.0)]), &empty_env()).unwrap(),
+            evaluate(
+                &call("max", vec![num(3.0), num(1.0), num(5.0)]),
+                &empty_env()
+            )
+            .unwrap(),
             Value::Number(5.0)
         );
     }
@@ -491,7 +547,11 @@ mod tests {
     #[test]
     fn eval_sum() {
         assert_eq!(
-            evaluate(&call("sum", vec![num(1.0), num(2.0), num(3.0)]), &empty_env()).unwrap(),
+            evaluate(
+                &call("sum", vec![num(1.0), num(2.0), num(3.0)]),
+                &empty_env()
+            )
+            .unwrap(),
             Value::Number(6.0)
         );
     }
@@ -515,7 +575,11 @@ mod tests {
     #[test]
     fn eval_product() {
         assert_eq!(
-            evaluate(&call("product", vec![num(2.0), num(3.0), num(4.0)]), &empty_env()).unwrap(),
+            evaluate(
+                &call("product", vec![num(2.0), num(3.0), num(4.0)]),
+                &empty_env()
+            )
+            .unwrap(),
             Value::Number(24.0)
         );
     }
@@ -531,7 +595,11 @@ mod tests {
     #[test]
     fn eval_mean() {
         assert_eq!(
-            evaluate(&call("mean", vec![num(2.0), num(4.0), num(6.0)]), &empty_env()).unwrap(),
+            evaluate(
+                &call("mean", vec![num(2.0), num(4.0), num(6.0)]),
+                &empty_env()
+            )
+            .unwrap(),
             Value::Number(4.0)
         );
     }
@@ -554,14 +622,22 @@ mod tests {
     #[test]
     fn eval_rss_three_values() {
         // sqrt(1^2 + 2^2 + 2^2) = 3
-        let result = evaluate(&call("rss", vec![num(1.0), num(2.0), num(2.0)]), &empty_env()).unwrap();
+        let result = evaluate(
+            &call("rss", vec![num(1.0), num(2.0), num(2.0)]),
+            &empty_env(),
+        )
+        .unwrap();
         assert_eq!(result, Value::Number(3.0));
     }
 
     #[test]
     fn eval_count() {
         assert_eq!(
-            evaluate(&call("count", vec![num(1.0), num(2.0), num(3.0)]), &empty_env()).unwrap(),
+            evaluate(
+                &call("count", vec![num(1.0), num(2.0), num(3.0)]),
+                &empty_env()
+            )
+            .unwrap(),
             Value::Number(3.0)
         );
     }
@@ -577,15 +653,27 @@ mod tests {
     #[test]
     fn eval_clamp() {
         assert_eq!(
-            evaluate(&call("clamp", vec![num(15.0), num(0.0), num(10.0)]), &empty_env()).unwrap(),
+            evaluate(
+                &call("clamp", vec![num(15.0), num(0.0), num(10.0)]),
+                &empty_env()
+            )
+            .unwrap(),
             Value::Number(10.0)
         );
         assert_eq!(
-            evaluate(&call("clamp", vec![num(-5.0), num(0.0), num(10.0)]), &empty_env()).unwrap(),
+            evaluate(
+                &call("clamp", vec![num(-5.0), num(0.0), num(10.0)]),
+                &empty_env()
+            )
+            .unwrap(),
             Value::Number(0.0)
         );
         assert_eq!(
-            evaluate(&call("clamp", vec![num(5.0), num(0.0), num(10.0)]), &empty_env()).unwrap(),
+            evaluate(
+                &call("clamp", vec![num(5.0), num(0.0), num(10.0)]),
+                &empty_env()
+            )
+            .unwrap(),
             Value::Number(5.0)
         );
     }
@@ -604,7 +692,7 @@ mod tests {
         let mut env = Env::new();
         env.bind("massActual", Value::Number(1500.0));
         env.bind("massLimit", Value::Number(2000.0));
-        assert_eq!(evaluate_constraint(&expr, &env).unwrap(), true);
+        assert!(evaluate_constraint(&expr, &env).unwrap());
     }
 
     #[test]
@@ -613,7 +701,7 @@ mod tests {
         let mut env = Env::new();
         env.bind("massActual", Value::Number(2500.0));
         env.bind("massLimit", Value::Number(2000.0));
-        assert_eq!(evaluate_constraint(&expr, &env).unwrap(), false);
+        assert!(!evaluate_constraint(&expr, &env).unwrap());
     }
 
     #[test]

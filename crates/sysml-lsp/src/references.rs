@@ -10,11 +10,7 @@ pub struct ReferenceLocation {
 /// Find all references to `name` within a single model (by URI).
 /// Searches definitions (super_type), usages (type_ref), type_references,
 /// connections, flows, satisfactions, verifications, and allocations.
-pub fn find_references_in_model(
-    model: &Model,
-    uri: &str,
-    name: &str,
-) -> Vec<ReferenceLocation> {
+pub fn find_references_in_model(model: &Model, uri: &str, name: &str) -> Vec<ReferenceLocation> {
     let target = simple_name(name);
     let mut refs = Vec::new();
 
@@ -149,10 +145,7 @@ mod tests {
         let model = parse_file("test.sysml", source);
         let refs = find_references_in_model(&model, "file:///test.sysml", "Engine");
         // Should find at least the type reference in `part engine : Engine`
-        assert!(
-            !refs.is_empty(),
-            "expected references to Engine"
-        );
+        assert!(!refs.is_empty(), "expected references to Engine");
     }
 
     #[test]
@@ -160,10 +153,7 @@ mod tests {
         let source = "part def Base;\npart def Sub :> Base;\n";
         let model = parse_file("test.sysml", source);
         let refs = find_references_in_model(&model, "file:///test.sysml", "Base");
-        assert!(
-            !refs.is_empty(),
-            "expected supertype reference to Base"
-        );
+        assert!(!refs.is_empty(), "expected supertype reference to Base");
     }
 
     #[test]
@@ -181,10 +171,8 @@ mod tests {
         let model_a = parse_file("a.sysml", source_a);
         let model_b = parse_file("b.sysml", source_b);
 
-        let models: Vec<(&str, &Model)> = vec![
-            ("file:///a.sysml", &model_a),
-            ("file:///b.sysml", &model_b),
-        ];
+        let models: Vec<(&str, &Model)> =
+            vec![("file:///a.sysml", &model_a), ("file:///b.sysml", &model_b)];
         let refs = find_all_references(&models, "Engine", false);
         // Should find reference in b.sysml
         assert!(refs.iter().any(|r| r.uri == "file:///b.sysml"));
@@ -209,7 +197,8 @@ mod tests {
 
     #[test]
     fn multiple_references_in_one_file() {
-        let source = "part def Engine;\npart def Car {\n    part e1 : Engine;\n    part e2 : Engine;\n}\n";
+        let source =
+            "part def Engine;\npart def Car {\n    part e1 : Engine;\n    part e2 : Engine;\n}\n";
         let model = parse_file("test.sysml", source);
         let refs = find_references_in_model(&model, "file:///test.sysml", "Engine");
         // At least 2 usages referencing Engine

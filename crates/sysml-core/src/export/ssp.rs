@@ -1,7 +1,7 @@
-/// SSP (System Structure and Parameterization) XML generation.
-///
-/// Generates SystemStructureDescription 1.0 XML from SysML v2
-/// part usages and connection definitions.
+//! SSP (System Structure and Parameterization) XML generation.
+//!
+//! Generates SystemStructureDescription 1.0 XML from SysML v2
+//! part usages and connection definitions.
 
 use serde::Serialize;
 
@@ -73,15 +73,13 @@ pub fn extract_ssp_structure(model: &Model) -> SspStructure {
 
 /// Generate SSP SystemStructureDescription XML from a structure.
 pub fn generate_ssd_xml(structure: &SspStructure) -> String {
-    let mut lines = Vec::new();
-
-    lines.push(r#"<?xml version="1.0" encoding="UTF-8"?>"#.to_string());
-    lines.push(
+    let mut lines = vec![
+        r#"<?xml version="1.0" encoding="UTF-8"?>"#.to_string(),
         "<ssd:SystemStructureDescription version=\"1.0\" name=\"system\"\n\
              \x20   xmlns:ssd=\"http://ssp-standard.org/SSP1/SystemStructureDescription\">"
             .to_string(),
-    );
-    lines.push("  <ssd:System name=\"root\">".to_string());
+        "  <ssd:System name=\"root\">".to_string(),
+    ];
 
     // Elements
     lines.push("    <ssd:Elements>".to_string());
@@ -96,21 +94,17 @@ pub fn generate_ssd_xml(structure: &SspStructure) -> String {
         // Find connectors for this component
         let mut seen = std::collections::HashSet::new();
         for conn in &structure.connections {
-            if conn.start_element == comp.name {
-                if seen.insert(conn.start_connector.clone()) {
-                    lines.push(format!(
-                        "          <ssd:Connector name=\"{}\" kind=\"output\"/>",
-                        conn.start_connector
-                    ));
-                }
+            if conn.start_element == comp.name && seen.insert(conn.start_connector.clone()) {
+                lines.push(format!(
+                    "          <ssd:Connector name=\"{}\" kind=\"output\"/>",
+                    conn.start_connector
+                ));
             }
-            if conn.end_element == comp.name {
-                if seen.insert(conn.end_connector.clone()) {
-                    lines.push(format!(
-                        "          <ssd:Connector name=\"{}\" kind=\"input\"/>",
-                        conn.end_connector
-                    ));
-                }
+            if conn.end_element == comp.name && seen.insert(conn.end_connector.clone()) {
+                lines.push(format!(
+                    "          <ssd:Connector name=\"{}\" kind=\"input\"/>",
+                    conn.end_connector
+                ));
             }
         }
         lines.push("        </ssd:Connectors>".to_string());
@@ -149,7 +143,10 @@ mod tests {
         // VehicleSystem has: part engine : Engine, part transmission : Transmission
         let names: Vec<&str> = ssp.components.iter().map(|c| c.name.as_str()).collect();
         assert!(names.contains(&"engine"), "Should find engine component");
-        assert!(names.contains(&"transmission"), "Should find transmission component");
+        assert!(
+            names.contains(&"transmission"),
+            "Should find transmission component"
+        );
 
         // connection engineToDrive connect engine.driveOut to transmission.driveIn
         assert_eq!(ssp.connections.len(), 1);

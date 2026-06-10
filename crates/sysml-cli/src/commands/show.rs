@@ -3,7 +3,7 @@ use std::process::ExitCode;
 
 use sysml_core::parser as sysml_parser;
 
-use crate::{Cli, read_source};
+use crate::{read_source, Cli};
 
 pub(crate) fn run(cli: &Cli, file: &PathBuf, element: &str, raw: bool) -> ExitCode {
     let (path_str, source) = match read_source(file) {
@@ -15,9 +15,13 @@ pub(crate) fn run(cli: &Cli, file: &PathBuf, element: &str, raw: bool) -> ExitCo
     // --raw mode: extract and print original SysML source text
     if raw {
         // Try definition first, then usage
-        let span = model.find_def(element)
-            .map(|d| &d.span)
-            .or_else(|| model.usages.iter().find(|u| u.name == element).map(|u| &u.span));
+        let span = model.find_def(element).map(|d| &d.span).or_else(|| {
+            model
+                .usages
+                .iter()
+                .find(|u| u.name == element)
+                .map(|u| &u.span)
+        });
         match span {
             Some(span) => {
                 let text = &source[span.start_byte..span.end_byte];
@@ -148,9 +152,6 @@ pub(crate) fn run(cli: &Cli, file: &PathBuf, element: &str, raw: bool) -> ExitCo
         return ExitCode::SUCCESS;
     }
 
-    eprintln!(
-        "error: element `{}` not found in `{}`",
-        element, path_str
-    );
+    eprintln!("error: element `{}` not found in `{}`", element, path_str);
     ExitCode::from(1)
 }

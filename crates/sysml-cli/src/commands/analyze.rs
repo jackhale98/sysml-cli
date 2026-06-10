@@ -1,12 +1,12 @@
-/// Analyze command: list, run, and compare analysis cases.
+//! Analyze command: list, run, and compare analysis cases.
 
 use std::path::PathBuf;
 use std::process::ExitCode;
 
 use sysml_core::parser as sysml_parser;
 use sysml_core::sim::analysis::{
-    evaluate_analysis, evaluate_trade_study,
-    extract_analysis_cases_from_model, format_analysis_list, AnalysisCaseModel,
+    evaluate_analysis, evaluate_trade_study, extract_analysis_cases_from_model,
+    format_analysis_list, AnalysisCaseModel,
 };
 
 use crate::cli::AnalyzeCommand;
@@ -102,12 +102,7 @@ fn run_list(cli: &Cli, files: &[PathBuf]) -> ExitCode {
     ExitCode::SUCCESS
 }
 
-fn run_execute(
-    cli: &Cli,
-    files: &[PathBuf],
-    name: Option<&str>,
-    bindings: &[String],
-) -> ExitCode {
+fn run_execute(cli: &Cli, files: &[PathBuf], name: Option<&str>, bindings: &[String]) -> ExitCode {
     let Some(model) = parse_models(files) else {
         return ExitCode::FAILURE;
     };
@@ -167,10 +162,7 @@ fn run_execute(
                 );
             }
             if let Some(ref obj) = case.objective {
-                println!(
-                    "  Objective: {} {:?}",
-                    obj.name, obj.kind
-                );
+                println!("  Objective: {} {:?}", obj.name, obj.kind);
             }
             for param in &case.parameters {
                 let val = env.get(&param.name).map(|v| format!(" = {}", v));
@@ -196,7 +188,8 @@ fn run_execute(
                 }
             }
             if let Some(ref ret) = case.return_decl {
-                let computed = eval_result.return_value
+                let computed = eval_result
+                    .return_value
                     .map(|v| format!(" => {:.4}", v))
                     .unwrap_or_default();
                 println!(
@@ -266,7 +259,8 @@ fn run_trade(cli: &Cli, files: &[PathBuf], name: Option<&str>) -> ExitCode {
             }
             println!();
             for alt in &trade.alternatives {
-                let score_str = alt.score
+                let score_str = alt
+                    .score
                     .map(|s| format!(" (score: {:.4})", s))
                     .unwrap_or_default();
                 println!("  Alternative: {}{}", alt.name, score_str);

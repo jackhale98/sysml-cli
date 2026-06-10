@@ -1,4 +1,4 @@
-/// Check for tree-sitter parse errors (ERROR / MISSING nodes).
+//! Check for tree-sitter parse errors (ERROR / MISSING nodes).
 
 use crate::checks::Check;
 use crate::diagnostic::{codes, Diagnostic};

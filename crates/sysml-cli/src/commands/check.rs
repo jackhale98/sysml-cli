@@ -1,7 +1,7 @@
-/// Validate SysML v2 models against structural rules.
-///
-/// Runs all lint checks: syntax errors, duplicate definitions, unused elements,
-/// unresolved type references, unsatisfied requirements, and more.
+//! Validate SysML v2 models against structural rules.
+//!
+//! Runs all lint checks: syntax errors, duplicate definitions, unused elements,
+//! unresolved type references, unsatisfied requirements, and more.
 
 use std::collections::HashSet;
 use std::path::PathBuf;
@@ -11,8 +11,8 @@ use sysml_core::checks::{self, Check};
 use sysml_core::diagnostic::{Diagnostic, Severity};
 use sysml_core::parser as sysml_parser;
 
-use crate::{Cli, collect_files_recursive, resolve_include_paths};
 use crate::output;
+use crate::{collect_files_recursive, resolve_include_paths, Cli};
 
 pub fn run(
     cli: &Cli,

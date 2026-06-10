@@ -1,4 +1,4 @@
-/// Byte-position text edits for surgical modification of SysML v2 source files.
+//! Byte-position text edits for surgical modification of SysML v2 source files.
 
 use crate::model::Model;
 
@@ -59,8 +59,7 @@ pub fn apply_edits(source: &str, plan: &EditPlan) -> Result<String, EditError> {
             return Err(EditError {
                 message: format!(
                     "overlapping edits: [{}, {}) and [{}, {})",
-                    pair[1].start_byte, pair[1].end_byte,
-                    pair[0].start_byte, pair[0].end_byte,
+                    pair[1].start_byte, pair[1].end_byte, pair[0].start_byte, pair[0].end_byte,
                 ),
             });
         }
@@ -72,7 +71,9 @@ pub fn apply_edits(source: &str, plan: &EditPlan) -> Result<String, EditError> {
             return Err(EditError {
                 message: format!(
                     "edit out of bounds: [{}, {}) in source of {} bytes",
-                    edit.start_byte, edit.end_byte, result.len()
+                    edit.start_byte,
+                    edit.end_byte,
+                    result.len()
                 ),
             });
         }
@@ -91,11 +92,9 @@ pub fn insert_member(
     parent_name: &str,
     member_text: &str,
 ) -> Result<TextEdit, EditError> {
-    let def = model
-        .find_def(parent_name)
-        .ok_or_else(|| EditError {
-            message: format!("definition `{}` not found", parent_name),
-        })?;
+    let def = model.find_def(parent_name).ok_or_else(|| EditError {
+        message: format!("definition `{}` not found", parent_name),
+    })?;
 
     let close_byte = def.body_end_byte.ok_or_else(|| EditError {
         message: format!("definition `{}` has no body (no closing `}}`)", parent_name),
@@ -247,13 +246,16 @@ pub fn diff(original: &str, modified: &str, filename: &str) -> String {
                         // Output the hunk
                         output.push_str(&format!(
                             "@@ -{},{} +{},{} @@\n",
-                            start_i + 1, di, start_j + 1, dj
+                            start_i + 1,
+                            di,
+                            start_j + 1,
+                            dj
                         ));
-                        for k in start_i..i + di {
-                            output.push_str(&format!("-{}\n", orig_lines[k]));
+                        for line in &orig_lines[start_i..i + di] {
+                            output.push_str(&format!("-{}\n", line));
                         }
-                        for k in start_j..j + dj {
-                            output.push_str(&format!("+{}\n", mod_lines[k]));
+                        for line in &mod_lines[start_j..j + dj] {
+                            output.push_str(&format!("+{}\n", line));
                         }
                         i += di;
                         j += dj;
@@ -383,8 +385,16 @@ mod tests {
         let source = "part def Vehicle;";
         let plan = EditPlan {
             edits: vec![
-                TextEdit { start_byte: 5, end_byte: 10, new_text: "x".to_string() },
-                TextEdit { start_byte: 8, end_byte: 12, new_text: "y".to_string() },
+                TextEdit {
+                    start_byte: 5,
+                    end_byte: 10,
+                    new_text: "x".to_string(),
+                },
+                TextEdit {
+                    start_byte: 8,
+                    end_byte: 12,
+                    new_text: "y".to_string(),
+                },
             ],
         };
         assert!(apply_edits(source, &plan).is_err());

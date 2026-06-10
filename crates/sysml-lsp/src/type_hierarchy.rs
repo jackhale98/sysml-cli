@@ -5,11 +5,7 @@ use crate::convert::span_to_range;
 use crate::document_symbols::def_kind_to_symbol_kind;
 
 /// Build a TypeHierarchyItem for a definition by name.
-pub fn prepare_type_hierarchy(
-    model: &Model,
-    uri: &Url,
-    name: &str,
-) -> Option<TypeHierarchyItem> {
+pub fn prepare_type_hierarchy(model: &Model, uri: &Url, name: &str) -> Option<TypeHierarchyItem> {
     let def = model.find_def(name)?;
     Some(make_item(
         &def.name,
@@ -22,10 +18,7 @@ pub fn prepare_type_hierarchy(
 
 /// Find supertypes of a definition (direct parent only in single-file mode,
 /// or chain if models are available).
-pub fn supertypes(
-    models: &[(&str, &Model)],
-    name: &str,
-) -> Vec<TypeHierarchyItem> {
+pub fn supertypes(models: &[(&str, &Model)], name: &str) -> Vec<TypeHierarchyItem> {
     let target = simple_name(name);
     // Find the definition to get its supertype
     for (_uri_str, model) in models {
@@ -54,10 +47,7 @@ pub fn supertypes(
 }
 
 /// Find subtypes of a definition (direct children).
-pub fn subtypes(
-    models: &[(&str, &Model)],
-    name: &str,
-) -> Vec<TypeHierarchyItem> {
+pub fn subtypes(models: &[(&str, &Model)], name: &str) -> Vec<TypeHierarchyItem> {
     let target = simple_name(name);
     let mut result = Vec::new();
 
@@ -171,10 +161,7 @@ mod tests {
         let source_b = "part def Derived :> Base;\n";
         let model_a = parse_file("a.sysml", source_a);
         let model_b = parse_file("b.sysml", source_b);
-        let models = vec![
-            ("file:///a.sysml", &model_a),
-            ("file:///b.sysml", &model_b),
-        ];
+        let models = vec![("file:///a.sysml", &model_a), ("file:///b.sysml", &model_b)];
         let result = supertypes(&models, "Derived");
         assert_eq!(result.len(), 1);
         assert_eq!(result[0].name, "Base");

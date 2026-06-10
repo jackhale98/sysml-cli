@@ -1,6 +1,6 @@
-/// Flags definitions that name themselves as their own super-type
-/// (e.g., `part def Vehicle :> Vehicle`).  This is always a typo / circular
-/// reference and would cause infinite recursion during type resolution.
+//! Flags definitions that name themselves as their own super-type
+//! (e.g., `part def Vehicle :> Vehicle`).  This is always a typo / circular
+//! reference and would cause infinite recursion during type resolution.
 
 use crate::checks::Check;
 use crate::diagnostic::{codes, Diagnostic};
@@ -56,8 +56,9 @@ mod tests {
         let model = parse_file("test.sysml", source);
         let diags = SelfSpecializationCheck.run(&model);
         assert!(
-            diags.iter().any(|d| d.code == codes::SELF_SPECIALIZATION
-                && d.message.contains("Vehicle")),
+            diags
+                .iter()
+                .any(|d| d.code == codes::SELF_SPECIALIZATION && d.message.contains("Vehicle")),
             "self-specialization should error: {:?}",
             diags.iter().map(|d| &d.message).collect::<Vec<_>>()
         );
@@ -75,7 +76,7 @@ mod tests {
     }
 
     #[test]
-    fn qualified_alias_to_stdlib_does_not_warn () {
+    fn qualified_alias_to_stdlib_does_not_warn() {
         // Common pattern: `attribute def MassValue :> ISQ::MassValue` —
         // legitimate stdlib re-export / specialization.
         let source = "attribute def MassValue :> ISQ::MassValue;\n";

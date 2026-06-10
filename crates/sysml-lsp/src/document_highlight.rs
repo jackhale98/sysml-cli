@@ -69,10 +69,23 @@ mod tests {
         let source = "part def Engine;\npart def Vehicle {\n    part engine : Engine;\n}\n";
         let model = parse_file("test.sysml", source);
         let hl = document_highlights(&model, "Engine");
-        assert!(hl.len() >= 2, "should highlight def + usage, got {}", hl.len());
-        let writes: Vec<_> = hl.iter().filter(|h| h.kind == Some(DocumentHighlightKind::WRITE)).collect();
-        let reads: Vec<_> = hl.iter().filter(|h| h.kind == Some(DocumentHighlightKind::READ)).collect();
-        assert!(!writes.is_empty(), "should have write highlight for definition");
+        assert!(
+            hl.len() >= 2,
+            "should highlight def + usage, got {}",
+            hl.len()
+        );
+        let writes: Vec<_> = hl
+            .iter()
+            .filter(|h| h.kind == Some(DocumentHighlightKind::WRITE))
+            .collect();
+        let reads: Vec<_> = hl
+            .iter()
+            .filter(|h| h.kind == Some(DocumentHighlightKind::READ))
+            .collect();
+        assert!(
+            !writes.is_empty(),
+            "should have write highlight for definition"
+        );
         assert!(!reads.is_empty(), "should have read highlight for type ref");
     }
 
@@ -94,10 +107,15 @@ mod tests {
 
     #[test]
     fn multiple_usages_highlighted() {
-        let source = "part def Engine;\npart def Car {\n    part e1 : Engine;\n    part e2 : Engine;\n}\n";
+        let source =
+            "part def Engine;\npart def Car {\n    part e1 : Engine;\n    part e2 : Engine;\n}\n";
         let model = parse_file("test.sysml", source);
         let hl = document_highlights(&model, "Engine");
-        assert!(hl.len() >= 3, "should have def + 2 usages, got {}", hl.len());
+        assert!(
+            hl.len() >= 3,
+            "should have def + 2 usages, got {}",
+            hl.len()
+        );
     }
 
     #[test]
@@ -105,7 +123,13 @@ mod tests {
         let source = "part def Engine;\npart def Vehicle {\n    part engine : Engine;\n}\n";
         let model = parse_file("test.sysml", source);
         let hl = document_highlights(&model, "engine");
-        let writes: Vec<_> = hl.iter().filter(|h| h.kind == Some(DocumentHighlightKind::WRITE)).collect();
-        assert!(!writes.is_empty(), "usage name should be highlighted as write");
+        let writes: Vec<_> = hl
+            .iter()
+            .filter(|h| h.kind == Some(DocumentHighlightKind::WRITE))
+            .collect();
+        assert!(
+            !writes.is_empty(),
+            "usage name should be highlighted as write"
+        );
     }
 }

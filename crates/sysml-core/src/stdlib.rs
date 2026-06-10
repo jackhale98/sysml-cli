@@ -1,7 +1,7 @@
-/// Embedded SysML v2 standard library.
-///
-/// The standard library files (`.sysml` and `.kerml`) are embedded at
-/// compile time from `sysml-v2-release/sysml.library/`.
+//! Embedded SysML v2 standard library.
+//!
+//! The standard library files (`.sysml` and `.kerml`) are embedded at
+//! compile time from `sysml-v2-release/sysml.library/`.
 
 use std::collections::{HashMap, HashSet};
 use std::sync::OnceLock;
@@ -99,7 +99,10 @@ mod tests {
             return;
         }
         let defs = stdlib_definitions();
-        assert!(defs.contains("ScalarValues"), "stdlib should define ScalarValues");
+        assert!(
+            defs.contains("ScalarValues"),
+            "stdlib should define ScalarValues"
+        );
     }
 
     #[test]
@@ -119,6 +122,9 @@ mod tests {
             return;
         }
         let pkg_defs = stdlib_package_defs();
-        assert!(!pkg_defs.is_empty(), "stdlib package index should not be empty");
+        assert!(
+            !pkg_defs.is_empty(),
+            "stdlib package index should not be empty"
+        );
     }
 }

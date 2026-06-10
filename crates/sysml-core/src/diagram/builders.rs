@@ -1,9 +1,9 @@
-/// Diagram builders: convert Model data into DiagramGraph.
+//! Diagram builders: convert Model data into DiagramGraph.
 
-use crate::model::*;
-use crate::sim::state_machine::StateMachineModel;
-use crate::sim::action_flow::{ActionModel, ActionStep};
 use super::graph::*;
+use crate::model::*;
+use crate::sim::action_flow::{ActionModel, ActionStep};
+use crate::sim::state_machine::StateMachineModel;
 
 /// Extract the root (first) segment of a dotted path.
 /// "engine.drivePwrPort" → "engine", "transmission" → "transmission"
@@ -47,7 +47,11 @@ pub fn build_bdd(model: &Model, scope: Option<&str>) -> DiagramGraph {
                 .as_ref()
                 .map(|m| format!(" {}", m))
                 .unwrap_or_default();
-            let type_str = if t.is_empty() { String::new() } else { format!(" : {}", t) };
+            let type_str = if t.is_empty() {
+                String::new()
+            } else {
+                format!(" : {}", t)
+            };
             attrs.push((u.kind.clone(), format!("{}{}{}", u.name, type_str, mult)));
         }
 
@@ -83,8 +87,7 @@ pub fn build_bdd(model: &Model, scope: Option<&str>) -> DiagramGraph {
     }
 
     // Composition edges (part usages that reference other definitions in scope)
-    let def_names: std::collections::HashSet<&str> =
-        defs.iter().map(|d| d.name.as_str()).collect();
+    let def_names: std::collections::HashSet<&str> = defs.iter().map(|d| d.name.as_str()).collect();
     for def in &defs {
         for u in model.usages_in_def(&def.name) {
             if let Some(ref t) = u.type_ref {
@@ -117,15 +120,16 @@ fn collect_ports_recursive(
 ) -> Vec<(String, String)> {
     let mut ports = Vec::new();
     // Find children: matching parent_def name AND contained within parent span
-    let children: Vec<&crate::model::Usage> = model.usages
+    let children: Vec<&crate::model::Usage> = model
+        .usages
         .iter()
-        .filter(|u| u.parent_def.as_deref() == Some(parent_name)
-            && parent_span.contains(&u.span))
+        .filter(|u| u.parent_def.as_deref() == Some(parent_name) && parent_span.contains(&u.span))
         .collect();
     for cu in &children {
         if cu.kind == "port" {
             let pt = cu.type_ref.as_deref().unwrap_or("");
-            let dir = cu.direction
+            let dir = cu
+                .direction
                 .map(|d| format!("{} ", d.label()))
                 .unwrap_or_default();
             let conj = if cu.is_conjugated { "~" } else { "" };
@@ -141,7 +145,12 @@ fn collect_ports_recursive(
             } else {
                 format!("{}.{}", prefix, cu.name)
             };
-            ports.extend(collect_ports_recursive(model, &cu.name, &cu.span, &nested_prefix));
+            ports.extend(collect_ports_recursive(
+                model,
+                &cu.name,
+                &cu.span,
+                &nested_prefix,
+            ));
         }
     }
     ports
@@ -161,7 +170,11 @@ pub fn build_ibd(model: &Model, def_name: &str) -> DiagramGraph {
             let child_ports = collect_ports_recursive(model, &u.name, &u.span, "");
             graph.add_node(DiagramNode {
                 id: u.name.clone(),
-                label: if t.is_empty() { u.name.clone() } else { format!("{} : {}", u.name, t) },
+                label: if t.is_empty() {
+                    u.name.clone()
+                } else {
+                    format!("{} : {}", u.name, t)
+                },
                 kind: NodeKind::Block,
                 stereotype: None,
                 attributes: child_ports,
@@ -260,7 +273,7 @@ pub fn build_stm(model: &Model, state_def_name: Option<&str>) -> DiagramGraph {
         kind: NodeKind::InitialState,
         stereotype: None,
         attributes: Vec::new(),
-                is_definition: false,
+        is_definition: false,
     });
 
     // Add state nodes
@@ -271,7 +284,7 @@ pub fn build_stm(model: &Model, state_def_name: Option<&str>) -> DiagramGraph {
             kind: NodeKind::State,
             stereotype: None,
             attributes: Vec::new(),
-                is_definition: false,
+            is_definition: false,
         });
     }
 
@@ -372,10 +385,9 @@ pub fn build_req(model: &Model) -> DiagramGraph {
                 .iter()
                 .filter(|d| d.has_body)
                 .filter(|d| {
-                    d.span.start_byte <= s.span.start_byte
-                        && s.span.end_byte <= d.span.end_byte
+                    d.span.start_byte <= s.span.start_byte && s.span.end_byte <= d.span.end_byte
                 })
-                .last()
+                .next_back()
                 .map(|d| (i, d.name.as_str()))
         })
         .collect();
@@ -453,7 +465,7 @@ pub fn build_pkg(model: &Model) -> DiagramGraph {
             kind: NodeKind::Package,
             stereotype: Some("<<package>>".to_string()),
             attributes: Vec::new(),
-                is_definition: false,
+            is_definition: false,
         });
 
         // Definitions contained in this package
@@ -509,14 +521,19 @@ pub fn build_par(model: &Model, scope: Option<&str>) -> DiagramGraph {
     let title = scope
         .map(|s| format!("par [{}]", s))
         .unwrap_or_else(|| format!("par [{}]", model.file));
-    let mut graph = DiagramGraph::new(title, DiagramKind::GeneralView(GeneralViewFlavor::Parametric));
+    let mut graph = DiagramGraph::new(
+        title,
+        DiagramKind::GeneralView(GeneralViewFlavor::Parametric),
+    );
 
     let constraint_defs: Vec<&Definition> = model
         .definitions
         .iter()
         .filter(|d| {
             d.kind == DefKind::Constraint
-                && (scope.is_none() || d.parent_def.as_deref() == scope || Some(d.name.as_str()) == scope)
+                && (scope.is_none()
+                    || d.parent_def.as_deref() == scope
+                    || Some(d.name.as_str()) == scope)
         })
         .collect();
 
@@ -567,7 +584,7 @@ pub fn build_stm_from_state_machine(sm: &StateMachineModel) -> DiagramGraph {
         kind: NodeKind::InitialState,
         stereotype: None,
         attributes: Vec::new(),
-                is_definition: false,
+        is_definition: false,
     });
 
     // State nodes with entry/do/exit actions as attributes
@@ -646,7 +663,7 @@ pub fn build_act_from_action_model(am: &ActionModel) -> DiagramGraph {
         kind: NodeKind::InitialState,
         stereotype: None,
         attributes: Vec::new(),
-                is_definition: false,
+        is_definition: false,
     });
 
     let mut counter = 0usize;
@@ -666,7 +683,7 @@ pub fn build_act_from_action_model(am: &ActionModel) -> DiagramGraph {
             kind: NodeKind::FinalState,
             stereotype: None,
             attributes: Vec::new(),
-                is_definition: false,
+            is_definition: false,
         });
         for id in &last_ids {
             graph.add_edge(DiagramEdge {
@@ -737,7 +754,7 @@ fn add_action_step(
             }
             let mut branch_ends = Vec::new();
             for branch in branches {
-                let ends = add_action_step(graph, branch, &[fork_id.clone()], counter);
+                let ends = add_action_step(graph, branch, std::slice::from_ref(&fork_id), counter);
                 branch_ends.extend(ends);
             }
             branch_ends
@@ -793,7 +810,7 @@ fn add_action_step(
                     kind: NodeKind::Action,
                     stereotype: None,
                     attributes: Vec::new(),
-                is_definition: false,
+                    is_definition: false,
                 });
                 let guard_label = branch.guard.as_ref().map(|g| format!("[{}]", g));
                 graph.add_edge(DiagramEdge {
@@ -827,7 +844,12 @@ fn add_action_step(
             }
             vec![merge_id]
         }
-        ActionStep::IfAction { condition, then_step, else_step, .. } => {
+        ActionStep::IfAction {
+            condition,
+            then_step,
+            else_step,
+            ..
+        } => {
             let dec_id = format!("if_{}", *counter);
             *counter += 1;
             graph.add_node(DiagramNode {
@@ -850,7 +872,8 @@ fn add_action_step(
             let mut all_ends = Vec::new();
 
             // Then branch
-            let then_ends = add_action_step(graph, then_step, &[dec_id.clone()], counter);
+            let then_ends =
+                add_action_step(graph, then_step, std::slice::from_ref(&dec_id), counter);
             // Add guard label on the first edge from decision to then
             if let Some(edge) = graph.edges.iter_mut().rev().find(|e| e.source == dec_id) {
                 edge.label = Some("[yes]".to_string());
@@ -859,7 +882,8 @@ fn add_action_step(
 
             // Else branch
             if let Some(else_s) = else_step {
-                let else_ends = add_action_step(graph, else_s, &[dec_id.clone()], counter);
+                let else_ends =
+                    add_action_step(graph, else_s, std::slice::from_ref(&dec_id), counter);
                 if let Some(edge) = graph.edges.iter_mut().rev().find(|e| e.source == dec_id) {
                     edge.label = Some("[no]".to_string());
                 }
@@ -890,13 +914,21 @@ fn add_action_step(
             }
             vec![id]
         }
-        ActionStep::Send { payload, via, to, .. } => {
+        ActionStep::Send {
+            payload, via, to, ..
+        } => {
             let id = format!("act_{}", *counter);
             *counter += 1;
             let mut label = "send".to_string();
-            if let Some(p) = payload { label.push_str(&format!(" {}", p)); }
-            if let Some(v) = via { label.push_str(&format!(" via {}", v)); }
-            if let Some(t) = to { label.push_str(&format!(" to {}", t)); }
+            if let Some(p) = payload {
+                label.push_str(&format!(" {}", p));
+            }
+            if let Some(v) = via {
+                label.push_str(&format!(" via {}", v));
+            }
+            if let Some(t) = to {
+                label.push_str(&format!(" to {}", t));
+            }
             graph.add_node(DiagramNode {
                 id: id.clone(),
                 label,
@@ -915,7 +947,9 @@ fn add_action_step(
             }
             vec![id]
         }
-        ActionStep::WhileLoop { condition, body, .. } => {
+        ActionStep::WhileLoop {
+            condition, body, ..
+        } => {
             let dec_id = format!("while_{}", *counter);
             *counter += 1;
             graph.add_node(DiagramNode {
@@ -934,7 +968,7 @@ fn add_action_step(
                     kind: EdgeKind::Flow,
                 });
             }
-            let body_ends = add_action_step(graph, body, &[dec_id.clone()], counter);
+            let body_ends = add_action_step(graph, body, std::slice::from_ref(&dec_id), counter);
             // Loop back
             for end_id in &body_ends {
                 graph.add_edge(DiagramEdge {
@@ -947,7 +981,12 @@ fn add_action_step(
             // Exit edge from decision
             vec![dec_id]
         }
-        ActionStep::ForLoop { variable, collection, body, .. } => {
+        ActionStep::ForLoop {
+            variable,
+            collection,
+            body,
+            ..
+        } => {
             let dec_id = format!("for_{}", *counter);
             *counter += 1;
             graph.add_node(DiagramNode {
@@ -966,7 +1005,7 @@ fn add_action_step(
                     kind: EdgeKind::Flow,
                 });
             }
-            let body_ends = add_action_step(graph, body, &[dec_id.clone()], counter);
+            let body_ends = add_action_step(graph, body, std::slice::from_ref(&dec_id), counter);
             for end_id in &body_ends {
                 graph.add_edge(DiagramEdge {
                     source: end_id.clone(),
@@ -1011,7 +1050,7 @@ fn add_action_step(
                     kind: NodeKind::FinalState,
                     stereotype: None,
                     attributes: Vec::new(),
-                is_definition: false,
+                    is_definition: false,
                 });
             }
             for prev in prev_ids {
@@ -1068,10 +1107,9 @@ pub fn build_trace(model: &Model) -> DiagramGraph {
                 .iter()
                 .filter(|d| d.has_body)
                 .filter(|d| {
-                    d.span.start_byte <= s.span.start_byte
-                        && s.span.end_byte <= d.span.end_byte
+                    d.span.start_byte <= s.span.start_byte && s.span.end_byte <= d.span.end_byte
                 })
-                .last()
+                .next_back()
                 .map(|d| (i, d.name.as_str()))
         })
         .collect();
@@ -1271,7 +1309,7 @@ pub fn build_ucd(model: &Model) -> DiagramGraph {
                             kind: NodeKind::Actor,
                             stereotype: Some("<<actor>>".to_string()),
                             attributes: Vec::new(),
-                is_definition: false,
+                            is_definition: false,
                         });
                         added_actors.insert(actor_name.to_string());
                     }
@@ -1313,12 +1351,15 @@ pub fn build_sv(model: &Model, scope: Option<&str>) -> DiagramGraph {
 
     // Collect lifeline participants: parts within scope (or top-level)
     let parts: Vec<&crate::model::Usage> = if let Some(scope_name) = scope {
-        model.usages_in_def(scope_name)
+        model
+            .usages_in_def(scope_name)
             .into_iter()
             .filter(|u| matches!(u.kind.as_str(), "part" | "item"))
             .collect()
     } else {
-        model.usages.iter()
+        model
+            .usages
+            .iter()
             .filter(|u| matches!(u.kind.as_str(), "part" | "item") && u.parent_def.is_none())
             .collect()
     };
@@ -1326,8 +1367,14 @@ pub fn build_sv(model: &Model, scope: Option<&str>) -> DiagramGraph {
     for part in &parts {
         graph.add_node(DiagramNode {
             id: part.name.clone(),
-            label: format!("{}{}", part.name,
-                part.type_ref.as_ref().map(|t| format!(" : {}", t)).unwrap_or_default()),
+            label: format!(
+                "{}{}",
+                part.name,
+                part.type_ref
+                    .as_ref()
+                    .map(|t| format!(" : {}", t))
+                    .unwrap_or_default()
+            ),
             kind: NodeKind::Lifeline,
             stereotype: None,
             attributes: Vec::new(),
@@ -1337,7 +1384,8 @@ pub fn build_sv(model: &Model, scope: Option<&str>) -> DiagramGraph {
 
     // Also add action usages as potential lifelines
     let action_parts: Vec<&crate::model::Usage> = if let Some(scope_name) = scope {
-        model.usages_in_def(scope_name)
+        model
+            .usages_in_def(scope_name)
             .into_iter()
             .filter(|u| matches!(u.kind.as_str(), "action" | "connection" | "flow"))
             .collect()
@@ -1348,8 +1396,14 @@ pub fn build_sv(model: &Model, scope: Option<&str>) -> DiagramGraph {
         if !graph.has_node(&ap.name) {
             graph.add_node(DiagramNode {
                 id: ap.name.clone(),
-                label: format!("{}{}", ap.name,
-                    ap.type_ref.as_ref().map(|t| format!(" : {}", t)).unwrap_or_default()),
+                label: format!(
+                    "{}{}",
+                    ap.name,
+                    ap.type_ref
+                        .as_ref()
+                        .map(|t| format!(" : {}", t))
+                        .unwrap_or_default()
+                ),
                 kind: NodeKind::Lifeline,
                 stereotype: None,
                 attributes: Vec::new(),
@@ -1452,8 +1506,7 @@ pub fn apply_view_filter(graph: &mut DiagramGraph, model: &Model, view_name: &st
 
     // Collect names of elements that pass the view filter
     let elements = query::list_elements(model, &filter);
-    let allowed: std::collections::HashSet<&str> =
-        elements.iter().map(|e| e.name()).collect();
+    let allowed: std::collections::HashSet<&str> = elements.iter().map(|e| e.name()).collect();
 
     if !allowed.is_empty() {
         graph.filter_by_names(&allowed);
@@ -1476,7 +1529,10 @@ mod tests {
         "#,
         );
         let graph = build_bdd(&model, None);
-        assert_eq!(graph.kind, DiagramKind::GeneralView(GeneralViewFlavor::Default));
+        assert_eq!(
+            graph.kind,
+            DiagramKind::GeneralView(GeneralViewFlavor::Default)
+        );
         assert_eq!(graph.nodes.len(), 3);
         assert!(graph.has_node("Vehicle"));
         assert!(graph.has_node("Engine"));
@@ -1620,14 +1676,18 @@ mod tests {
         );
         let graph = build_par(&model, None);
         assert!(graph.has_node("MassConstraint"));
-        let node = graph.nodes.iter().find(|n| n.id == "MassConstraint").unwrap();
+        let node = graph
+            .nodes
+            .iter()
+            .find(|n| n.id == "MassConstraint")
+            .unwrap();
         assert_eq!(node.kind, NodeKind::Constraint);
     }
 
     #[test]
     fn rich_stm_has_transition_labels() {
-        use crate::sim::state_machine::*;
         use crate::model::Span;
+        use crate::sim::state_machine::*;
 
         let sm = StateMachineModel {
             name: "Traffic".to_string(),
@@ -1679,8 +1739,8 @@ mod tests {
 
     #[test]
     fn act_from_action_model() {
-        use crate::sim::action_flow::*;
         use crate::model::Span;
+        use crate::sim::action_flow::*;
 
         let am = ActionModel {
             name: "Process".to_string(),
@@ -1693,7 +1753,9 @@ mod tests {
                     name: "Step2".to_string(),
                     span: Span::default(),
                 },
-                ActionStep::Done { span: Span::default() },
+                ActionStep::Done {
+                    span: Span::default(),
+                },
             ],
             span: Span::default(),
         };
@@ -1704,7 +1766,9 @@ mod tests {
         assert!(graph.has_node("__final__"));
 
         // Should have action nodes
-        let actions: Vec<_> = graph.nodes.iter()
+        let actions: Vec<_> = graph
+            .nodes
+            .iter()
             .filter(|n| n.kind == NodeKind::Action)
             .collect();
         assert_eq!(actions.len(), 2);
@@ -1717,32 +1781,32 @@ mod tests {
 
     #[test]
     fn act_with_decision() {
+        use crate::model::Span;
         use crate::sim::action_flow::*;
         use crate::sim::expr::Expr;
-        use crate::model::Span;
 
         let am = ActionModel {
             name: "Branching".to_string(),
-            steps: vec![
-                ActionStep::IfAction {
-                    condition: Expr::Var("ready".to_string()),
-                    then_step: Box::new(ActionStep::Perform {
-                        name: "Go".to_string(),
-                        span: Span::default(),
-                    }),
-                    else_step: Some(Box::new(ActionStep::Perform {
-                        name: "Wait".to_string(),
-                        span: Span::default(),
-                    })),
+            steps: vec![ActionStep::IfAction {
+                condition: Expr::Var("ready".to_string()),
+                then_step: Box::new(ActionStep::Perform {
+                    name: "Go".to_string(),
                     span: Span::default(),
-                },
-            ],
+                }),
+                else_step: Some(Box::new(ActionStep::Perform {
+                    name: "Wait".to_string(),
+                    span: Span::default(),
+                })),
+                span: Span::default(),
+            }],
             span: Span::default(),
         };
 
         let graph = build_act_from_action_model(&am);
         // Should have decision node
-        let decisions: Vec<_> = graph.nodes.iter()
+        let decisions: Vec<_> = graph
+            .nodes
+            .iter()
             .filter(|n| n.kind == NodeKind::Decision)
             .collect();
         assert!(!decisions.is_empty());
@@ -1774,7 +1838,11 @@ mod tests {
         assert!(graph.has_node("Vehicle"));
 
         // MassReq should be satisfied
-        let sat_edges: Vec<_> = graph.edges.iter().filter(|e| e.kind == EdgeKind::Satisfy).collect();
+        let sat_edges: Vec<_> = graph
+            .edges
+            .iter()
+            .filter(|e| e.kind == EdgeKind::Satisfy)
+            .collect();
         assert_eq!(sat_edges.len(), 1);
 
         // SpeedReq should be marked UNSATISFIED and UNVERIFIED
@@ -1798,13 +1866,24 @@ mod tests {
         assert_eq!(graph.kind, DiagramKind::GridView(GridViewFlavor::Alloc));
         assert!(graph.has_node("ProcessData"));
         assert!(graph.has_node("Computer"));
-        assert!(graph.has_node("UnallocatedAction"), "Unallocated actions should appear");
+        assert!(
+            graph.has_node("UnallocatedAction"),
+            "Unallocated actions should appear"
+        );
 
-        let alloc_edges: Vec<_> = graph.edges.iter().filter(|e| e.kind == EdgeKind::Allocate).collect();
+        let alloc_edges: Vec<_> = graph
+            .edges
+            .iter()
+            .filter(|e| e.kind == EdgeKind::Allocate)
+            .collect();
         assert_eq!(alloc_edges.len(), 1);
 
         // Unallocated action should have stereotype
-        let unalloc = graph.nodes.iter().find(|n| n.id == "UnallocatedAction").unwrap();
+        let unalloc = graph
+            .nodes
+            .iter()
+            .find(|n| n.id == "UnallocatedAction")
+            .unwrap();
         assert!(unalloc.stereotype.as_ref().unwrap().contains("UNALLOCATED"));
     }
 
@@ -1822,9 +1901,18 @@ mod tests {
         "#,
         );
         let graph = build_ucd(&model);
-        assert_eq!(graph.kind, DiagramKind::GeneralView(GeneralViewFlavor::UseCase));
-        assert!(graph.has_node("DriveVehicle"), "Should have DriveVehicle use case");
-        assert!(graph.has_node("StartEngine"), "Should have StartEngine use case");
+        assert_eq!(
+            graph.kind,
+            DiagramKind::GeneralView(GeneralViewFlavor::UseCase)
+        );
+        assert!(
+            graph.has_node("DriveVehicle"),
+            "Should have DriveVehicle use case"
+        );
+        assert!(
+            graph.has_node("StartEngine"),
+            "Should have StartEngine use case"
+        );
     }
 
     #[test]
@@ -1842,7 +1930,9 @@ mod tests {
         let graph = build_ibd(&model, "Vehicle");
         assert!(graph.has_node("engine"));
         assert!(graph.has_node("transmission"));
-        let conn_edges: Vec<_> = graph.edges.iter()
+        let conn_edges: Vec<_> = graph
+            .edges
+            .iter()
             .filter(|e| e.kind == EdgeKind::Connection)
             .collect();
         assert_eq!(conn_edges.len(), 1);
@@ -1870,7 +1960,9 @@ mod tests {
         assert!(initial_count >= 3, "Should have Vehicle, Engine, FuelPort");
         apply_view_filter(&mut graph, &model, "PartsOnly");
         // After filtering, only part definitions should remain
-        assert!(graph.nodes.len() <= initial_count,
-            "View filter should prune nodes");
+        assert!(
+            graph.nodes.len() <= initial_count,
+            "View filter should prune nodes"
+        );
     }
 }

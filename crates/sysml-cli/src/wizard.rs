@@ -1,4 +1,4 @@
-/// CLI wizard runner — implements WizardRunner using dialoguer.
+//! CLI wizard runner — implements WizardRunner using dialoguer.
 
 use sysml_core::interactive::*;
 
@@ -120,10 +120,8 @@ impl WizardRunner for CliWizardRunner {
                     .interact_opt()
                 {
                     Ok(Some(indices)) => {
-                        let selected: Vec<String> = indices
-                            .iter()
-                            .map(|&i| options[i].value.clone())
-                            .collect();
+                        let selected: Vec<String> =
+                            indices.iter().map(|&i| options[i].value.clone()).collect();
                         Some(WizardAnswer::Selected(selected))
                     }
                     _ => None,

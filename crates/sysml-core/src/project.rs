@@ -1,5 +1,5 @@
-/// Project discovery — locate and load a `.sysml/config.toml` by walking
-/// up the directory tree from a starting path.
+//! Project discovery — locate and load a `.sysml/config.toml` by walking
+//! up the directory tree from a starting path.
 
 use std::path::{Path, PathBuf};
 
