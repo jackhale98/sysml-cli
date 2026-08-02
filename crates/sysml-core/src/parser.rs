@@ -320,11 +320,22 @@ fn is_structural_boundary(kind: &str) -> bool {
     )
 }
 
+/// Effective modifier token kind for a preceding sibling: unwraps the named
+/// `modifier` node (its single child is the keyword token).
+fn sibling_modifier_kind(sib: &Node) -> &'static str {
+    if sib.kind() == "modifier" {
+        if let Some(child) = sib.child(0) {
+            return child.kind();
+        }
+    }
+    sib.kind()
+}
+
 /// Extract direction modifier from preceding siblings.
 fn get_direction(node: &Node) -> Option<Direction> {
     let mut sibling = node.prev_sibling();
     while let Some(sib) = sibling {
-        match sib.kind() {
+        match sibling_modifier_kind(&sib) {
             "in" => return Some(Direction::In),
             "out" => return Some(Direction::Out),
             "inout" => return Some(Direction::InOut),
@@ -359,7 +370,7 @@ fn is_conjugated_type(node: &Node, source: &[u8]) -> bool {
     // Also check for "conjugate" modifier in preceding siblings
     let mut sibling = node.prev_sibling();
     while let Some(sib) = sibling {
-        match sib.kind() {
+        match sibling_modifier_kind(&sib) {
             "conjugate" => return true,
             k if is_structural_boundary(k) => break,
             _ => {}
@@ -400,7 +411,7 @@ fn get_visibility(node: &Node) -> Option<Visibility> {
 fn is_abstract(node: &Node) -> bool {
     let mut sibling = node.prev_sibling();
     while let Some(sib) = sibling {
-        match sib.kind() {
+        match sibling_modifier_kind(&sib) {
             "abstract" => return true,
             k if is_structural_boundary(k) => break,
             _ => {}
@@ -664,6 +675,26 @@ fn walk_node_scoped(
     parent_def_name: Option<&str>,
 ) {
     let kind = node.kind();
+
+    // MISSING nodes are zero-width leaves whose kind is the *expected* token
+    // (e.g. `;`) with is_missing() set — they never appear as a "MISSING" kind.
+    if node.is_missing() {
+        let context = node
+            .parent()
+            .map(|p| node_text(&p, source).to_string())
+            .unwrap_or_default();
+        let context_trimmed = if context.len() > 60 {
+            format!("{}...", &context[..60])
+        } else {
+            context
+        };
+        model.syntax_errors.push(SyntaxError {
+            message: format!("Missing `{}`", kind),
+            context: context_trimmed,
+            span: Span::from_node(&node),
+        });
+        return;
+    }
 
     match kind {
         // --- Syntax errors ---
