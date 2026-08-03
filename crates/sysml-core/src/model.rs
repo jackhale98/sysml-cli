@@ -286,6 +286,9 @@ pub struct Usage {
     /// Subsets target name.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub subsets: Option<String>,
+    /// Documentation comment text.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub doc: Option<String>,
     /// Whether this usage is a variant choice (`variant part ...`).
     #[serde(skip_serializing_if = "std::ops::Not::not")]
     pub is_variant: bool,

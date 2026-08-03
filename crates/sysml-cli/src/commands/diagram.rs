@@ -123,7 +123,16 @@ pub(crate) fn run(
 
     // Apply view filter if specified
     if let Some(view_name) = view {
-        apply_view_filter(&mut graph, &model, view_name);
+        match apply_view_filter(&mut graph, &model, view_name) {
+            Ok(0) => {
+                eprintln!("warning: view `{}` matches no elements", view_name);
+            }
+            Ok(_) => {}
+            Err(msg) => {
+                eprintln!("error: {}", msg);
+                return ExitCode::FAILURE;
+            }
+        }
     }
 
     let output = render(&graph, format);

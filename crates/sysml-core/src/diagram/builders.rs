@@ -1496,21 +1496,37 @@ pub fn build_sv(model: &Model, scope: Option<&str>) -> DiagramGraph {
 /// Apply a view filter to a diagram graph.
 ///
 /// Uses the view definition's expose and kind filters to prune the graph.
-/// Returns the filtered graph.
-pub fn apply_view_filter(graph: &mut DiagramGraph, model: &Model, view_name: &str) {
+/// Returns the number of elements the view matched, or an error naming
+/// the available views when `view_name` doesn't exist (a silent no-op
+/// here previously made `--view` appear to work while doing nothing).
+pub fn apply_view_filter(
+    graph: &mut DiagramGraph,
+    model: &Model,
+    view_name: &str,
+) -> Result<usize, String> {
     use crate::query;
 
     let Some(filter) = query::filter_from_view(model, view_name) else {
-        return;
+        let available: Vec<&str> = model.views.iter().map(|v| v.name.as_str()).collect();
+        return Err(format!(
+            "view `{}` not found. Available views: {}",
+            view_name,
+            if available.is_empty() {
+                "(none defined in model)".to_string()
+            } else {
+                available.join(", ")
+            }
+        ));
     };
 
     // Collect names of elements that pass the view filter
     let elements = query::list_elements(model, &filter);
     let allowed: std::collections::HashSet<&str> = elements.iter().map(|e| e.name()).collect();
 
-    if !allowed.is_empty() {
-        graph.filter_by_names(&allowed);
-    }
+    // An empty match set filters honestly to an empty diagram rather
+    // than silently rendering everything.
+    graph.filter_by_names(&allowed);
+    Ok(allowed.len())
 }
 
 #[cfg(test)]
@@ -1958,11 +1974,23 @@ mod tests {
         let mut graph = build_bdd(&model, None);
         let initial_count = graph.nodes.len();
         assert!(initial_count >= 3, "Should have Vehicle, Engine, FuelPort");
-        apply_view_filter(&mut graph, &model, "PartsOnly");
+        let matched = apply_view_filter(&mut graph, &model, "PartsOnly")
+            .expect("view exists");
+        assert!(matched > 0, "view should match part definitions");
         // After filtering, only part definitions should remain
         assert!(
             graph.nodes.len() <= initial_count,
             "View filter should prune nodes"
         );
+    }
+
+    #[test]
+    fn view_filter_unknown_view_errors() {
+        let model = parse_file("test.sysml", "part def Vehicle;
+");
+        let mut graph = build_bdd(&model, None);
+        let err = apply_view_filter(&mut graph, &model, "NoSuchView");
+        assert!(err.is_err(), "unknown view must be an error, not a no-op");
+        assert!(err.unwrap_err().contains("NoSuchView"));
     }
 }

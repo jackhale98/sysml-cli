@@ -458,7 +458,10 @@ fn get_short_name(node: &Node, source: &[u8]) -> Option<String> {
 fn get_doc_comment(node: &Node, source: &[u8]) -> Option<String> {
     let mut cursor = node.walk();
     for child in node.children(&mut cursor) {
-        if child.kind() == "definition_body" || child.kind() == "enumeration_body" {
+        if matches!(
+            child.kind(),
+            "definition_body" | "enumeration_body" | "requirement_body" | "state_body"
+        ) {
             let mut bc = child.walk();
             for body_child in child.children(&mut bc) {
                 if body_child.kind() == "doc_comment" {
@@ -914,6 +917,7 @@ fn walk_node_scoped(
                     short_name,
                     redefinition,
                     subsets,
+                    doc: get_doc_comment(&node, source),
                     is_variant: has_modifier(&node, "variant"),
                     is_variation: has_modifier(&node, "variation"),
                     qualified_name: None,
@@ -959,7 +963,8 @@ fn walk_node_scoped(
                             short_name: None,
                             redefinition: None,
                             subsets: None,
-                            is_variant: false,
+                            doc: None,
+                    is_variant: false,
                     is_variation: false,
                     qualified_name: None,
                         });
@@ -1024,6 +1029,7 @@ fn walk_node_scoped(
                     short_name: None,
                     redefinition: None,
                     subsets: None,
+                    doc: None,
                     is_variant: false,
                     is_variation: false,
                     qualified_name: None,
@@ -1097,6 +1103,7 @@ fn walk_node_scoped(
                     short_name: None,
                     redefinition: None,
                     subsets: None,
+                    doc: None,
                     is_variant: false,
                     is_variation: false,
                     qualified_name: None,
@@ -1251,7 +1258,8 @@ fn walk_node_scoped(
                         short_name: None,
                         redefinition: None,
                         subsets: None,
-                        is_variant: false,
+                        doc: None,
+                    is_variant: false,
                     is_variation: false,
                     qualified_name: None,
                     });
@@ -1323,7 +1331,8 @@ fn walk_node_scoped(
                 short_name: None,
                 redefinition: None,
                 subsets: None,
-                is_variant: false,
+                doc: None,
+                    is_variant: false,
                     is_variation: false,
                     qualified_name: None,
             });
@@ -1360,7 +1369,8 @@ fn walk_node_scoped(
                 short_name: None,
                 redefinition: None,
                 subsets: None,
-                is_variant: false,
+                doc: None,
+                    is_variant: false,
                     is_variation: false,
                     qualified_name: None,
             });
@@ -1390,6 +1400,7 @@ fn walk_node_scoped(
                     short_name: None,
                     redefinition: None,
                     subsets: None,
+                    doc: None,
                     is_variant: false,
                     is_variation: false,
                     qualified_name: None,
@@ -1418,7 +1429,8 @@ fn walk_node_scoped(
                                 short_name: None,
                                 redefinition: None,
                                 subsets: None,
-                                is_variant: false,
+                                doc: None,
+                    is_variant: false,
                     is_variation: false,
                     qualified_name: None,
                             });
@@ -1449,7 +1461,8 @@ fn walk_node_scoped(
                         short_name: None,
                         redefinition: None,
                         subsets: None,
-                        is_variant: false,
+                        doc: None,
+                    is_variant: false,
                     is_variation: false,
                     qualified_name: None,
                     });

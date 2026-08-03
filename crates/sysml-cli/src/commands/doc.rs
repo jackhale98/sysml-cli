@@ -171,6 +171,60 @@ fn generate_markdown(model: &Model, root: Option<&str>) -> String {
         out.push('\n');
     }
 
+    // Requirements — the statements themselves are the artifact
+    // stakeholders want from generated documentation (Ch 32).
+    let req_usages: Vec<_> = model
+        .usages
+        .iter()
+        .filter(|u| u.kind == "requirement")
+        .collect();
+    let req_defs: Vec<_> = defs
+        .iter()
+        .filter(|d| d.kind == DefKind::Requirement)
+        .collect();
+    if !req_usages.is_empty() || !req_defs.is_empty() {
+        out.push_str("## Requirements\n\n");
+        if !req_usages.is_empty() {
+            out.push_str("| ID | Requirement | Type | Statement |\n");
+            out.push_str("|----|-------------|------|----------|\n");
+            for r in &req_usages {
+                // Usage doc, falling back to the typing def's doc
+                let statement = r
+                    .doc
+                    .clone()
+                    .or_else(|| {
+                        r.type_ref
+                            .as_deref()
+                            .and_then(|t| model.find_def(sysml_core::model::simple_name(t)))
+                            .and_then(|d| d.doc.clone())
+                    })
+                    .unwrap_or_default();
+                out.push_str(&format!(
+                    "| {} | `{}` | {} | {} |\n",
+                    r.short_name
+                        .as_deref()
+                        .map(|s| format!("`<{}>`", s))
+                        .unwrap_or_else(|| "-".to_string()),
+                    r.name,
+                    r.type_ref.as_deref().unwrap_or("-"),
+                    statement.replace('\n', " ")
+                ));
+            }
+            out.push('\n');
+        }
+        for def in &req_defs {
+            // Defs not already represented through a usage's fallback
+            out.push_str(&format!("### {}", def.name));
+            if let Some(ref sn) = def.short_name {
+                out.push_str(&format!(" `<{}>`", sn));
+            }
+            out.push_str("\n\n");
+            if let Some(ref doc) = def.doc {
+                out.push_str(&format!("{}\n\n", doc));
+            }
+        }
+    }
+
     // Relationships
     if !model.connections.is_empty() || !model.satisfactions.is_empty() {
         out.push_str("## Relationships\n\n");
