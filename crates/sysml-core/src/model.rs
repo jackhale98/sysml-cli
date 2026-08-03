@@ -393,6 +393,11 @@ pub struct Model {
     /// Names resolved from imports (populated by the resolver).
     #[serde(skip_serializing_if = "Vec::is_empty")]
     pub resolved_imports: Vec<String>,
+    /// Simple names referenced by *other* files in the same invocation
+    /// (populated by the resolver). Used to suppress cross-file unused-def
+    /// false positives.
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub external_references: Vec<String>,
 }
 
 impl Model {
@@ -412,6 +417,7 @@ impl Model {
             comments: Vec::new(),
             views: Vec::new(),
             resolved_imports: Vec::new(),
+            external_references: Vec::new(),
         }
     }
 

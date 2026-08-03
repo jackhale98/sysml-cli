@@ -52,7 +52,9 @@ pub fn run(
             }
         }
         Some(sysml_core::resolver::Project::from_files(&all_files))
-    } else if files.len() > 1 {
+    } else if !files.is_empty() {
+        // Even a single file gets a project so package short-name aliases
+        // and root-namespace resolution work within it.
         Some(sysml_core::resolver::Project::from_files(files))
     } else {
         None
@@ -78,6 +80,13 @@ pub fn run(
         // Resolve imports if project is available
         if let Some(ref proj) = project {
             model.resolved_imports = proj.resolve_imports(&model);
+            // Fully-qualified references resolve from the root namespace
+            // without an import (SysML v2 name resolution).
+            model
+                .resolved_imports
+                .extend(proj.resolve_root_refs(&model));
+            // Defs referenced by sibling files count as used (W001).
+            model.external_references = proj.external_references_for(&model);
         }
 
         for check in &active_checks {

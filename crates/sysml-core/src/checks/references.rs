@@ -151,7 +151,12 @@ impl Check for UnusedDefCheck {
     }
 
     fn run(&self, model: &Model) -> Vec<Diagnostic> {
-        let referenced = model.referenced_names();
+        let mut referenced = model.referenced_names();
+        // Names referenced by other files in the same invocation
+        // (populated by the resolver) count as used.
+        for r in &model.external_references {
+            referenced.insert(r.as_str());
+        }
         let mut diagnostics = Vec::new();
 
         for def in &model.definitions {
