@@ -87,16 +87,25 @@ fn get_supertype(node: &Node, source: &[u8]) -> Option<String> {
 
 /// Get the type reference from a colon type relationship.
 fn get_type_ref(node: &Node, source: &[u8]) -> Option<String> {
+    get_type_ref_node(node).map(|t| node_text(&t, source).to_string())
+        // Also check for specialization as a type relationship
+        .or_else(|| get_supertype(node, source))
+}
+
+/// Locate the tree-sitter node holding a usage's type reference, so
+/// diagnostics/quickfixes can target exactly the type token rather than
+/// the whole declaration.
+fn get_type_ref_node<'a>(node: &Node<'a>) -> Option<Node<'a>> {
     // Try field "type" first (from hidden _colon_type_rel)
     if let Some(t) = node.child_by_field_name("type") {
-        return Some(node_text(&t, source).to_string());
+        return Some(t);
     }
     // Look for typed_by child node (grammar pattern: typed_by with type field)
     let mut cursor = node.walk();
     for child in node.children(&mut cursor) {
         if child.kind() == "typed_by" {
             if let Some(t) = child.child_by_field_name("type") {
-                return Some(node_text(&t, source).to_string());
+                return Some(t);
             }
         }
     }
@@ -107,13 +116,12 @@ fn get_type_ref(node: &Node, source: &[u8]) -> Option<String> {
         if child.kind() == ":" {
             saw_colon = true;
         } else if saw_colon && (child.kind() == "qualified_name" || child.kind() == "identifier") {
-            return Some(node_text(&child, source).to_string());
+            return Some(child);
         } else if saw_colon && child.kind() != ":" {
             saw_colon = false;
         }
     }
-    // Also check for specialization as a type relationship
-    get_supertype(node, source)
+    None
 }
 
 /// Map a keyword string to DefKind.
@@ -869,9 +877,14 @@ fn walk_node_scoped(
             if let Some(name) = name {
                 let type_ref = get_type_ref(&node, source);
                 if let Some(ref t) = type_ref {
+                    // Span the type token itself (not the whole declaration)
+                    // so W004 diagnostics and quickfixes are precise.
+                    let tspan = get_type_ref_node(&node)
+                        .map(|n| Span::from_node(&n))
+                        .unwrap_or_else(|| Span::from_node(&node));
                     model.type_references.push(TypeReference {
                         name: t.clone(),
-                        span: Span::from_node(&node),
+                        span: tspan,
                     });
                 }
                 let direction = get_direction(&node);
@@ -1254,7 +1267,7 @@ fn walk_node_scoped(
                     let name = node_text(&child, source).to_string();
                     model.type_references.push(TypeReference {
                         name,
-                        span: Span::from_node(&node),
+                        span: Span::from_node(&child),
                     });
                     break;
                 }

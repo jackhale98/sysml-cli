@@ -5,7 +5,7 @@ use crate::convert::span_to_range;
 
 /// Find all highlights for `name` within a single model.
 /// Returns the definition site as Write, and all reference sites as Read.
-pub fn document_highlights(model: &Model, name: &str) -> Vec<DocumentHighlight> {
+pub fn document_highlights(model: &Model, source: &str, name: &str) -> Vec<DocumentHighlight> {
     let target = simple_name(name);
     let mut highlights = Vec::new();
 
@@ -13,7 +13,7 @@ pub fn document_highlights(model: &Model, name: &str) -> Vec<DocumentHighlight> 
     for def in &model.definitions {
         if def.name == target {
             highlights.push(DocumentHighlight {
-                range: span_to_range(&def.span),
+                range: span_to_range(&def.span, source),
                 kind: Some(DocumentHighlightKind::WRITE),
             });
         }
@@ -21,7 +21,7 @@ pub fn document_highlights(model: &Model, name: &str) -> Vec<DocumentHighlight> 
         if let Some(ref st) = def.super_type {
             if simple_name(st) == target {
                 highlights.push(DocumentHighlight {
-                    range: span_to_range(&def.span),
+                    range: span_to_range(&def.span, source),
                     kind: Some(DocumentHighlightKind::READ),
                 });
             }
@@ -32,14 +32,14 @@ pub fn document_highlights(model: &Model, name: &str) -> Vec<DocumentHighlight> 
     for usage in &model.usages {
         if usage.name == target {
             highlights.push(DocumentHighlight {
-                range: span_to_range(&usage.span),
+                range: span_to_range(&usage.span, source),
                 kind: Some(DocumentHighlightKind::WRITE),
             });
         }
         if let Some(ref tr) = usage.type_ref {
             if simple_name(tr) == target {
                 highlights.push(DocumentHighlight {
-                    range: span_to_range(&usage.span),
+                    range: span_to_range(&usage.span, source),
                     kind: Some(DocumentHighlightKind::READ),
                 });
             }
@@ -50,7 +50,7 @@ pub fn document_highlights(model: &Model, name: &str) -> Vec<DocumentHighlight> 
     for tr in &model.type_references {
         if simple_name(&tr.name) == target {
             highlights.push(DocumentHighlight {
-                range: span_to_range(&tr.span),
+                range: span_to_range(&tr.span, source),
                 kind: Some(DocumentHighlightKind::READ),
             });
         }
@@ -68,7 +68,7 @@ mod tests {
     fn highlights_definition_and_usage() {
         let source = "part def Engine;\npart def Vehicle {\n    part engine : Engine;\n}\n";
         let model = parse_file("test.sysml", source);
-        let hl = document_highlights(&model, "Engine");
+        let hl = document_highlights(&model, source, "Engine");
         assert!(
             hl.len() >= 2,
             "should highlight def + usage, got {}",
@@ -93,7 +93,7 @@ mod tests {
     fn highlights_supertype() {
         let source = "part def Base;\npart def Sub :> Base;\n";
         let model = parse_file("test.sysml", source);
-        let hl = document_highlights(&model, "Base");
+        let hl = document_highlights(&model, source, "Base");
         assert!(hl.len() >= 2, "should highlight def + supertype ref");
     }
 
@@ -101,7 +101,7 @@ mod tests {
     fn no_highlights_for_unknown() {
         let source = "part def Vehicle;\n";
         let model = parse_file("test.sysml", source);
-        let hl = document_highlights(&model, "Unknown");
+        let hl = document_highlights(&model, source, "Unknown");
         assert!(hl.is_empty());
     }
 
@@ -110,7 +110,7 @@ mod tests {
         let source =
             "part def Engine;\npart def Car {\n    part e1 : Engine;\n    part e2 : Engine;\n}\n";
         let model = parse_file("test.sysml", source);
-        let hl = document_highlights(&model, "Engine");
+        let hl = document_highlights(&model, source, "Engine");
         assert!(
             hl.len() >= 3,
             "should have def + 2 usages, got {}",
@@ -122,7 +122,7 @@ mod tests {
     fn usage_name_highlighted_as_write() {
         let source = "part def Engine;\npart def Vehicle {\n    part engine : Engine;\n}\n";
         let model = parse_file("test.sysml", source);
-        let hl = document_highlights(&model, "engine");
+        let hl = document_highlights(&model, source, "engine");
         let writes: Vec<_> = hl
             .iter()
             .filter(|h| h.kind == Some(DocumentHighlightKind::WRITE))

@@ -19,7 +19,7 @@ pub fn workspace_symbols(query: &str, defs: &[DefLocation]) -> Vec<SymbolInforma
                 deprecated: None,
                 location: Location {
                     uri,
-                    range: span_to_range(&loc.span),
+                    range: span_to_range(&loc.span, ""),
                 },
                 container_name: None,
             })

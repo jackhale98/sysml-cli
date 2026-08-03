@@ -280,7 +280,7 @@ mod tests {
 
         let source = "part def Vehicle;\npart car : Vehicel;\n";
         let model = parse_file("test.sysml", source);
-        let diags = compute_diagnostics(&model, &[]);
+        let diags = compute_diagnostics(&model, source, &[], &[]);
 
         let uri = Url::parse("file:///test.sysml").unwrap();
         let actions = code_actions(&uri, &diags, Some(source), None);

@@ -47,7 +47,7 @@ fn usage_kind_to_symbol_kind(kind: &str) -> SymbolKind {
 
 /// Build a hierarchical list of document symbols from a model.
 #[allow(deprecated)] // DocumentSymbol::children is deprecated in newer lsp_types but required
-pub fn document_symbols(model: &Model) -> Vec<DocumentSymbol> {
+pub fn document_symbols(model: &Model, source: &str) -> Vec<DocumentSymbol> {
     // Build top-level definitions (no parent), then nest children
     let mut top_level: Vec<DocumentSymbol> = Vec::new();
 
@@ -56,8 +56,8 @@ pub fn document_symbols(model: &Model) -> Vec<DocumentSymbol> {
             continue; // handled as child
         }
 
-        let children = build_children(model, &def.name);
-        let range = span_to_range(&def.span);
+        let children = build_children(model, source, &def.name);
+        let range = span_to_range(&def.span, source);
 
         top_level.push(DocumentSymbol {
             name: def.name.clone(),
@@ -79,7 +79,7 @@ pub fn document_symbols(model: &Model) -> Vec<DocumentSymbol> {
 }
 
 #[allow(deprecated)]
-fn build_children(model: &Model, parent_name: &str) -> Vec<DocumentSymbol> {
+fn build_children(model: &Model, source: &str, parent_name: &str) -> Vec<DocumentSymbol> {
     let mut children = Vec::new();
 
     // Child definitions
@@ -87,8 +87,8 @@ fn build_children(model: &Model, parent_name: &str) -> Vec<DocumentSymbol> {
         if def.parent_def.as_deref() != Some(parent_name) {
             continue;
         }
-        let grandchildren = build_children(model, &def.name);
-        let range = span_to_range(&def.span);
+        let grandchildren = build_children(model, source, &def.name);
+        let range = span_to_range(&def.span, source);
         children.push(DocumentSymbol {
             name: def.name.clone(),
             detail: def.super_type.clone(),
@@ -110,7 +110,7 @@ fn build_children(model: &Model, parent_name: &str) -> Vec<DocumentSymbol> {
         if usage.parent_def.as_deref() != Some(parent_name) {
             continue;
         }
-        let range = span_to_range(&usage.span);
+        let range = span_to_range(&usage.span, source);
         children.push(DocumentSymbol {
             name: usage.name.clone(),
             detail: usage.type_ref.clone(),
@@ -136,7 +136,7 @@ mod tests {
         let source =
             "package Vehicles {\n    part def Vehicle {\n        part engine : Engine;\n    }\n}\n";
         let model = parse_file("test.sysml", source);
-        let symbols = document_symbols(&model);
+        let symbols = document_symbols(&model, source);
 
         assert_eq!(symbols.len(), 1, "expected one top-level symbol");
         assert_eq!(symbols[0].name, "Vehicles");
@@ -158,7 +158,7 @@ mod tests {
     fn symbol_kind_mapping() {
         let source = "part def P;\nport def I;\naction def A;\nstate def S;\nattribute def At;\n";
         let model = parse_file("test.sysml", source);
-        let symbols = document_symbols(&model);
+        let symbols = document_symbols(&model, source);
 
         let kinds: Vec<_> = symbols.iter().map(|s| (&s.name, s.kind)).collect();
         assert!(kinds.contains(&(&"P".to_string(), SymbolKind::CLASS)));
@@ -172,7 +172,7 @@ mod tests {
     fn symbol_ranges_match_spans() {
         let source = "part def Vehicle;\n";
         let model = parse_file("test.sysml", source);
-        let symbols = document_symbols(&model);
+        let symbols = document_symbols(&model, source);
         assert_eq!(symbols.len(), 1);
         // Should be on line 0 (0-based)
         assert_eq!(symbols[0].range.start.line, 0);
@@ -181,7 +181,7 @@ mod tests {
     #[test]
     fn empty_file_empty_symbols() {
         let model = parse_file("test.sysml", "");
-        let symbols = document_symbols(&model);
+        let symbols = document_symbols(&model, "");
         assert!(symbols.is_empty());
     }
 }

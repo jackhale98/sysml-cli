@@ -11,7 +11,7 @@ use tower_lsp::lsp_types::{CodeLens, Position, Range};
 use crate::convert::span_to_range;
 
 /// Produce code-lens entries for a single file's model.
-pub fn code_lenses(model: &Model) -> Vec<CodeLens> {
+pub fn code_lenses(model: &Model, source: &str) -> Vec<CodeLens> {
     let mut lenses = Vec::new();
 
     for def in &model.definitions {
@@ -24,7 +24,7 @@ pub fn code_lenses(model: &Model) -> Vec<CodeLens> {
             _ => None,
         };
         if let Some(title) = title {
-            let range = lens_position(&span_to_range(&def.span));
+            let range = lens_position(&span_to_range(&def.span, source));
             lenses.push(CodeLens {
                 range,
                 command: Some(tower_lsp::lsp_types::Command {
@@ -125,7 +125,7 @@ mod tests {
             part def Vehicle { satisfy MaxMass; }
         "#;
         let model = parse_file("test.sysml", source);
-        let lenses = code_lenses(&model);
+        let lenses = code_lenses(&model, source);
         assert!(
             lenses.iter().any(|l| l
                 .command
@@ -143,7 +143,7 @@ mod tests {
     fn unreferenced_requirement_gets_warning_lens() {
         let source = "requirement def Lonely;\n";
         let model = parse_file("test.sysml", source);
-        let lenses = code_lenses(&model);
+        let lenses = code_lenses(&model, source);
         assert!(
             lenses.iter().any(|l| l
                 .command
@@ -164,7 +164,7 @@ mod tests {
             part def Vehicle { part engine : Engine; }
         "#;
         let model = parse_file("test.sysml", source);
-        let lenses = code_lenses(&model);
+        let lenses = code_lenses(&model, source);
         assert!(
             lenses.iter().any(|l| l
                 .command
@@ -182,7 +182,7 @@ mod tests {
     fn part_def_with_no_usages_emits_no_lens() {
         let source = "part def Unused;\n";
         let model = parse_file("test.sysml", source);
-        let lenses = code_lenses(&model);
+        let lenses = code_lenses(&model, source);
         // Only kinds with referenced usages get lenses (excluding the
         // requirement-unreferenced case).
         assert!(lenses.iter().all(|l| l

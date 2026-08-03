@@ -85,31 +85,44 @@ pub fn semantic_tokens(source: &str) -> Vec<SemanticToken> {
             let start = node.start_position();
             let end = node.end_position();
 
+            // Tree-sitter positions are byte columns; LSP expects UTF-16
+            // code units. Convert per line.
+            let utf16 = |row: usize, byte_col: usize| -> u32 {
+                lines
+                    .get(row)
+                    .map(|l| crate::convert::utf16_col(l, byte_col))
+                    .unwrap_or(byte_col as u32)
+            };
+
             if start.row == end.row {
-                let length = (end.column - start.column) as u32;
+                let col = utf16(start.row, start.column);
+                let length = utf16(start.row, end.column).saturating_sub(col);
                 if length > 0 {
-                    raw_tokens.push((start.row as u32, start.column as u32, length, token_type));
+                    raw_tokens.push((start.row as u32, col, length, token_type));
                 }
             } else {
                 // Multi-line token: emit per-line segments
                 if let Some(line) = lines.get(start.row) {
-                    let len = line.len().saturating_sub(start.column) as u32;
+                    let col = utf16(start.row, start.column);
+                    let len = utf16(start.row, line.len()).saturating_sub(col);
                     if len > 0 {
-                        raw_tokens.push((start.row as u32, start.column as u32, len, token_type));
+                        raw_tokens.push((start.row as u32, col, len, token_type));
                     }
                 }
                 for row in (start.row + 1)..end.row {
                     if let Some(line) = lines.get(row) {
                         let trimmed = line.trim_start();
-                        let indent = line.len() - trimmed.len();
-                        let len = trimmed.len() as u32;
+                        let indent_bytes = line.len() - trimmed.len();
+                        let col = utf16(row, indent_bytes);
+                        let len = utf16(row, line.len()).saturating_sub(col);
                         if len > 0 {
-                            raw_tokens.push((row as u32, indent as u32, len, token_type));
+                            raw_tokens.push((row as u32, col, len, token_type));
                         }
                     }
                 }
                 if end.column > 0 {
-                    raw_tokens.push((end.row as u32, 0, end.column as u32, token_type));
+                    let len = utf16(end.row, end.column);
+                    raw_tokens.push((end.row as u32, 0, len, token_type));
                 }
             }
         }

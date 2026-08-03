@@ -10,13 +10,21 @@ use crate::convert::span_to_range;
 /// injected into `model.resolved_imports` so cross-file types aren't flagged as unresolved.
 pub fn compute_diagnostics(
     model: &Model,
+    source: &str,
     workspace_names: &[String],
+    external_refs: &[String],
 ) -> Vec<lsp_types::Diagnostic> {
     // Clone model so we can populate resolved_imports for cross-file awareness
     let mut model = model.clone();
     for name in workspace_names {
         if !model.resolved_imports.contains(name) {
             model.resolved_imports.push(name.clone());
+        }
+    }
+    // Names referenced by other workspace files count as used (W001).
+    for name in external_refs {
+        if !model.external_references.contains(name) {
+            model.external_references.push(name.clone());
         }
     }
 
@@ -37,7 +45,7 @@ pub fn compute_diagnostics(
             }
 
             result.push(lsp_types::Diagnostic {
-                range: span_to_range(&d.span),
+                range: span_to_range(&d.span, source),
                 severity: Some(severity),
                 code: Some(NumberOrString::String(d.code.to_string())),
                 source: Some("sysml".to_string()),
@@ -59,7 +67,7 @@ mod tests {
     fn unresolved_type_produces_warning() {
         let source = "part def Vehicle;\npart car : Vehicel;\n";
         let model = parse_file("test.sysml", source);
-        let diags = compute_diagnostics(&model, &[]);
+        let diags = compute_diagnostics(&model, source, &[], &[]);
         let w004: Vec<_> = diags
             .iter()
             .filter(|d| d.code == Some(NumberOrString::String("W004".to_string())))
@@ -74,7 +82,7 @@ mod tests {
     fn duplicate_def_produces_error() {
         let source = "part def A;\npart def A;\n";
         let model = parse_file("test.sysml", source);
-        let diags = compute_diagnostics(&model, &[]);
+        let diags = compute_diagnostics(&model, source, &[], &[]);
         let e002: Vec<_> = diags
             .iter()
             .filter(|d| d.code == Some(NumberOrString::String("E002".to_string())))
@@ -87,7 +95,7 @@ mod tests {
     fn unused_def_produces_information() {
         let source = "part def Vehicle;\n";
         let model = parse_file("test.sysml", source);
-        let diags = compute_diagnostics(&model, &[]);
+        let diags = compute_diagnostics(&model, source, &[], &[]);
         let w001: Vec<_> = diags
             .iter()
             .filter(|d| d.code == Some(NumberOrString::String("W001".to_string())))
@@ -100,7 +108,7 @@ mod tests {
     fn valid_model_no_errors_or_warnings() {
         let source = "part def Engine;\npart def Vehicle {\n    part engine : Engine;\n}\n";
         let model = parse_file("test.sysml", source);
-        let diags = compute_diagnostics(&model, &[]);
+        let diags = compute_diagnostics(&model, source, &[], &[]);
         let errors_and_warnings: Vec<_> = diags
             .iter()
             .filter(|d| {
@@ -119,7 +127,7 @@ mod tests {
     fn suggestion_appended_to_message() {
         let source = "part def Vehicle;\npart car : Vehicel;\n";
         let model = parse_file("test.sysml", source);
-        let diags = compute_diagnostics(&model, &[]);
+        let diags = compute_diagnostics(&model, source, &[], &[]);
         let w004: Vec<_> = diags
             .iter()
             .filter(|d| d.code == Some(NumberOrString::String("W004".to_string())))
@@ -136,7 +144,7 @@ mod tests {
     fn span_conversion_correct_0based() {
         let source = "part def Vehicle;\npart car : Vehicel;\n";
         let model = parse_file("test.sysml", source);
-        let diags = compute_diagnostics(&model, &[]);
+        let diags = compute_diagnostics(&model, source, &[], &[]);
         for d in &diags {
             assert!(d.range.start.line <= 1);
             assert!(d.range.end.line <= 1);
@@ -149,7 +157,7 @@ mod tests {
         let source = "part def Vehicle {\n    part engine : Engine;\n}\n";
         let model = parse_file("b.sysml", source);
         let workspace = vec!["Engine".to_string()];
-        let diags = compute_diagnostics(&model, &workspace);
+        let diags = compute_diagnostics(&model, source, &workspace, &[]);
         let w004: Vec<_> = diags
             .iter()
             .filter(|d| d.code == Some(NumberOrString::String("W004".to_string())))
@@ -166,7 +174,7 @@ mod tests {
         let source = "part def Vehicle {\n    part engine : Engin;\n}\n";
         let model = parse_file("b.sysml", source);
         let workspace = vec!["Engine".to_string()];
-        let diags = compute_diagnostics(&model, &workspace);
+        let diags = compute_diagnostics(&model, source, &workspace, &[]);
         let w004: Vec<_> = diags
             .iter()
             .filter(|d| d.code == Some(NumberOrString::String("W004".to_string())))

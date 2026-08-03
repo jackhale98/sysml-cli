@@ -18,7 +18,7 @@ use crate::convert::span_to_range;
 
 /// Build document links for a single file, using a workspace name → file
 /// table (typically `Model::file` from each parsed workspace model).
-pub fn document_links(model: &Model, name_to_file: &HashMap<String, String>) -> Vec<DocumentLink> {
+pub fn document_links(model: &Model, source: &str, name_to_file: &HashMap<String, String>) -> Vec<DocumentLink> {
     let mut links = Vec::new();
 
     // Import statements
@@ -27,7 +27,7 @@ pub fn document_links(model: &Model, name_to_file: &HashMap<String, String>) -> 
         if let Some(file) = name_to_file.get(target_simple) {
             if let Some(url) = path_to_url(file) {
                 links.push(DocumentLink {
-                    range: span_to_range(&imp.span),
+                    range: span_to_range(&imp.span, source),
                     target: Some(url),
                     tooltip: Some(format!("Open definition of `{}`", target_simple)),
                     data: None,
@@ -42,7 +42,7 @@ pub fn document_links(model: &Model, name_to_file: &HashMap<String, String>) -> 
         if let Some(file) = name_to_file.get(target_simple) {
             if let Some(url) = path_to_url(file) {
                 links.push(DocumentLink {
-                    range: span_to_range(&tr.span),
+                    range: span_to_range(&tr.span, source),
                     target: Some(url),
                     tooltip: Some(format!("Open `{}`", target_simple)),
                     data: None,
@@ -58,7 +58,7 @@ pub fn document_links(model: &Model, name_to_file: &HashMap<String, String>) -> 
             if let Some(file) = name_to_file.get(target_simple) {
                 if let Some(url) = path_to_url(file) {
                     links.push(DocumentLink {
-                        range: span_to_range(&def.span),
+                        range: span_to_range(&def.span, source),
                         target: Some(url),
                         tooltip: Some(format!("Open `{}`", target_simple)),
                         data: None,
@@ -100,7 +100,7 @@ mod tests {
         // Pretend "Base" lives in /tmp/base.sysml (file need not exist for
         // the link generation logic).
         let table = make_table(&[("Base", "/tmp/base.sysml")]);
-        let links = document_links(&model, &table);
+        let links = document_links(&model, source, &table);
         assert!(
             !links.is_empty(),
             "expected at least one document link, got {:?}",
@@ -116,7 +116,7 @@ mod tests {
         let source = "part def Vehicle :> Unknown;\n";
         let model = parse_file("/tmp/main.sysml", source);
         let table: HashMap<String, String> = HashMap::new();
-        let links = document_links(&model, &table);
+        let links = document_links(&model, source, &table);
         assert!(links.is_empty(), "unknown targets must not produce links");
     }
 
@@ -128,7 +128,7 @@ mod tests {
         "#;
         let model = parse_file("/tmp/main.sysml", source);
         let table = make_table(&[("Vehicles", "/tmp/lib.sysml")]);
-        let links = document_links(&model, &table);
+        let links = document_links(&model, source, &table);
         assert!(
             !links.is_empty(),
             "import statement should produce a document link"

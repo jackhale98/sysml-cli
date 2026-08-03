@@ -85,10 +85,81 @@ fn find_occurrences(model: &Model, source: &str, old_name: &str) -> Vec<Occurren
         }
     }
 
+    // Relationship statements and imports mention names too — a rename
+    // that skips them silently corrupts traceability. Scan every
+    // whole-word occurrence within each statement's span.
+    let mut scan_span = |span: &sysml_core::model::Span, mentions: bool| {
+        if !mentions || span.end_byte > source.len() || span.start_byte >= span.end_byte {
+            return;
+        }
+        let text = &source[span.start_byte..span.end_byte];
+        for pos in find_all_words_in(text, target) {
+            let abs = span.start_byte + pos;
+            if !occs.iter().any(|o| o.start_byte == abs) {
+                occs.push(Occurrence {
+                    start_byte: abs,
+                    end_byte: abs + target.len(),
+                });
+            }
+        }
+    };
+
+    for imp in &model.imports {
+        scan_span(
+            &imp.span,
+            imp.path.split("::").any(|seg| seg == target),
+        );
+    }
+    for s in &model.satisfactions {
+        let mentions = simple_name(&s.requirement) == target
+            || s.requirement.split("::").any(|seg| simple_name(seg) == target)
+            || s.by.as_deref().map(simple_name) == Some(target);
+        scan_span(&s.span, mentions);
+    }
+    for v in &model.verifications {
+        let mentions = simple_name(&v.requirement) == target
+            || v.requirement.split("::").any(|seg| simple_name(seg) == target)
+            || simple_name(&v.by) == target;
+        scan_span(&v.span, mentions);
+    }
+    for c in &model.connections {
+        let mentions = [&c.source, &c.target]
+            .iter()
+            .any(|r| r.split(['.', ':']).any(|seg| seg == target));
+        scan_span(&c.span, mentions);
+    }
+    for f in &model.flows {
+        let mentions = [&f.source, &f.target]
+            .iter()
+            .any(|r| r.split(['.', ':']).any(|seg| seg == target))
+            || f.item_type.as_deref().map(simple_name) == Some(target);
+        scan_span(&f.span, mentions);
+    }
+    for a in &model.allocations {
+        let mentions = [&a.source, &a.target]
+            .iter()
+            .any(|r| r.split(['.', ':']).any(|seg| seg == target));
+        scan_span(&a.span, mentions);
+    }
+
     // Sort and dedup
     occs.sort_by_key(|o| o.start_byte);
     occs.dedup_by_key(|o| o.start_byte);
     occs
+}
+
+/// Find all whole-word occurrences of `word` in `text`.
+fn find_all_words_in(text: &str, word: &str) -> Vec<usize> {
+    let mut result = Vec::new();
+    let mut start = 0;
+    while let Some(pos) = text[start..].find(word) {
+        let abs = start + pos;
+        if is_word_boundary(text, abs, word.len()) {
+            result.push(abs);
+        }
+        start = abs + 1;
+    }
+    result
 }
 
 /// Find a whole-word occurrence of `word` in `text` (first match).
@@ -309,6 +380,50 @@ mod tests {
         // Offset on "part" keyword, not on a renameable identifier
         let result = prepare_rename(&model, source, 0);
         assert!(result.is_none());
+    }
+
+    #[test]
+    fn rename_covers_import_statements() {
+        let source = "private import Pkg::Drone;\npart def Fleet {\n    part d : Drone;\n}\n";
+        let model = parse_file("test.sysml", source);
+        let occs = find_occurrences(&model, source, "Drone");
+        let texts: Vec<&str> = occs
+            .iter()
+            .map(|o| &source[o.start_byte..o.end_byte])
+            .collect();
+        // Must include the mention inside the import statement
+        let import_hit = occs
+            .iter()
+            .any(|o| o.start_byte < source.find(";\n").unwrap());
+        assert!(
+            import_hit,
+            "import statement occurrence missing: {texts:?} at {occs:?}"
+        );
+    }
+
+    #[test]
+    fn rename_covers_satisfy_statements() {
+        let source = "requirement def MaxMass;\npart def Car {\n    satisfy MaxMass;\n}\n";
+        let model = parse_file("test.sysml", source);
+        let occs = find_occurrences(&model, source, "MaxMass");
+        assert!(
+            occs.len() >= 2,
+            "def + satisfy occurrence expected, got {:?}",
+            occs
+        );
+    }
+
+    #[test]
+    fn rename_covers_connect_statements() {
+        let source = "part def S {\n    part a;\n    part b;\n    connect a to b;\n}\n";
+        let model = parse_file("test.sysml", source);
+        let occs = find_occurrences(&model, source, "a");
+        // usage decl + connect endpoint
+        assert!(
+            occs.len() >= 2,
+            "usage + connect occurrence expected, got {:?}",
+            occs
+        );
     }
 
     #[test]

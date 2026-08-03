@@ -48,6 +48,22 @@ impl SysmlLanguageServer {
             .collect()
     }
 
+    /// Simple names referenced by files other than `uri` — used to
+    /// suppress cross-file unused-definition false positives (and the
+    /// dangerous "Remove unused" quickfix they would offer).
+    fn workspace_external_refs(&self, uri: &str) -> Vec<String> {
+        let mut refs = std::collections::HashSet::new();
+        for entry in self.state.files.iter() {
+            if entry.key() == uri {
+                continue;
+            }
+            for name in entry.value().model.referenced_names() {
+                refs.insert(name.to_string());
+            }
+        }
+        refs.into_iter().collect()
+    }
+
     async fn on_change(&self, uri: Url, text: String, version: i32) {
         let uri_str = uri.to_string();
         let mut model = parser::parse_file(&uri_str, &text);
@@ -58,7 +74,9 @@ impl SysmlLanguageServer {
 
         // Compute diagnostics with cross-file awareness
         let workspace_names = self.workspace_def_names();
-        let diags = diagnostics::compute_diagnostics(&model, &workspace_names);
+        let external_refs = self.workspace_external_refs(&uri_str);
+        let diags =
+            diagnostics::compute_diagnostics(&model, &text, &workspace_names, &external_refs);
         self.state.files.insert(
             uri_str,
             FileState {
@@ -86,6 +104,19 @@ impl SysmlLanguageServer {
                 let mut model = parser::parse_file(&path_str, &source);
                 qualify_model(&mut model);
                 self.state.index_model_defs(&uri_str, &model);
+                // Keep the parsed file available so workspace-wide
+                // operations (rename, references, type hierarchy) see
+                // closed files too. did_open replaces this entry.
+                if !self.state.files.contains_key(&uri_str) {
+                    self.state.files.insert(
+                        uri_str.clone(),
+                        FileState {
+                            source,
+                            model,
+                            version: 0,
+                        },
+                    );
+                }
             }
         }
     }
@@ -157,6 +188,11 @@ impl LanguageServer for SysmlLanguageServer {
                     resolve_provider: Some(false),
                     work_done_progress_options: WorkDoneProgressOptions::default(),
                 }),
+                // NOTE: lsp-types 0.94 (pinned by tower-lsp 0.20) has no
+                // type_hierarchy_provider field, so the implemented type
+                // hierarchy cannot be advertised until tower-lsp is
+                // upgraded. Clients that probe the methods anyway get
+                // working responses.
                 ..Default::default()
             },
             server_info: Some(ServerInfo {
@@ -194,7 +230,13 @@ impl LanguageServer for SysmlLanguageServer {
 
         if let Some(file_state) = self.state.files.get(&uri_str) {
             let workspace_names = self.workspace_def_names();
-            let diags = diagnostics::compute_diagnostics(&file_state.model, &workspace_names);
+            let external_refs = self.workspace_external_refs(&uri_str);
+            let diags = diagnostics::compute_diagnostics(
+                &file_state.model,
+                &file_state.source,
+                &workspace_names,
+                &external_refs,
+            );
             self.client
                 .publish_diagnostics(uri, diags, Some(file_state.version))
                 .await;
@@ -203,7 +245,24 @@ impl LanguageServer for SysmlLanguageServer {
 
     async fn did_close(&self, params: DidCloseTextDocumentParams) {
         let uri_str = params.text_document.uri.to_string();
+        // Replace the buffer state with the on-disk content so the file
+        // remains visible to workspace-wide operations after closing.
         self.state.files.remove(&uri_str);
+        if let Ok(path) = params.text_document.uri.to_file_path() {
+            if let Ok(source) = std::fs::read_to_string(&path) {
+                let mut model = parser::parse_file(&path.to_string_lossy(), &source);
+                qualify_model(&mut model);
+                self.state.index_model_defs(&uri_str, &model);
+                self.state.files.insert(
+                    uri_str.clone(),
+                    FileState {
+                        source,
+                        model,
+                        version: 0,
+                    },
+                );
+            }
+        }
         self.client
             .publish_diagnostics(params.text_document.uri, vec![], None)
             .await;
@@ -217,7 +276,8 @@ impl LanguageServer for SysmlLanguageServer {
         let Some(file_state) = self.state.files.get(&uri_str) else {
             return Ok(None);
         };
-        let symbols = document_symbols::document_symbols(&file_state.model);
+        let symbols =
+            document_symbols::document_symbols(&file_state.model, &file_state.source);
         Ok(Some(DocumentSymbolResponse::Nested(symbols)))
     }
 
@@ -257,9 +317,15 @@ impl LanguageServer for SysmlLanguageServer {
             Url::parse(&target_uri).unwrap_or(uri)
         };
 
+        let target_source = self
+            .state
+            .files
+            .get(&target_uri)
+            .map(|fs| fs.source.clone())
+            .unwrap_or_default();
         Ok(Some(GotoDefinitionResponse::Scalar(Location {
             uri: target_url,
-            range: span_to_range(&span),
+            range: span_to_range(&span, &target_source),
         })))
     }
 
@@ -305,7 +371,7 @@ impl LanguageServer for SysmlLanguageServer {
                     if let Ok(loc_uri) = Url::parse(&r.uri) {
                         all_refs.push(Location {
                             uri: loc_uri,
-                            range: span_to_range(&r.span),
+                            range: span_to_range(&r.span, &fs.source),
                         });
                     }
                 }
@@ -316,7 +382,7 @@ impl LanguageServer for SysmlLanguageServer {
                         if let Ok(loc_uri) = Url::parse(uri_key) {
                             all_refs.push(Location {
                                 uri: loc_uri,
-                                range: span_to_range(&def.span),
+                                range: span_to_range(&def.span, &fs.source),
                             });
                         }
                     }
@@ -498,7 +564,8 @@ impl LanguageServer for SysmlLanguageServer {
             return Ok(None);
         };
 
-        let highlights = document_highlight::document_highlights(&file_state.model, &name);
+        let highlights =
+            document_highlight::document_highlights(&file_state.model, &file_state.source, &name);
         if highlights.is_empty() {
             Ok(None)
         } else {
@@ -601,7 +668,7 @@ impl LanguageServer for SysmlLanguageServer {
         let Some(file_state) = self.state.files.get(&uri_str) else {
             return Ok(None);
         };
-        let hints = inlay_hints::inlay_hints(&file_state.model);
+        let hints = inlay_hints::inlay_hints(&file_state.model, &file_state.source);
         if hints.is_empty() {
             Ok(None)
         } else {
@@ -637,7 +704,12 @@ impl LanguageServer for SysmlLanguageServer {
             return Ok(None);
         };
 
-        let item = type_hierarchy::prepare_type_hierarchy(&file_state.model, &uri, &name);
+        let item = type_hierarchy::prepare_type_hierarchy(
+            &file_state.model,
+            &file_state.source,
+            &uri,
+            &name,
+        );
         Ok(item.map(|i| vec![i]))
     }
 
@@ -650,11 +722,11 @@ impl LanguageServer for SysmlLanguageServer {
             .state
             .files
             .iter()
-            .map(|e| (e.key().clone(), e.value().model.clone()))
+            .map(|e| (e.key().clone(), e.value().source.clone(), e.value().model.clone()))
             .collect();
-        let models_refs: Vec<(&str, &sysml_core::model::Model)> = models_data
+        let models_refs: Vec<(&str, &str, &sysml_core::model::Model)> = models_data
             .iter()
-            .map(|(uri, model)| (uri.as_str(), model))
+            .map(|(uri, source, model)| (uri.as_str(), source.as_str(), model))
             .collect();
 
         let result = type_hierarchy::supertypes(&models_refs, name);
@@ -674,11 +746,11 @@ impl LanguageServer for SysmlLanguageServer {
             .state
             .files
             .iter()
-            .map(|e| (e.key().clone(), e.value().model.clone()))
+            .map(|e| (e.key().clone(), e.value().source.clone(), e.value().model.clone()))
             .collect();
-        let models_refs: Vec<(&str, &sysml_core::model::Model)> = models_data
+        let models_refs: Vec<(&str, &str, &sysml_core::model::Model)> = models_data
             .iter()
-            .map(|(uri, model)| (uri.as_str(), model))
+            .map(|(uri, source, model)| (uri.as_str(), source.as_str(), model))
             .collect();
 
         let result = type_hierarchy::subtypes(&models_refs, name);
@@ -694,7 +766,7 @@ impl LanguageServer for SysmlLanguageServer {
         let Some(file_state) = self.state.files.get(&uri_str) else {
             return Ok(None);
         };
-        let lenses = code_lens::code_lenses(&file_state.model);
+        let lenses = code_lens::code_lenses(&file_state.model, &file_state.source);
         if lenses.is_empty() {
             Ok(None)
         } else {
@@ -720,7 +792,8 @@ impl LanguageServer for SysmlLanguageServer {
                     .or_insert_with(|| model.file.clone());
             }
         }
-        let links = document_link::document_links(&file_state.model, &name_to_file);
+        let links =
+            document_link::document_links(&file_state.model, &file_state.source, &name_to_file);
         if links.is_empty() {
             Ok(None)
         } else {

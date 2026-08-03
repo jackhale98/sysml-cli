@@ -1,8 +1,17 @@
 use sysml_core::model::Span;
 use tower_lsp::lsp_types::{Position, Range};
 
-/// Convert a sysml-core Span (1-based rows/cols) to an LSP Range (0-based lines/chars).
-pub fn span_to_range(span: &Span) -> Range {
+/// Convert a sysml-core Span to an LSP Range with UTF-16 columns (the LSP
+/// default position encoding). Uses the span's byte offsets against
+/// `source`; falls back to the span's raw (byte) columns when the offsets
+/// don't fit the given source (e.g. unavailable source passed as "").
+pub fn span_to_range(span: &Span, source: &str) -> Range {
+    if span.end_byte <= source.len() && span.start_byte <= span.end_byte {
+        return Range::new(
+            offset_to_position(source, span.start_byte),
+            offset_to_position(source, span.end_byte),
+        );
+    }
     Range::new(
         Position::new(
             span.start_row.saturating_sub(1) as u32,
@@ -15,23 +24,23 @@ pub fn span_to_range(span: &Span) -> Range {
     )
 }
 
-/// Convert an LSP Position (0-based line/character) to a byte offset in source text.
-/// Returns None if the position is out of range.
+/// Convert an LSP Position (0-based line, UTF-16 character) to a byte
+/// offset in source text. Returns None if the position is out of range.
 pub fn position_to_offset(source: &str, pos: &Position) -> Option<usize> {
     let mut offset = 0usize;
     for (i, line) in source.split('\n').enumerate() {
         if i == pos.line as usize {
             let col = pos.character as usize;
-            // Walk UTF-8 characters to find byte offset at this column
-            let mut char_count = 0;
-            for (byte_idx, _) in line.char_indices() {
-                if char_count == col {
+            // Walk characters accumulating UTF-16 code units
+            let mut units = 0usize;
+            for (byte_idx, ch) in line.char_indices() {
+                if units == col {
                     return Some(offset + byte_idx);
                 }
-                char_count += 1;
+                units += ch.len_utf16();
             }
             // Column is at or past end of line
-            if char_count == col {
+            if units == col {
                 return Some(offset + line.len());
             }
             return None;
@@ -41,14 +50,14 @@ pub fn position_to_offset(source: &str, pos: &Position) -> Option<usize> {
     None
 }
 
-#[allow(dead_code)] // used in tests; needed for future features
-/// Convert a byte offset in source text to an LSP Position (0-based line/character).
+/// Convert a byte offset in source text to an LSP Position (0-based line,
+/// UTF-16 character).
 pub fn offset_to_position(source: &str, offset: usize) -> Position {
     let mut line = 0u32;
     let mut line_start = 0usize;
     for (i, ch) in source.char_indices() {
         if i == offset {
-            let col = source[line_start..offset].chars().count() as u32;
+            let col = source[line_start..offset].encode_utf16().count() as u32;
             return Position::new(line, col);
         }
         if ch == '\n' {
@@ -57,8 +66,19 @@ pub fn offset_to_position(source: &str, offset: usize) -> Position {
         }
     }
     // Offset is at EOF
-    let col = source[line_start..].chars().count() as u32;
+    let col = source[line_start..].encode_utf16().count() as u32;
     Position::new(line, col)
+}
+
+/// UTF-16 code-unit column for a byte column within a single line.
+/// Clamps to the line's end when the byte column overshoots.
+pub fn utf16_col(line: &str, byte_col: usize) -> u32 {
+    let upto = line
+        .char_indices()
+        .take_while(|(i, _)| *i < byte_col.min(line.len()))
+        .map(|(_, c)| c.len_utf16())
+        .sum::<usize>();
+    upto as u32
 }
 
 #[cfg(test)]
@@ -75,7 +95,7 @@ mod tests {
             start_byte: 0,
             end_byte: 9,
         };
-        let range = span_to_range(&span);
+        let range = span_to_range(&span, "");
         assert_eq!(range.start.line, 0);
         assert_eq!(range.start.character, 0);
         assert_eq!(range.end.line, 0);
@@ -92,7 +112,7 @@ mod tests {
             start_byte: 40,
             end_byte: 52,
         };
-        let range = span_to_range(&span);
+        let range = span_to_range(&span, "");
         assert_eq!(range.start.line, 4);
         assert_eq!(range.start.character, 2);
         assert_eq!(range.end.line, 4);
@@ -109,7 +129,7 @@ mod tests {
             start_byte: 10,
             end_byte: 30,
         };
-        let range = span_to_range(&span);
+        let range = span_to_range(&span, "");
         assert_eq!(range.start.line, 1);
         assert_eq!(range.start.character, 0);
         assert_eq!(range.end.line, 3);
