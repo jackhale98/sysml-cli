@@ -36,6 +36,7 @@ pub(crate) fn run(cli: &Cli, files: &[PathBuf], check: bool, min_coverage: f64) 
             "requirements": rows.iter().map(|r| {
                 serde_json::json!({
                     "name": r.requirement,
+                    "id": r.id,
                     "satisfied_by": r.satisfied_by,
                     "verified_by": r.verified_by,
                 })
@@ -71,7 +72,11 @@ pub(crate) fn run(cli: &Cli, files: &[PathBuf], check: bool, min_coverage: f64) 
             } else {
                 row.verified_by.join(", ")
             };
-            println!("{:<20} {:<20} {:<20}", row.requirement, sat, ver);
+            let label = match &row.id {
+                Some(id) => format!("<{}> {}", id, row.requirement),
+                None => row.requirement.clone(),
+            };
+            println!("{:<20} {:<20} {:<20}", label, sat, ver);
         }
 
         // Print coverage summary

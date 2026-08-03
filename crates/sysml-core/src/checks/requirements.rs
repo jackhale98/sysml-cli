@@ -19,17 +19,10 @@ impl Check for UnsatisfiedReqCheck {
             .filter(|d| d.kind == DefKind::Requirement)
             .collect();
 
-        // Collect all satisfied requirement names (normalize to simple name)
-        let satisfied: std::collections::HashSet<&str> = model
-            .satisfactions
-            .iter()
-            .map(|s| simple_name(&s.requirement))
-            .collect();
-
         let mut diagnostics = Vec::new();
 
         for def in req_defs {
-            if !satisfied.contains(def.name.as_str()) {
+            if !requirement_traced(model, def, &model.satisfactions, |s| &s.requirement) {
                 diagnostics.push(Diagnostic::warning(
                     &model.file,
                     def.span.clone(),
@@ -46,6 +39,35 @@ impl Check for UnsatisfiedReqCheck {
     }
 }
 
+/// True when a requirement def is traced by any of `items` — either
+/// directly (target names the def or its `<id>`) or through one of its
+/// usages (target names a usage typed by the def, or that usage's `<id>`).
+fn requirement_traced<'a, T>(
+    model: &'a Model,
+    def: &crate::model::Definition,
+    items: &'a [T],
+    target: impl Fn(&'a T) -> &'a str,
+) -> bool {
+    use crate::model::target_matches;
+    let usages: Vec<_> = model
+        .usages
+        .iter()
+        .filter(|u| {
+            u.kind == "requirement"
+                && u.type_ref
+                    .as_deref()
+                    .is_some_and(|t| simple_name(t) == def.name)
+        })
+        .collect();
+    items.iter().any(|item| {
+        let t = target(item);
+        target_matches(t, &def.name, def.short_name.as_deref())
+            || usages
+                .iter()
+                .any(|u| target_matches(t, &u.name, u.short_name.as_deref()))
+    })
+}
+
 pub struct UnverifiedReqCheck;
 
 impl Check for UnverifiedReqCheck {
@@ -60,16 +82,10 @@ impl Check for UnverifiedReqCheck {
             .filter(|d| d.kind == DefKind::Requirement)
             .collect();
 
-        let verified: std::collections::HashSet<&str> = model
-            .verifications
-            .iter()
-            .map(|v| simple_name(&v.requirement))
-            .collect();
-
         let mut diagnostics = Vec::new();
 
         for def in req_defs {
-            if !verified.contains(def.name.as_str()) {
+            if !requirement_traced(model, def, &model.verifications, |v| &v.requirement) {
                 diagnostics.push(Diagnostic::warning(
                     &model.file,
                     def.span.clone(),

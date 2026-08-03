@@ -431,6 +431,24 @@ impl Model {
         self.definitions.iter().find(|d| d.name == name)
     }
 
+    /// Find a definition by name or `<short_name>` id (quotes ignored).
+    pub fn find_def_by_key(&self, key: &str) -> Option<&Definition> {
+        let k = unquote_name(key);
+        self.definitions.iter().find(|d| {
+            unquote_name(&d.name) == k
+                || d.short_name.as_deref().map(unquote_name) == Some(k)
+        })
+    }
+
+    /// Find a usage by name or `<short_name>` id (quotes ignored).
+    pub fn find_usage_by_key(&self, key: &str) -> Option<&Usage> {
+        let k = unquote_name(key);
+        self.usages.iter().find(|u| {
+            unquote_name(&u.name) == k
+                || u.short_name.as_deref().map(unquote_name) == Some(k)
+        })
+    }
+
     /// Get all usages with a specific parent_def.
     pub fn usages_in_def(&self, def_name: &str) -> Vec<&Usage> {
         self.usages
@@ -492,6 +510,30 @@ pub fn simple_name(name: &str) -> &str {
         .rsplit('.')
         .next()
         .unwrap_or(name)
+}
+
+/// Strip surrounding single quotes from an unrestricted name
+/// (`'Air Frame'` -> `Air Frame`).
+pub fn unquote_name(name: &str) -> &str {
+    name.strip_prefix('\'')
+        .and_then(|s| s.strip_suffix('\''))
+        .unwrap_or(name)
+}
+
+/// True when a satisfy/verify/refine target refers to an element with the
+/// given name or `<short_name>` id. Handles qualified names, feature chains
+/// (`reqs.REQ2`), and quoted unrestricted names.
+pub fn target_matches(target: &str, name: &str, short_name: Option<&str>) -> bool {
+    let simple = unquote_name(simple_name(target));
+    if simple == unquote_name(name) {
+        return true;
+    }
+    if let Some(sn) = short_name {
+        if simple == unquote_name(sn) {
+            return true;
+        }
+    }
+    false
 }
 
 /// Populate `qualified_name` fields on all definitions and usages by walking

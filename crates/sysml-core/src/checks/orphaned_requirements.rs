@@ -48,12 +48,34 @@ impl Check for OrphanedRequirementCheck {
             }
         }
 
+        // Satisfy/verify statements may target a requirement usage's
+        // `<id>` short name (`satisfy reqs.REQ2;`) — resolve those ids to
+        // the usage's type so the def counts as referenced.
+        let usage_ids: Vec<(&str, &str)> = model
+            .usages
+            .iter()
+            .filter(|u| u.kind == "requirement")
+            .filter_map(|u| {
+                Some((
+                    crate::model::unquote_name(u.short_name.as_deref()?),
+                    simple_name(u.type_ref.as_deref()?),
+                ))
+            })
+            .collect();
+        let id_referenced: HashSet<&str> = usage_ids
+            .iter()
+            .filter(|(id, _)| referenced.contains(id))
+            .map(|(_, ty)| *ty)
+            .collect();
+
         let mut diagnostics = Vec::new();
         for def in &model.definitions {
             if def.kind != DefKind::Requirement {
                 continue;
             }
-            if referenced.contains(def.name.as_str()) {
+            if referenced.contains(def.name.as_str())
+                || id_referenced.contains(def.name.as_str())
+            {
                 continue;
             }
             diagnostics.push(

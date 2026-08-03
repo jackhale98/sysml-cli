@@ -313,36 +313,82 @@ pub fn parse_kind_filter(s: &str) -> Option<KindFilter> {
 #[derive(Debug, Clone)]
 pub struct TraceRow {
     pub requirement: String,
+    /// `<short_name>` id of the requirement, if declared (e.g. `REQ2`).
+    pub id: Option<String>,
     pub satisfied_by: Vec<String>,
     pub verified_by: Vec<String>,
 }
 
 /// Generate a requirements traceability matrix.
+///
+/// Requirements are typically modeled as *usages* with `<ID>` short names
+/// typed by requirement defs (book Ch 32), so usages are first-class rows.
+/// Requirement defs appear as rows only when no usage types them (otherwise
+/// the usages are the trace subjects and the def row would double-count).
 pub fn trace_requirements(model: &Model) -> Vec<TraceRow> {
+    use crate::model::{target_matches, unquote_name};
+
+    let req_usages: Vec<&crate::model::Usage> = model
+        .usages
+        .iter()
+        .filter(|u| u.kind == "requirement")
+        .collect();
+
+    let collect_matches = |name: &str, short_name: Option<&str>| -> (Vec<String>, Vec<String>) {
+        let satisfied_by: Vec<String> = model
+            .satisfactions
+            .iter()
+            .filter(|s| target_matches(&s.requirement, name, short_name))
+            .map(|s| s.by.clone().unwrap_or_else(|| "(implicit)".to_string()))
+            .collect();
+        let verified_by: Vec<String> = model
+            .verifications
+            .iter()
+            .filter(|v| target_matches(&v.requirement, name, short_name))
+            .map(|v| v.by.clone())
+            .collect();
+        (satisfied_by, verified_by)
+    };
+
+    let mut rows = Vec::new();
+
+    for usage in &req_usages {
+        let (satisfied_by, verified_by) =
+            collect_matches(&usage.name, usage.short_name.as_deref());
+        rows.push(TraceRow {
+            requirement: usage.name.clone(),
+            id: usage
+                .short_name
+                .as_deref()
+                .map(|s| unquote_name(s).to_string()),
+            satisfied_by,
+            verified_by,
+        });
+    }
+
+    // Defs not typed by any requirement usage are standalone trace subjects.
+    let used_defs: std::collections::HashSet<&str> = req_usages
+        .iter()
+        .filter_map(|u| u.type_ref.as_deref())
+        .map(simple_name)
+        .collect();
+
     let req_defs: Vec<&Definition> = model
         .definitions
         .iter()
         .filter(|d| d.kind == DefKind::Requirement)
+        .filter(|d| !used_defs.contains(d.name.as_str()))
         .collect();
 
-    let mut rows = Vec::new();
     for req in &req_defs {
-        let satisfied_by: Vec<String> = model
-            .satisfactions
-            .iter()
-            .filter(|s| simple_name(&s.requirement) == req.name)
-            .map(|s| s.by.clone().unwrap_or_else(|| "(implicit)".to_string()))
-            .collect();
-
-        let verified_by: Vec<String> = model
-            .verifications
-            .iter()
-            .filter(|v| simple_name(&v.requirement) == req.name)
-            .map(|v| v.by.clone())
-            .collect();
-
+        let (satisfied_by, verified_by) =
+            collect_matches(&req.name, req.short_name.as_deref());
         rows.push(TraceRow {
             requirement: req.name.clone(),
+            id: req
+                .short_name
+                .as_deref()
+                .map(|s| unquote_name(s).to_string()),
             satisfied_by,
             verified_by,
         });
@@ -1311,20 +1357,75 @@ mod tests {
     }
 
     #[test]
+    fn trace_requirement_usages_with_ids() {
+        // Book Ch 32 style: requirements as usages with <ID> short names,
+        // satisfied via qualified name or by-clause, verified via objective.
+        let model = parse_file(
+            "test.sysml",
+            r#"
+            package <DSRE> 'Drone System Requirements' {
+                requirement def UavFlightTimeReq;
+                requirement <REQ2> uavFlightTime : UavFlightTimeReq;
+                requirement <REQ3> uavMaxSpeed;
+            }
+            part def Battery {
+                satisfy DSRE::uavFlightTime;
+            }
+            part theDrone : Drone;
+            satisfy DSRE::uavMaxSpeed by theDrone;
+            part def Drone;
+        "#,
+        );
+        let rows = trace_requirements(&model);
+        // The def is typed by a usage, so only the two usages are rows.
+        assert_eq!(rows.len(), 2, "rows: {rows:?}");
+        let flight = rows.iter().find(|r| r.requirement == "uavFlightTime").unwrap();
+        assert_eq!(flight.id.as_deref(), Some("REQ2"));
+        assert!(!flight.satisfied_by.is_empty(), "usage satisfy must match");
+        let speed = rows.iter().find(|r| r.requirement == "uavMaxSpeed").unwrap();
+        assert_eq!(speed.id.as_deref(), Some("REQ3"));
+        assert_eq!(speed.satisfied_by, vec!["theDrone".to_string()]);
+    }
+
+    #[test]
+    fn trace_satisfy_by_short_name_id() {
+        // `satisfy reqs.REQ2;` targets the usage's <id> via feature chain.
+        let model = parse_file(
+            "test.sysml",
+            r#"
+            requirement def R;
+            requirement <REQ2> reqUsage : R;
+            part def Impl {
+                satisfy reqs.REQ2;
+            }
+        "#,
+        );
+        let rows = trace_requirements(&model);
+        let row = rows.iter().find(|r| r.requirement == "reqUsage").unwrap();
+        assert!(
+            !row.satisfied_by.is_empty(),
+            "satisfy by <id> feature chain must match: {rows:?}"
+        );
+    }
+
+    #[test]
     fn trace_coverage_metrics() {
         let rows = vec![
             TraceRow {
                 requirement: "R1".into(),
+                id: None,
                 satisfied_by: vec!["A".into()],
                 verified_by: vec!["T1".into()],
             },
             TraceRow {
                 requirement: "R2".into(),
+                id: None,
                 satisfied_by: vec!["B".into()],
                 verified_by: vec![],
             },
             TraceRow {
                 requirement: "R3".into(),
+                id: None,
                 satisfied_by: vec![],
                 verified_by: vec![],
             },
