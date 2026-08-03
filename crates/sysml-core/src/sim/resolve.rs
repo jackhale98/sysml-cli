@@ -72,6 +72,25 @@ pub fn resolve_attribute_tree(
     root_def: &str,
     attribute_name: &str,
 ) -> AttributeTree {
+    resolve_attribute_tree_with_variants(
+        model,
+        root_def,
+        attribute_name,
+        &std::collections::HashMap::new(),
+    )
+}
+
+/// Resolve an attribute tree with variant selections (Ch 35
+/// configure-then-compute). `selections` maps a variation point — the
+/// part usage name typed by a variation def, or the variation def's
+/// name — to the chosen variant usage name. Variant usages of
+/// unselected variation points are all included.
+pub fn resolve_attribute_tree_with_variants(
+    model: &Model,
+    root_def: &str,
+    attribute_name: &str,
+    selections: &std::collections::HashMap<String, String>,
+) -> AttributeTree {
     let (own_value, unit) =
         match find_attribute_value_with_unit(model, root_def, attribute_name) {
             Some((v, u)) => (Some(v), u),
@@ -79,7 +98,8 @@ pub fn resolve_attribute_tree(
         };
     let mut visited = HashSet::new();
     visited.insert(root_def.to_string());
-    let children = resolve_children(model, root_def, attribute_name, &mut visited);
+    let children =
+        resolve_children(model, root_def, root_def, attribute_name, &mut visited, selections);
 
     AttributeTree {
         root: root_def.to_string(),
@@ -93,10 +113,18 @@ pub fn resolve_attribute_tree(
 fn resolve_children(
     model: &Model,
     def_name: &str,
+    context_name: &str,
     attribute_name: &str,
     visited: &mut HashSet<String>,
+    selections: &std::collections::HashMap<String, String>,
 ) -> Vec<AttributeNode> {
     let mut nodes = Vec::new();
+
+    // Variant choice for this scope, if the enclosing usage or this
+    // (variation) def has a selection.
+    let selected: Option<&String> = selections
+        .get(context_name)
+        .or_else(|| selections.get(def_name));
 
     for usage in model.usages_in_def(def_name) {
         // Skip non-part usages (attributes, actions, states, etc.)
@@ -107,6 +135,16 @@ fn resolve_children(
         );
         if !is_part {
             continue;
+        }
+
+        // Variant filtering: when a variant is selected for this scope,
+        // keep only the chosen variant usage.
+        if usage.is_variant {
+            if let Some(choice) = selected {
+                if usage.name != *choice {
+                    continue;
+                }
+            }
         }
 
         let type_name = usage
@@ -130,7 +168,14 @@ fn resolve_children(
             Vec::new()
         } else {
             visited.insert(type_name.to_string());
-            let c = resolve_children(model, type_name, attribute_name, visited);
+            let c = resolve_children(
+                model,
+                type_name,
+                &usage.name,
+                attribute_name,
+                visited,
+                selections,
+            );
             visited.remove(type_name);
             c
         };

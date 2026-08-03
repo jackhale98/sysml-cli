@@ -4,7 +4,7 @@
 //! configurable methods: sum, RSS, product, min, max.
 
 use crate::model::Model;
-use crate::sim::resolve::{resolve_attribute_tree, AttributeNode};
+use crate::sim::resolve::AttributeNode;
 
 /// Aggregation method for rollup computation.
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -120,7 +120,29 @@ pub fn evaluate_rollup(
     attribute_name: &str,
     method: AggregationMethod,
 ) -> RollupResult {
-    let tree = resolve_attribute_tree(model, root_def, attribute_name);
+    evaluate_rollup_with_variants(
+        model,
+        root_def,
+        attribute_name,
+        method,
+        &std::collections::HashMap::new(),
+    )
+}
+
+/// Evaluate a rollup with variant selections (`point=choice`, Ch 35).
+pub fn evaluate_rollup_with_variants(
+    model: &Model,
+    root_def: &str,
+    attribute_name: &str,
+    method: AggregationMethod,
+    selections: &std::collections::HashMap<String, String>,
+) -> RollupResult {
+    let tree = crate::sim::resolve::resolve_attribute_tree_with_variants(
+        model,
+        root_def,
+        attribute_name,
+        selections,
+    );
     let unit = pick_target_unit(&tree);
     let own = to_target(tree.own_value.unwrap_or(0.0), &tree.unit, &unit);
     let (child_total, contributions) = aggregate_children(&tree.children, method, &[], &unit);
@@ -453,6 +475,71 @@ mod tests {
             result.unit
         );
         assert_eq!(result.unit.as_deref(), Some("kg"));
+    }
+
+    const VARIANT_MODEL: &str = r#"
+        variation part def BatteryChoice {
+            variant part standardBattery : StandardBattery;
+            variant part powerBattery : PowerBattery;
+        }
+        part def StandardBattery { attribute mass = 1.6 [SI::kg]; }
+        part def PowerBattery { attribute mass = 2.2 [SI::kg]; }
+        part def Drone {
+            attribute mass = 1.0 [SI::kg];
+            part battery : BatteryChoice;
+        }
+    "#;
+
+    #[test]
+    fn variant_selection_by_usage_name() {
+        // Ch 35 configure-then-compute: select via the part usage name.
+        let model = parse_file("test.sysml", VARIANT_MODEL);
+        let mut sel = std::collections::HashMap::new();
+        sel.insert("battery".to_string(), "powerBattery".to_string());
+        let result = evaluate_rollup_with_variants(
+            &model, "Drone", "mass", AggregationMethod::Sum, &sel,
+        );
+        assert!((result.total - 3.2).abs() < 1e-9, "got {}", result.total);
+
+        sel.insert("battery".to_string(), "standardBattery".to_string());
+        let result = evaluate_rollup_with_variants(
+            &model, "Drone", "mass", AggregationMethod::Sum, &sel,
+        );
+        assert!((result.total - 2.6).abs() < 1e-9, "got {}", result.total);
+    }
+
+    #[test]
+    fn variant_selection_by_def_name() {
+        // Selection may also key on the variation def's name.
+        let model = parse_file("test.sysml", VARIANT_MODEL);
+        let mut sel = std::collections::HashMap::new();
+        sel.insert("BatteryChoice".to_string(), "powerBattery".to_string());
+        let result = evaluate_rollup_with_variants(
+            &model, "Drone", "mass", AggregationMethod::Sum, &sel,
+        );
+        assert!((result.total - 3.2).abs() < 1e-9, "got {}", result.total);
+    }
+
+    #[test]
+    fn unconfigured_variation_includes_all_variants() {
+        let model = parse_file("test.sysml", VARIANT_MODEL);
+        let result = evaluate_rollup(&model, "Drone", "mass", AggregationMethod::Sum);
+        assert!((result.total - 4.8).abs() < 1e-9, "got {}", result.total);
+    }
+
+    #[test]
+    fn variant_flags_captured_in_model() {
+        let model = parse_file("test.sysml", VARIANT_MODEL);
+        let choice = model.find_def("BatteryChoice").unwrap();
+        assert!(choice.is_variation, "variation modifier must be captured");
+        let std_bat = model
+            .usages
+            .iter()
+            .find(|u| u.name == "standardBattery")
+            .unwrap();
+        assert!(std_bat.is_variant, "variant modifier must be captured");
+        let battery = model.usages.iter().find(|u| u.name == "battery").unwrap();
+        assert!(!battery.is_variant, "plain usages are not variants");
     }
 
     #[test]

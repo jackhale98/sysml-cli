@@ -19,7 +19,8 @@ pub fn run(cli: &Cli, kind: &RollupCommand) -> ExitCode {
             root,
             attr,
             method,
-        } => run_compute(cli, files, root, attr, method),
+            variant,
+        } => run_compute(cli, files, root, attr, method, variant),
         RollupCommand::Budget {
             files,
             root,
@@ -75,7 +76,14 @@ fn parse_and_merge(files: &[PathBuf]) -> Option<Model> {
     Some(merged)
 }
 
-fn run_compute(cli: &Cli, files: &[PathBuf], root: &str, attr: &str, method: &str) -> ExitCode {
+fn run_compute(
+    cli: &Cli,
+    files: &[PathBuf],
+    root: &str,
+    attr: &str,
+    method: &str,
+    variant: &[String],
+) -> ExitCode {
     let Some(model) = parse_and_merge(files) else {
         return ExitCode::FAILURE;
     };
@@ -91,7 +99,41 @@ fn run_compute(cli: &Cli, files: &[PathBuf], root: &str, attr: &str, method: &st
         return ExitCode::FAILURE;
     }
 
-    let result = evaluate_rollup(&model, root, attr, agg);
+    // Parse --variant POINT=CHOICE selections and validate the choices.
+    let mut selections = std::collections::HashMap::new();
+    for v in variant {
+        let Some((point, choice)) = v.split_once('=') else {
+            eprintln!("error: --variant expects POINT=CHOICE, got `{}`", v);
+            return ExitCode::FAILURE;
+        };
+        let choice_ok = model
+            .usages
+            .iter()
+            .any(|u| u.is_variant && u.name == choice);
+        if !choice_ok {
+            let available: Vec<&str> = model
+                .usages
+                .iter()
+                .filter(|u| u.is_variant)
+                .map(|u| u.name.as_str())
+                .collect();
+            eprintln!(
+                "error: `{}` is not a variant usage. Available variants: {}",
+                choice,
+                if available.is_empty() {
+                    "(none in model)".to_string()
+                } else {
+                    available.join(", ")
+                }
+            );
+            return ExitCode::FAILURE;
+        }
+        selections.insert(point.to_string(), choice.to_string());
+    }
+
+    let result = sysml_core::sim::rollup::evaluate_rollup_with_variants(
+        &model, root, attr, agg, &selections,
+    );
 
     match cli.format.as_str() {
         "json" => println!("{}", format_rollup_json(&result)),

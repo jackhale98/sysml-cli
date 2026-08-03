@@ -417,12 +417,20 @@ fn get_visibility(node: &Node) -> Option<Visibility> {
 
 /// Check if a node has an abstract modifier in preceding siblings.
 fn is_abstract(node: &Node) -> bool {
+    has_modifier(node, "abstract")
+}
+
+/// Check whether NODE is preceded by the given modifier keyword
+/// (e.g. "variation", "variant").
+fn has_modifier(node: &Node, keyword: &str) -> bool {
     let mut sibling = node.prev_sibling();
     while let Some(sib) = sibling {
-        match sibling_modifier_kind(&sib) {
-            "abstract" => return true,
-            k if is_structural_boundary(k) => break,
-            _ => {}
+        let k = sibling_modifier_kind(&sib);
+        if k == keyword {
+            return true;
+        }
+        if is_structural_boundary(k) {
+            break;
         }
         sibling = sib.prev_sibling();
     }
@@ -776,6 +784,7 @@ fn walk_node_scoped(
                     short_name,
                     doc: doc.clone(),
                     is_abstract: is_abstract_val,
+                    is_variation: has_modifier(&node, "variation"),
                     enum_members: Vec::new(),
                     parent_def: parent_def_name.map(|s| s.to_string()),
                     body_start_byte,
@@ -905,6 +914,8 @@ fn walk_node_scoped(
                     short_name,
                     redefinition,
                     subsets,
+                    is_variant: has_modifier(&node, "variant"),
+                    is_variation: has_modifier(&node, "variation"),
                     qualified_name: None,
                 });
 
@@ -948,7 +959,9 @@ fn walk_node_scoped(
                             short_name: None,
                             redefinition: None,
                             subsets: None,
-                            qualified_name: None,
+                            is_variant: false,
+                    is_variation: false,
+                    qualified_name: None,
                         });
                     }
                 }
@@ -1011,6 +1024,8 @@ fn walk_node_scoped(
                     short_name: None,
                     redefinition: None,
                     subsets: None,
+                    is_variant: false,
+                    is_variation: false,
                     qualified_name: None,
                 });
             }
@@ -1082,6 +1097,8 @@ fn walk_node_scoped(
                     short_name: None,
                     redefinition: None,
                     subsets: None,
+                    is_variant: false,
+                    is_variation: false,
                     qualified_name: None,
                 });
             }
@@ -1234,7 +1251,9 @@ fn walk_node_scoped(
                         short_name: None,
                         redefinition: None,
                         subsets: None,
-                        qualified_name: None,
+                        is_variant: false,
+                    is_variation: false,
+                    qualified_name: None,
                     });
                     break;
                 }
@@ -1304,7 +1323,9 @@ fn walk_node_scoped(
                 short_name: None,
                 redefinition: None,
                 subsets: None,
-                qualified_name: None,
+                is_variant: false,
+                    is_variation: false,
+                    qualified_name: None,
             });
             // Recurse into body for nested elements
             let mut cursor = node.walk();
@@ -1339,7 +1360,9 @@ fn walk_node_scoped(
                 short_name: None,
                 redefinition: None,
                 subsets: None,
-                qualified_name: None,
+                is_variant: false,
+                    is_variation: false,
+                    qualified_name: None,
             });
         }
 
@@ -1367,6 +1390,8 @@ fn walk_node_scoped(
                     short_name: None,
                     redefinition: None,
                     subsets: None,
+                    is_variant: false,
+                    is_variation: false,
                     qualified_name: None,
                 });
             }
@@ -1393,7 +1418,9 @@ fn walk_node_scoped(
                                 short_name: None,
                                 redefinition: None,
                                 subsets: None,
-                                qualified_name: None,
+                                is_variant: false,
+                    is_variation: false,
+                    qualified_name: None,
                             });
                             break;
                         }
@@ -1422,7 +1449,9 @@ fn walk_node_scoped(
                         short_name: None,
                         redefinition: None,
                         subsets: None,
-                        qualified_name: None,
+                        is_variant: false,
+                    is_variation: false,
+                    qualified_name: None,
                     });
                     break;
                 }

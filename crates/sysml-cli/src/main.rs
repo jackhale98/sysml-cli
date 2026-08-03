@@ -32,6 +32,8 @@ fn main() -> ExitCode {
             parent,
             unused,
             abstract_only,
+            variations,
+            variants,
             visibility,
             view,
         } => commands::list::run(
@@ -42,6 +44,8 @@ fn main() -> ExitCode {
             parent.as_deref(),
             *unused,
             *abstract_only,
+            *variations,
+            *variants,
             visibility.as_deref(),
             view.as_deref(),
         ),

@@ -417,6 +417,7 @@ mod tests {
             visibility: None,
             short_name: None,
             doc: None,
+            is_variation: false,
             is_abstract: false,
             enum_members: Vec::new(),
             parent_def: None,
@@ -444,6 +445,7 @@ mod tests {
             visibility: None,
             short_name: None,
             doc: None,
+            is_variation: false,
             is_abstract: false,
             enum_members: Vec::new(),
             parent_def: Some("VehicleModel".into()),
@@ -471,6 +473,7 @@ mod tests {
             visibility: None,
             short_name: None,
             doc: None,
+            is_variation: false,
             is_abstract: false,
             enum_members: Vec::new(),
             parent_def: Some("VehicleModel".into()),
@@ -498,6 +501,7 @@ mod tests {
             visibility: None,
             short_name: None,
             doc: None,
+            is_variation: false,
             is_abstract: false,
             enum_members: Vec::new(),
             parent_def: Some("VehicleModel".into()),
@@ -527,6 +531,8 @@ mod tests {
             short_name: None,
             redefinition: None,
             subsets: None,
+            is_variant: false,
+            is_variation: false,
             qualified_name: None,
         });
         model.usages.push(Usage {
@@ -549,6 +555,8 @@ mod tests {
             short_name: None,
             redefinition: None,
             subsets: None,
+            is_variant: false,
+            is_variation: false,
             qualified_name: None,
         });
 
@@ -692,6 +700,8 @@ mod tests {
             short_name: None,
             redefinition: None,
             subsets: None,
+            is_variant: false,
+            is_variation: false,
             qualified_name: None,
         });
 
@@ -716,6 +726,7 @@ mod tests {
             visibility: None,
             short_name: None,
             doc: None,
+            is_variation: false,
             is_abstract: false,
             enum_members: Vec::new(),
             parent_def: None,
@@ -735,6 +746,7 @@ mod tests {
             visibility: None,
             short_name: None,
             doc: None,
+            is_variation: false,
             is_abstract: false,
             enum_members: Vec::new(),
             parent_def: Some("A".into()),
@@ -754,6 +766,7 @@ mod tests {
             visibility: None,
             short_name: None,
             doc: None,
+            is_variation: false,
             is_abstract: false,
             enum_members: Vec::new(),
             parent_def: Some("B".into()),
@@ -1001,6 +1014,8 @@ kind = "reviews"
             short_name: None,
             redefinition: None,
             subsets: None,
+            is_variant: false,
+            is_variation: false,
             qualified_name: None,
         });
 

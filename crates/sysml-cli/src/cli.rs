@@ -109,6 +109,14 @@ pub(crate) enum Command {
         #[arg(long, name = "abstract")]
         abstract_only: bool,
 
+        /// Show only variation points (`variation` defs/usages, Ch 35).
+        #[arg(long)]
+        variations: bool,
+
+        /// Show only variant choices (`variant` usages, Ch 35).
+        #[arg(long)]
+        variants: bool,
+
         /// Filter by visibility (public, private, protected).
         #[arg(long)]
         visibility: Option<String>,
@@ -882,6 +890,12 @@ pub(crate) enum RollupCommand {
         /// Aggregation method: sum, rss, product, min, max.
         #[arg(long, default_value = "sum")]
         method: String,
+        /// Select a variant for a variation point: POINT=CHOICE
+        /// (e.g. --variant battery=powerBattery). Repeatable. POINT is
+        /// the part usage name or the variation def name; unselected
+        /// variation points include all variants.
+        #[arg(long = "variant", value_name = "POINT=CHOICE")]
+        variant: Vec<String>,
     },
     /// Check an attribute rollup against a budget limit.
     ///

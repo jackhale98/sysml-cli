@@ -156,6 +156,9 @@ pub struct Definition {
     /// Whether the definition is abstract.
     #[serde(skip_serializing_if = "std::ops::Not::not")]
     pub is_abstract: bool,
+    /// Whether the definition is a variation point (`variation part def`).
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    pub is_variation: bool,
     /// Members of an enum definition.
     #[serde(skip_serializing_if = "Vec::is_empty")]
     pub enum_members: Vec<EnumMember>,
@@ -283,6 +286,12 @@ pub struct Usage {
     /// Subsets target name.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub subsets: Option<String>,
+    /// Whether this usage is a variant choice (`variant part ...`).
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    pub is_variant: bool,
+    /// Whether this usage is a variation point (`variation part ...`).
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    pub is_variation: bool,
     /// Fully qualified name (populated by qualify_model).
     #[serde(skip_serializing_if = "Option::is_none")]
     pub qualified_name: Option<crate::qualified_name::QualifiedName>,

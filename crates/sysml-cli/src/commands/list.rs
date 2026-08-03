@@ -14,6 +14,8 @@ pub(crate) fn run(
     parent: Option<&str>,
     unused: bool,
     abstract_only: bool,
+    variations: bool,
+    variants: bool,
     visibility: Option<&str>,
     view: Option<&str>,
 ) -> ExitCode {
@@ -59,6 +61,8 @@ pub(crate) fn run(
         parent: parent.map(|s| s.to_string()),
         unused_only: unused,
         abstract_only,
+        variations_only: variations,
+        variants_only: variants,
         visibility: vis_filter,
     };
 

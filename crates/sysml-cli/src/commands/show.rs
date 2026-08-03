@@ -47,6 +47,9 @@ pub(crate) fn run(cli: &Cli, file: &PathBuf, element: &str, raw: bool) -> ExitCo
             if def.is_abstract {
                 println!("  abstract: yes");
             }
+            if def.is_variation {
+                println!("  variation: yes");
+            }
             if let Some(ref st) = def.super_type {
                 println!("  specializes: {}", st);
             }
@@ -125,6 +128,12 @@ pub(crate) fn run(cli: &Cli, file: &PathBuf, element: &str, raw: bool) -> ExitCo
             }
             if let Some(ref t) = usage.type_ref {
                 println!("  type: {}", t);
+            }
+            if usage.is_variant {
+                println!("  variant: yes");
+            }
+            if usage.is_variation {
+                println!("  variation: yes");
             }
             if let Some(ref dir) = usage.direction {
                 println!("  direction: {}", dir.label());

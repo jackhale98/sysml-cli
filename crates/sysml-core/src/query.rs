@@ -103,6 +103,10 @@ pub struct ListFilter {
     pub unused_only: bool,
     /// Only show abstract definitions.
     pub abstract_only: bool,
+    /// Only show variation points (`variation` defs/usages).
+    pub variations_only: bool,
+    /// Only show variant choices (`variant` usages).
+    pub variants_only: bool,
     /// Filter by visibility.
     pub visibility: Option<Visibility>,
 }
@@ -152,6 +156,12 @@ pub fn list_elements<'a>(model: &'a Model, filter: &ListFilter) -> Vec<Element<'
             if filter.abstract_only && !def.is_abstract {
                 continue;
             }
+            if filter.variations_only && !def.is_variation {
+                continue;
+            }
+            if filter.variants_only {
+                continue; // variants are usages, never defs
+            }
             if let Some(vis) = &filter.visibility {
                 if def.visibility.as_ref() != Some(vis) {
                     continue;
@@ -185,6 +195,12 @@ pub fn list_elements<'a>(model: &'a Model, filter: &ListFilter) -> Vec<Element<'
                 if usage.parent_def.as_deref() != Some(parent.as_str()) {
                     continue;
                 }
+            }
+            if filter.variations_only && !usage.is_variation {
+                continue;
+            }
+            if filter.variants_only && !usage.is_variant {
+                continue;
             }
             results.push(Element::Usage(usage));
         }
