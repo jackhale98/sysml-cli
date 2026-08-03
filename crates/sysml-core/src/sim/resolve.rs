@@ -19,6 +19,8 @@ pub struct AttributeNode {
     pub quantity: u32,
     /// Resolved value of the target attribute on this node (if any)
     pub own_value: Option<f64>,
+    /// Unit of the value, normalized (e.g. "kg" from `250 [SI::kg]`)
+    pub unit: Option<String>,
     /// Child nodes (parts inside this definition)
     pub children: Vec<AttributeNode>,
 }
@@ -32,8 +34,32 @@ pub struct AttributeTree {
     pub attribute: String,
     /// Root's own attribute value (if any)
     pub own_value: Option<f64>,
+    /// Unit of the root's value, normalized
+    pub unit: Option<String>,
     /// Child part nodes
     pub children: Vec<AttributeNode>,
+}
+
+/// Parse a SysML value expression that may carry a unit bracket:
+/// `250`, `250 [SI::kg]`, `12.5[kg]`, `20 [SI::'km/h']`.
+/// Returns the numeric value and the normalized unit (qualifier prefix
+/// like `SI::` stripped, quotes removed).
+pub fn parse_value_with_unit(expr: &str) -> Option<(f64, Option<String>)> {
+    let expr = expr.trim();
+    if let Ok(v) = expr.parse::<f64>() {
+        return Some((v, None));
+    }
+    let open = expr.find('[')?;
+    let close = expr.rfind(']')?;
+    if close <= open {
+        return None;
+    }
+    let value: f64 = expr[..open].trim().parse().ok()?;
+    let raw_unit = expr[open + 1..close].trim();
+    let unit = crate::model::unquote_name(
+        raw_unit.rsplit("::").next().unwrap_or(raw_unit),
+    );
+    Some((value, Some(unit.to_string())))
 }
 
 /// Resolve an attribute tree starting from a root definition.
@@ -46,7 +72,11 @@ pub fn resolve_attribute_tree(
     root_def: &str,
     attribute_name: &str,
 ) -> AttributeTree {
-    let own_value = find_attribute_value(model, root_def, attribute_name);
+    let (own_value, unit) =
+        match find_attribute_value_with_unit(model, root_def, attribute_name) {
+            Some((v, u)) => (Some(v), u),
+            None => (None, None),
+        };
     let mut visited = HashSet::new();
     visited.insert(root_def.to_string());
     let children = resolve_children(model, root_def, attribute_name, &mut visited);
@@ -55,6 +85,7 @@ pub fn resolve_attribute_tree(
         root: root_def.to_string(),
         attribute: attribute_name.to_string(),
         own_value,
+        unit,
         children,
     }
 }
@@ -88,7 +119,11 @@ fn resolve_children(
         let quantity = quantity_from_multiplicity(usage);
 
         // Resolve the attribute value on this usage's type
-        let own_value = find_attribute_value(model, type_name, attribute_name);
+        let (own_value, unit) =
+            match find_attribute_value_with_unit(model, type_name, attribute_name) {
+                Some((v, u)) => (Some(v), u),
+                None => (None, None),
+            };
 
         // Recurse into children (cycle detection)
         let children = if visited.contains(type_name) {
@@ -105,6 +140,7 @@ fn resolve_children(
             definition: type_name.to_string(),
             quantity,
             own_value,
+            unit,
             children,
         });
     }
@@ -115,12 +151,22 @@ fn resolve_children(
 /// Find the value of a named attribute within a definition.
 /// Checks attribute usages and feature usages with matching names.
 pub fn find_attribute_value(model: &Model, def_name: &str, attr_name: &str) -> Option<f64> {
+    find_attribute_value_with_unit(model, def_name, attr_name).map(|(v, _)| v)
+}
+
+/// Find the value and unit of a named attribute within a definition.
+/// Value expressions may carry unit brackets (`250 [SI::kg]`).
+pub fn find_attribute_value_with_unit(
+    model: &Model,
+    def_name: &str,
+    attr_name: &str,
+) -> Option<(f64, Option<String>)> {
     // Check direct usages in this definition
     for usage in model.usages_in_def(def_name) {
         if usage.name == attr_name && matches!(usage.kind.as_str(), "attribute" | "feature") {
             if let Some(ref expr) = usage.value_expr {
-                if let Ok(v) = expr.trim().parse::<f64>() {
-                    return Some(v);
+                if let Some(vu) = parse_value_with_unit(expr) {
+                    return Some(vu);
                 }
             }
         }
@@ -134,8 +180,8 @@ pub fn find_attribute_value(model: &Model, def_name: &str, attr_name: &str) -> O
             && matches!(usage.kind.as_str(), "attribute" | "feature")
         {
             if let Some(ref expr) = usage.value_expr {
-                if let Ok(v) = expr.trim().parse::<f64>() {
-                    return Some(v);
+                if let Some(vu) = parse_value_with_unit(expr) {
+                    return Some(vu);
                 }
             }
         }
@@ -146,7 +192,7 @@ pub fn find_attribute_value(model: &Model, def_name: &str, attr_name: &str) -> O
         if let Some(ref super_type) = def.super_type {
             let st = simple_name(super_type);
             if st != def_name {
-                return find_attribute_value(model, st, attr_name);
+                return find_attribute_value_with_unit(model, st, attr_name);
             }
         }
     }

@@ -77,8 +77,40 @@ pub struct RollupResult {
     pub total: f64,
     /// Root's own value (not from children)
     pub own_value: f64,
+    /// Unit all values were converted into (from `value [unit]` brackets)
+    pub unit: Option<String>,
     /// Per-child contribution breakdown
     pub contributions: Vec<Contribution>,
+}
+
+/// First unit found in the tree, preferring the root's own unit.
+fn pick_target_unit(tree: &crate::sim::resolve::AttributeTree) -> Option<String> {
+    if tree.unit.is_some() {
+        return tree.unit.clone();
+    }
+    fn first_unit(nodes: &[AttributeNode]) -> Option<String> {
+        for n in nodes {
+            if n.unit.is_some() {
+                return n.unit.clone();
+            }
+            if let Some(u) = first_unit(&n.children) {
+                return Some(u);
+            }
+        }
+        None
+    }
+    first_unit(&tree.children)
+}
+
+/// Convert `value` from `from` into `target` where both are known;
+/// values without a unit (or without a known conversion) pass through.
+fn to_target(value: f64, from: &Option<String>, target: &Option<String>) -> f64 {
+    match (from, target) {
+        (Some(f), Some(t)) if f != t => {
+            crate::sim::units::convert(value, f, t).unwrap_or(value)
+        }
+        _ => value,
+    }
 }
 
 /// Evaluate a rollup on a model.
@@ -89,8 +121,9 @@ pub fn evaluate_rollup(
     method: AggregationMethod,
 ) -> RollupResult {
     let tree = resolve_attribute_tree(model, root_def, attribute_name);
-    let own = tree.own_value.unwrap_or(0.0);
-    let (child_total, contributions) = aggregate_children(&tree.children, method, &[]);
+    let unit = pick_target_unit(&tree);
+    let own = to_target(tree.own_value.unwrap_or(0.0), &tree.unit, &unit);
+    let (child_total, contributions) = aggregate_children(&tree.children, method, &[], &unit);
     let total = own + child_total;
 
     // Compute percentages
@@ -102,6 +135,7 @@ pub fn evaluate_rollup(
         method,
         total,
         own_value: own,
+        unit,
         contributions,
     }
 }
@@ -110,6 +144,7 @@ fn aggregate_children(
     children: &[AttributeNode],
     method: AggregationMethod,
     parent_path: &[String],
+    target_unit: &Option<String>,
 ) -> (f64, Vec<Contribution>) {
     let mut contributions = Vec::new();
     let mut values: Vec<f64> = Vec::new();
@@ -118,8 +153,9 @@ fn aggregate_children(
         let mut path = parent_path.to_vec();
         path.push(child.name.clone());
 
-        let own = child.own_value.unwrap_or(0.0);
-        let (child_sum, child_contribs) = aggregate_children(&child.children, method, &path);
+        let own = to_target(child.own_value.unwrap_or(0.0), &child.unit, target_unit);
+        let (child_sum, child_contribs) =
+            aggregate_children(&child.children, method, &path, target_unit);
         let subtotal = (own + child_sum) * child.quantity as f64;
 
         values.push(subtotal);
@@ -172,15 +208,21 @@ fn set_percentages(mut contributions: Vec<Contribution>, total: f64) -> Vec<Cont
 
 /// Format a rollup result as a human-readable table.
 pub fn format_rollup_text(result: &RollupResult) -> String {
+    let unit_suffix = result
+        .unit
+        .as_deref()
+        .map(|u| format!(" [{}]", u))
+        .unwrap_or_default();
     let mut out = format!(
-        "Rollup: {} ({}) for {}\n",
+        "Rollup: {}{} ({}) for {}\n",
         result.attribute,
+        unit_suffix,
         result.method.label(),
         result.root
     );
     out.push_str(&format!(
-        "  {} {:>40} {:.4}\n",
-        result.root, "total:", result.total
+        "  {} {:>40} {:.4}{}\n",
+        result.root, "total:", result.total, unit_suffix
     ));
     if result.own_value != 0.0 {
         out.push_str(&format!("    (own) {:>38} {:.4}\n", "", result.own_value));
@@ -371,6 +413,65 @@ mod tests {
         assert!(text.contains("Rollup: mass (sum) for Vehicle"));
         assert!(text.contains("230")); // total
         assert!(text.contains("engine"));
+    }
+
+    #[test]
+    fn rollup_with_unit_brackets() {
+        // Values with `[SI::kg]` unit brackets must parse and roll up.
+        let source = r#"
+            part def Engine { attribute mass = 180 [SI::kg]; }
+            part def Chassis { attribute mass = 250 [SI::kg]; }
+            part def Vehicle {
+                attribute mass = 50 [SI::kg];
+                part engine : Engine;
+                part chassis : Chassis;
+            }
+        "#;
+        let model = parse_file("test.sysml", source);
+        let result = evaluate_rollup(&model, "Vehicle", "mass", AggregationMethod::Sum);
+        assert_eq!(result.total, 480.0);
+        assert_eq!(result.unit.as_deref(), Some("kg"));
+    }
+
+    #[test]
+    fn rollup_converts_mixed_units() {
+        // Mixed kg/g values convert into the root's unit (kg).
+        let source = r#"
+            part def Bolt { attribute mass = 50 [SI::g]; }
+            part def Frame {
+                attribute mass = 2 [SI::kg];
+                part bolts : Bolt [10];
+            }
+        "#;
+        let model = parse_file("test.sysml", source);
+        let result = evaluate_rollup(&model, "Frame", "mass", AggregationMethod::Sum);
+        // 2 kg + 10 * 0.05 kg = 2.5 kg
+        assert!(
+            (result.total - 2.5).abs() < 1e-9,
+            "expected 2.5 kg, got {} {:?}",
+            result.total,
+            result.unit
+        );
+        assert_eq!(result.unit.as_deref(), Some("kg"));
+    }
+
+    #[test]
+    fn parse_value_with_unit_forms() {
+        use crate::sim::resolve::parse_value_with_unit;
+        assert_eq!(parse_value_with_unit("250"), Some((250.0, None)));
+        assert_eq!(
+            parse_value_with_unit("250 [SI::kg]"),
+            Some((250.0, Some("kg".to_string())))
+        );
+        assert_eq!(
+            parse_value_with_unit("12.5[kg]"),
+            Some((12.5, Some("kg".to_string())))
+        );
+        assert_eq!(
+            parse_value_with_unit("20 [SI::'km/h']"),
+            Some((20.0, Some("km/h".to_string())))
+        );
+        assert_eq!(parse_value_with_unit("not a number"), None);
     }
 
     #[test]
