@@ -4,6 +4,8 @@ A fast, standalone SysML v2 command-line toolchain and language server for model
 
 Built on [tree-sitter](https://tree-sitter.github.io/) for reliable parsing of SysML v2 textual notation. Zero runtime dependencies — just a single binary.
 
+Validated against the 169 code listings in the *SysML v2 Book* (Weilkiens, 2026-05 pre-release): 165 parse cleanly — the remaining 4 are deliberate fragments/errata in the book itself. Fully-qualified names resolve from the root namespace without imports, package short names (`package <LIB> 'Library Package'`) work everywhere, and values carry their units (`250 [SI::kg]`).
+
 ## Documentation
 
 | | |
@@ -216,12 +218,14 @@ constraint PowerBudget: satisfied
 $ sysml trace requirements.sysml model.sysml
 Requirement          Satisfied By         Verified By
 ------------------------------------------------------------
-TemperatureAccuracy  TemperatureSensor    TestTempAccuracy
-OperatingRange       WeatherStationUnit   -
-BatteryLife          PowerSupply          TestBatteryLife
+<REQ1> tempAccuracy  TemperatureSensor    TestTempAccuracy
+<REQ2> opRange       WeatherStationUnit   -
+<REQ3> batteryLife   PowerSupply          TestBatteryLife
 
 Coverage: 3/3 satisfied (100%), 2/3 verified (67%)
 ```
+
+Requirements modeled as usages with `<ID>` short names (the book's house style) are first-class trace rows; satisfy/verify statements match by name, qualified name, feature chain, or `<ID>`. Look up any element by its ID with `sysml show model.sysml REQ2`.
 
 ### Attribute rollups — mass, cost, power, tolerance budgets
 
@@ -245,7 +249,19 @@ Budget: mass for Vehicle
   Status: PASS
 ```
 
+Values may carry unit brackets — `attribute mass = 250 [SI::kg];` — and mixed units convert automatically (kg/g, m/mm, h/min, ...) into the root's unit, which is shown in the output.
+
 Aggregation methods: `sum` (default), `rss` (tolerance stackups), `product`, `min`, `max`. Use `--format json` for CI integration.
+
+**Variant configurations** (SysML v2 variations, Ch 35): select variants per variation point and compute the configured system:
+
+```sh
+$ sysml list --variants model.sysml                    # what can vary?
+$ sysml rollup compute model.sysml --root Drone --attr mass \
+      --variant battery=powerBattery                   # configure, then compute
+```
+
+Unselected variation points include all variants; unknown choices error with the list of available variants.
 
 Parametric sweeps and what-if scenarios:
 

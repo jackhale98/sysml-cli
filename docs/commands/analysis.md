@@ -58,6 +58,7 @@ Show detailed information about a specific element.
 
 ```sh
 sysml show model.sysml Vehicle
+sysml show model.sysml REQ2                   # Look up by <ID> short name
 sysml show -f json model.sysml Engine
 sysml show --raw model.sysml Vehicle          # Print raw SysML source text
 ```
@@ -93,6 +94,12 @@ sysml trace model.sysml
 sysml trace --check --min-coverage 80 model.sysml    # CI gate
 sysml trace -f json model.sysml
 ```
+
+Requirement *usages* are first-class rows, labeled with their `<ID>`
+short names (`<REQ2> uavFlightTime`); requirement defs appear as rows
+only when no usage types them. Satisfy/verify statements match by
+simple name, qualified name, feature chain (`reqs.REQ2`), or `<ID>`.
+JSON output includes an `id` field per requirement.
 
 | Option | Description |
 |--------|-------------|
@@ -192,3 +199,34 @@ sysml stats src/*.sysml                       # Multiple files
 ```
 
 Output includes definitions/usages by kind, connection/flow/satisfaction/verification/allocation counts, package count, abstract definitions, import count, max nesting depth, and documentation coverage percentage.
+
+## rollup
+
+Aggregate a numeric attribute across the part hierarchy — mass, cost,
+power, tolerance budgets.
+
+```sh
+sysml rollup compute model.sysml --root Vehicle --attr mass
+sysml rollup compute model.sysml --root Vehicle --attr mass --method rss
+sysml rollup budget model.sysml --root Vehicle --attr mass --limit 2000
+sysml rollup sensitivity model.sysml --root Vehicle --attr mass
+sysml rollup sweep model.sysml --root Vehicle --attr mass --param engine --from 100 --to 300 --steps 5
+```
+
+Attribute values may carry unit brackets (`attribute mass = 250 [SI::kg];`).
+Mixed units convert automatically into the root's unit (kg/g, m/mm,
+h/min, ...) and the result displays its unit.
+
+**Variant configurations** (Ch 35 configure-then-compute):
+
+```sh
+sysml list --variants model.sysml
+sysml rollup compute model.sysml --root Drone --attr mass --variant battery=powerBattery
+```
+
+| Option (compute) | Description |
+|--------|-------------|
+| `--root <DEF>` | Root part definition to start from |
+| `--attr <NAME>` | Attribute to aggregate |
+| `--method <M>` | `sum` (default), `rss`, `product`, `min`, `max` |
+| `--variant POINT=CHOICE` | Select a variant for a variation point (repeatable). POINT is the part usage name or the variation def name; unselected points include all variants |

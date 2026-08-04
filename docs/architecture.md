@@ -93,6 +93,6 @@ State is managed with `DashMap` for concurrent access — tower-lsp dispatches r
 
 **Model vs Records vs Tool**: SysML files define types and structure. TOML records capture operational data (what happened, when, by whom). The tool provides execution logic, validation, and reporting.
 
-**Flat command namespace**: All commands are top-level (`sysml risk matrix`, not `sysml lifecycle risk matrix`). Designed for non-software engineers who shouldn't need to memorize a command hierarchy.
+**Flat command namespace**: All commands are top-level (`sysml rollup compute`, not `sysml analysis rollup compute`). Designed for non-software engineers who shouldn't need to memorize a command hierarchy.
 
 **Progressive enhancement**: The tool works with zero configuration for pure SysML v2 analysis. The `.sysml/` project and cache are opt-in.

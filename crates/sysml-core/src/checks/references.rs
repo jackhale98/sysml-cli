@@ -222,7 +222,7 @@ impl Check for UnresolvedTypeCheck {
                     &model.file,
                     tr.span.clone(),
                     codes::UNRESOLVED_TYPE,
-                    format!("type `{}` is not defined in this file", tr.name),
+                    format!("type `{}` cannot be resolved (not defined, imported, or reachable from the root namespace)", tr.name),
                 );
                 if let Some(closest) = find_closest_match(name, known.iter().copied()) {
                     diag = diag.with_suggestion(format!("did you mean `{}`?", closest));

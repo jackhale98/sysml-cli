@@ -40,7 +40,7 @@
 | W001 | unused | `<kind> '<name>' is defined but never referenced` |
 | W002 | unsatisfied | `requirement def '<name>' has no corresponding satisfy statement` |
 | W003 | unverified | `requirement def '<name>' has no corresponding verify statement` |
-| W004 | unresolved | `type '<name>' is not defined in this file` |
+| W004 | unresolved | `type '<name>' cannot be resolved (not defined, imported, or reachable from the root namespace)` |
 | W005 | unresolved | `reference '<name>' does not resolve to any definition or usage` |
 | W006 | port-types | `connected ports have different types` |
 | W007 | constraints | `constraint def '<name>' has a body but no constraint expression` |
@@ -53,6 +53,18 @@
 | W014 | orphan-req | `requirement def '<name>' is never satisfied, verified, or specialized` |
 | W015 | self-specialization | `<kind> '<name>' specializes itself: ':> <name>' would cause infinite recursion` |
 | W016 | unbound-port | `port '<name>' (in '<parent>') is declared but never connected` |
+
+### Multi-file semantics
+
+When several files are checked in one invocation (or `-I` include paths
+are given), they share a root namespace, per SysML v2 name resolution:
+
+- Fully-qualified references (`LIB::Widget`) resolve without an import.
+- Package short names (`package <LIB> 'Library Package'`) resolve in
+  imports and references, quoted or not.
+- W001 (unused) counts references from sibling files as uses.
+- W002/W003/W014 treat a requirement def as traced when any usage
+  typing it — or that usage's `<ID>` short name — is satisfied/verified.
 
 ## Output Formats
 
