@@ -72,6 +72,9 @@ impl Default for SimConfig {
 
 /// Run a state machine simulation to completion.
 pub fn simulate(machine: &StateMachineModel, config: &SimConfig) -> SimulationState {
+    if !machine.regions.is_empty() {
+        return simulate_parallel(machine, config);
+    }
     let initial = match &machine.entry_state {
         Some(s) => s.clone(),
         None => {
@@ -155,6 +158,138 @@ pub fn simulate(machine: &StateMachineModel, config: &SimConfig) -> SimulationSt
     }
 
     state
+}
+
+/// Simulate a parallel state: each region runs concurrently with its own
+/// current state; events are broadcast to every region (SysML semantics —
+/// an event occurrence is visible to all orthogonal regions). Triggerless
+/// (completion) transitions run between events, with per-phase cycle
+/// detection so ping-pong loops like `stabilizing <-> moving` settle
+/// instead of consuming the whole step budget.
+fn simulate_parallel(machine: &StateMachineModel, config: &SimConfig) -> SimulationState {
+    let init_region = |r: &StateMachineModel| -> SimulationState {
+        SimulationState {
+            machine_name: r.name.clone(),
+            current_state: r
+                .entry_state
+                .clone()
+                .or_else(|| r.states.first().map(|s| s.name.clone()))
+                .unwrap_or_default(),
+            step: 0,
+            env: config.initial_env.clone(),
+            trace: Vec::new(),
+            status: SimStatus::Running,
+        }
+    };
+
+    let mut sims: Vec<SimulationState> = machine.regions.iter().map(init_region).collect();
+    let mut trace: Vec<SimStep> = Vec::new();
+    let mut step_no = 0usize;
+    let mut hit_max = false;
+
+    let mut record = |region: &str, mut s: SimStep, step_no: &mut usize, trace: &mut Vec<SimStep>| {
+        s.step = *step_no;
+        s.from_state = format!("{}.{}", region, s.from_state);
+        s.to_state = format!("{}.{}", region, s.to_state);
+        *step_no += 1;
+        trace.push(s);
+    };
+
+    // Fire completion (triggerless) transitions per region until each is
+    // quiescent or revisits a state within this phase (cycle).
+    let mut run_completion =
+        |sims: &mut Vec<SimulationState>, trace: &mut Vec<SimStep>, step_no: &mut usize| -> bool {
+            let mut any = false;
+            for (i, region) in machine.regions.iter().enumerate() {
+                let mut visited: std::collections::HashSet<String> =
+                    std::collections::HashSet::new();
+                visited.insert(sims[i].current_state.clone());
+                loop {
+                    if *step_no >= config.max_steps {
+                        return any;
+                    }
+                    let next = step(region, &sims[i], None);
+                    if next.trace.len() > sims[i].trace.len() {
+                        let fired = next.trace.last().unwrap().clone();
+                        let target = next.current_state.clone();
+                        record(&region.name, fired, step_no, trace);
+                        sims[i] = next;
+                        any = true;
+                        if !visited.insert(target) {
+                            break; // cycle within this phase — settle
+                        }
+                    } else {
+                        break;
+                    }
+                }
+            }
+            any
+        };
+
+    let fired_initially = run_completion(&mut sims, &mut trace, &mut step_no);
+
+    // Broadcast each event to every region, then re-run completions.
+    for evt in &config.events {
+        if step_no >= config.max_steps {
+            hit_max = true;
+            break;
+        }
+        let mut consumed = false;
+        for (i, region) in machine.regions.iter().enumerate() {
+            let next = step(region, &sims[i], Some(evt));
+            if next.trace.len() > sims[i].trace.len() {
+                let fired = next.trace.last().unwrap().clone();
+                if fired.trigger.is_some() {
+                    consumed = true;
+                }
+                record(&region.name, fired, &mut step_no, &mut trace);
+                sims[i] = next;
+            }
+        }
+        if !consumed {
+            // Event matched no region — record it as ignored
+            let combined = sims
+                .iter()
+                .map(|s| s.current_state.as_str())
+                .collect::<Vec<_>>()
+                .join(" | ");
+            trace.push(SimStep {
+                step: step_no,
+                from_state: combined.clone(),
+                transition_name: None,
+                trigger: Some(evt.clone()),
+                guard_result: Some(false),
+                effect: None,
+                to_state: combined,
+                exit_action: None,
+                entry_action: None,
+            });
+            step_no += 1;
+        }
+        run_completion(&mut sims, &mut trace, &mut step_no);
+    }
+
+    let current = sims
+        .iter()
+        .map(|s| s.current_state.as_str())
+        .collect::<Vec<_>>()
+        .join(" | ");
+    let status = if hit_max || step_no >= config.max_steps {
+        SimStatus::MaxSteps
+    } else if trace.is_empty() && !fired_initially {
+        SimStatus::Deadlocked
+    } else {
+        SimStatus::Completed
+    };
+
+    SimulationState {
+        machine_name: machine.name.clone(),
+        current_state: current,
+        step: step_no,
+        env: config.initial_env.clone(),
+        trace,
+        status,
+    }
 }
 
 /// Advance the simulation by one step.
@@ -391,6 +526,7 @@ mod tests {
                 },
             ],
             entry_state: Some("red".to_string()),
+            regions: Vec::new(),
             span: dummy_span(),
         }
     }
@@ -475,6 +611,7 @@ mod tests {
                 },
             ],
             entry_state: Some("a".to_string()),
+            regions: Vec::new(),
             span: dummy_span(),
         };
         let config = SimConfig::default();
@@ -518,6 +655,7 @@ mod tests {
                 span: dummy_span(),
             }],
             entry_state: Some("idle".to_string()),
+            regions: Vec::new(),
             span: dummy_span(),
         };
 
@@ -567,6 +705,7 @@ mod tests {
                 span: dummy_span(),
             }],
             entry_state: Some("a".to_string()),
+            regions: Vec::new(),
             span: dummy_span(),
         };
         let config = SimConfig {
@@ -627,5 +766,76 @@ mod tests {
 
         let stepped2 = step(&machine, &stepped, Some("next"));
         assert_eq!(stepped2.current_state, "yellow");
+    }
+
+    #[test]
+    fn parallel_regions_simulate_concurrently() {
+        // Book listing-088 pattern: parallel state with two regions,
+        // each with entry-then initial states and completion loops.
+        let source = r#"
+            state flying parallel {
+                state positioning {
+                    entry;
+                        then stabilizing;
+                    state stabilizing;
+                        transition stabilizing then moving;
+                    state moving;
+                        transition moving then stabilizing;
+                }
+                state observing {
+                    entry;
+                        then idle;
+                    state idle;
+                        transition idle then watching;
+                    state watching;
+                        transition watching then idle;
+                }
+            }
+        "#;
+        let machines = crate::sim::state_parser::extract_state_machines("t.sysml", source);
+        let flying = machines.iter().find(|m| m.name == "flying").unwrap();
+        assert_eq!(flying.regions.len(), 2, "two parallel regions");
+
+        let state = simulate(flying, &SimConfig::default());
+        assert_ne!(
+            state.status,
+            SimStatus::Deadlocked,
+            "parallel state must not deadlock: {:?}",
+            state.trace
+        );
+        let froms: Vec<&str> = state.trace.iter().map(|s| s.from_state.as_str()).collect();
+        assert!(
+            froms.iter().any(|f| f.starts_with("positioning.")),
+            "positioning region must step: {froms:?}"
+        );
+        assert!(
+            froms.iter().any(|f| f.starts_with("observing.")),
+            "observing region must step: {froms:?}"
+        );
+        assert!(
+            state.current_state.contains('|'),
+            "combined current state: {}",
+            state.current_state
+        );
+    }
+
+    #[test]
+    fn transition_source_shorthand() {
+        // `transition A then B;` — leading name is the source (Ch 28).
+        let source = r#"
+            state def M {
+                entry; then a;
+                state a;
+                transition a then b;
+                state b;
+            }
+        "#;
+        let machines = crate::sim::state_parser::extract_state_machines("t.sysml", source);
+        let m = machines.iter().find(|m| m.name == "M").unwrap();
+        assert!(
+            m.transitions.iter().any(|t| t.source == "a" && t.target == "b"),
+            "shorthand transition extracted: {:?}",
+            m.transitions
+        );
     }
 }

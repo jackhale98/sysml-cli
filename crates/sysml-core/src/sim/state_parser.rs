@@ -83,6 +83,7 @@ fn extract_state_machine_from_node(node: &Node, source: &[u8]) -> Option<StateMa
         states,
         transitions,
         entry_state,
+        regions: Vec::new(),
         span: Span::from_node(node),
     })
 }
@@ -105,9 +106,17 @@ fn extract_state_machine_from_state_usage(node: &Node, source: &[u8]) -> Option<
     let name_node = node.child_by_field_name("name")?;
     let name = node_text(&name_node, source).to_string();
 
+    let is_parallel = {
+        let mut c = node.walk();
+        let kids: Vec<_> = node.children(&mut c).collect();
+        kids.iter()
+            .any(|ch| !ch.is_named() && node_text(ch, source) == "parallel")
+    };
+
     let mut states = Vec::new();
     let mut transitions = Vec::new();
     let mut entry_state = None;
+    let mut regions = Vec::new();
 
     let mut cursor = node.walk();
     for child in node.children(&mut cursor) {
@@ -119,6 +128,20 @@ fn extract_state_machine_from_state_usage(node: &Node, source: &[u8]) -> Option<
                 &mut transitions,
                 &mut entry_state,
             );
+            if is_parallel {
+                // Direct child states with their own bodies are the
+                // orthogonal regions.
+                let mut bc = child.walk();
+                for body_child in child.children(&mut bc) {
+                    if body_child.kind() == "state_usage" {
+                        if let Some(region) =
+                            extract_state_machine_from_state_usage(&body_child, source)
+                        {
+                            regions.push(region);
+                        }
+                    }
+                }
+            }
         }
     }
 
@@ -133,6 +156,7 @@ fn extract_state_machine_from_state_usage(node: &Node, source: &[u8]) -> Option<
         states,
         transitions,
         entry_state,
+        regions,
         span: Span::from_node(node),
     })
 }
@@ -187,6 +211,7 @@ fn extract_state_machine_from_exhibit(node: &Node, source: &[u8]) -> Option<Stat
         states,
         transitions,
         entry_state,
+        regions: Vec::new(),
         span: Span::from_node(node),
     })
 }
@@ -198,6 +223,22 @@ fn extract_state_body(
     transitions: &mut Vec<Transition>,
     entry_state: &mut Option<String>,
 ) {
+    // Pass 1: collect declared states so `transition A then B;` can be
+    // disambiguated — leading name that IS a state is a source shorthand
+    // (Ch 28); one that isn't (e.g. `initial`) is an initial
+    // pseudo-transition.
+    let mut known_states: std::collections::HashSet<String> =
+        std::collections::HashSet::new();
+    {
+        let mut c = body.walk();
+        for child in body.children(&mut c) {
+            if child.kind() == "state_usage" {
+                if let Some(n) = child.child_by_field_name("name") {
+                    known_states.insert(node_text(&n, source).to_string());
+                }
+            }
+        }
+    }
     let mut cursor = body.walk();
     for child in body.children(&mut cursor) {
         match child.kind() {
@@ -223,7 +264,7 @@ fn extract_state_body(
                 }
             }
             "transition_statement" => {
-                if let Some(t) = extract_transition(&child, source) {
+                if let Some(t) = extract_transition(&child, source, &known_states) {
                     transitions.push(t);
                 } else if entry_state.is_none() {
                     // Handle initial pseudo-transition: `transition initial then off;`
@@ -341,7 +382,11 @@ fn extract_send_action(node: &Node, source: &[u8]) -> ActionRef {
     ActionRef::Send { payload, via, to }
 }
 
-fn extract_transition(node: &Node, source: &[u8]) -> Option<Transition> {
+fn extract_transition(
+    node: &Node,
+    source: &[u8],
+    known_states: &std::collections::HashSet<String>,
+) -> Option<Transition> {
     let name = node
         .child_by_field_name("name")
         .map(|n| node_text(&n, source).to_string());
@@ -405,6 +450,17 @@ fn extract_transition(node: &Node, source: &[u8]) -> Option<Transition> {
             }
         }
     }
+
+    // `transition stabilizing then moving;` — without a `first` clause a
+    // leading name that names a DECLARED state doubles as the source
+    // (book Ch 28 shorthand). Non-state names like `initial` stay as
+    // pseudo-transition names handled by the caller.
+    let (name, source_state) = match (source_state, &name) {
+        (None, Some(n)) if target_state.is_some() && known_states.contains(n.as_str()) => {
+            (None, name)
+        }
+        (src, _) => (name, src),
+    };
 
     // Need at least source and target
     let src = source_state?;

@@ -11,6 +11,10 @@ pub struct StateMachineModel {
     pub states: Vec<StateNode>,
     pub transitions: Vec<Transition>,
     pub entry_state: Option<String>,
+    /// Parallel regions (`state s parallel { state r1 {..} state r2 {..} }`).
+    /// Non-empty regions are simulated concurrently with broadcast events.
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub regions: Vec<StateMachineModel>,
     pub span: Span,
 }
 

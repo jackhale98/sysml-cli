@@ -1733,6 +1733,7 @@ mod tests {
                 span: Span::default(),
             }],
             entry_state: Some("Red".to_string()),
+            regions: Vec::new(),
             span: Span::default(),
         };
 
