@@ -138,7 +138,9 @@ fn execute_step(action_step: &ActionStep, state: &mut ActionExecState, config: &
         }
         ActionStep::Decide { name, branches, .. } => {
             let label = name.as_deref().unwrap_or("decide");
-            // Evaluate guards and pick the first matching branch
+            // Evaluate guards and pick the first matching branch. When no
+            // branch carries a guard, take the first (noted in the trace).
+            let unguarded = branches.iter().all(|b| b.guard.is_none());
             let mut taken = None;
             for branch in branches {
                 let guard_ok = match &branch.guard {
@@ -146,17 +148,34 @@ fn execute_step(action_step: &ActionStep, state: &mut ActionExecState, config: &
                     Some(expr) => eval::evaluate_constraint(expr, &state.env).unwrap_or(false),
                 };
                 if guard_ok {
-                    taken = Some(&branch.target);
+                    taken = Some(branch);
                     break;
                 }
             }
-            let target = taken.cloned().unwrap_or_else(|| "none".to_string());
+            let desc = match taken {
+                Some(b) if unguarded && branches.len() > 1 => format!(
+                    "decide {} -> {} (unguarded; taking first branch)",
+                    label, b.target
+                ),
+                Some(b) => format!("decide {} -> {}", label, b.target),
+                None => format!("decide {} -> none (no guard satisfied)", label),
+            };
             state.trace.push(ActionExecStep {
                 step: state.step,
                 kind: "decide".to_string(),
-                description: format!("decide {} -> {}", label, target),
+                description: desc,
             });
             state.step += 1;
+
+            // Execute ONLY the chosen branch's steps.
+            if let Some(branch) = taken {
+                for s in &branch.steps {
+                    if state.status != ActionExecStatus::Running {
+                        break;
+                    }
+                    execute_step(s, state, config);
+                }
+            }
         }
         ActionStep::Merge { name, .. } => {
             let label = name.as_deref().unwrap_or("merge");
@@ -601,5 +620,104 @@ mod tests {
         let parsed: serde_json::Value = serde_json::from_str(&json).unwrap();
         assert!(parsed.is_object());
         assert_eq!(parsed["action_name"], "Test");
+    }
+
+    #[test]
+    fn decide_executes_only_chosen_branch() {
+        // Book listing-073 pattern: anonymous fork/decide with fan-out.
+        let source = r#"
+            action def EvaluateTarget {
+                first start;
+                then fork;
+                    then observeByCamera;
+                    then observeByLidar;
+                    action observeByCamera;
+                        then j;
+                    action observeByLidar;
+                        then j;
+                join j;
+                then decide;
+                    then signalTargetFound;
+                    then signalTargetNotFound;
+                    action signalTargetFound;
+                        then m;
+                    action signalTargetNotFound;
+                        then m;
+                merge m;
+                then done;
+            }
+        "#;
+        let actions = crate::sim::action_parser::extract_actions("t.sysml", source);
+        let model = actions.iter().find(|a| a.name == "EvaluateTarget").unwrap();
+        let state = execute_action(model, &ActionExecConfig::default());
+        let performed: Vec<&str> = state
+            .trace
+            .iter()
+            .filter(|s| s.kind == "perform")
+            .map(|s| s.description.as_str())
+            .collect();
+        // Each observation action exactly once
+        assert_eq!(
+            performed
+                .iter()
+                .filter(|d| d.contains("observeByCamera"))
+                .count(),
+            1,
+            "fork branch must run once: {performed:?}"
+        );
+        // Exactly ONE decide branch executes
+        let found = performed.iter().any(|d| d.contains("signalTargetFound"));
+        let not_found = performed
+            .iter()
+            .any(|d| d.contains("signalTargetNotFound"));
+        assert!(
+            found ^ not_found,
+            "exactly one decide branch must execute: {performed:?}"
+        );
+        // Nothing runs before start
+        assert!(
+            performed.first().is_some_and(|d| d.contains("start")),
+            "start must be first: {performed:?}"
+        );
+    }
+
+    #[test]
+    fn declared_actions_run_once_in_succession_order() {
+        // Book listing-072 pattern: mixed then-chains and named successions.
+        let source = r#"
+            action def PerformMission {
+                action flyToPosition : FlyToPosition;
+                first start;
+                then action takeOff;
+                then flyToPosition;
+                succession s first flyToPosition then observeArea;
+                action observeArea;
+                then action returnHome;
+                then action land;
+                then done;
+            }
+        "#;
+        let actions = crate::sim::action_parser::extract_actions("t.sysml", source);
+        let model = actions.iter().find(|a| a.name == "PerformMission").unwrap();
+        let state = execute_action(model, &ActionExecConfig::default());
+        let performed: Vec<String> = state
+            .trace
+            .iter()
+            .filter(|s| s.kind == "perform")
+            .map(|s| s.description.replace("perform ", ""))
+            .collect();
+        assert_eq!(
+            performed,
+            vec![
+                "start",
+                "takeOff",
+                "flyToPosition",
+                "observeArea",
+                "returnHome",
+                "land",
+                "done"
+            ],
+            "each action once, in flow order"
+        );
     }
 }

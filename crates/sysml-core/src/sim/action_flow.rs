@@ -81,4 +81,7 @@ pub enum ActionStep {
 pub struct DecideBranch {
     pub guard: Option<Expr>,
     pub target: String,
+    /// The steps executed when this branch is taken (up to the merge).
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub steps: Vec<ActionStep>,
 }
