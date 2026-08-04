@@ -187,7 +187,7 @@ fn simulate_parallel(machine: &StateMachineModel, config: &SimConfig) -> Simulat
     let mut step_no = 0usize;
     let mut hit_max = false;
 
-    let mut record = |region: &str, mut s: SimStep, step_no: &mut usize, trace: &mut Vec<SimStep>| {
+    let record = |region: &str, mut s: SimStep, step_no: &mut usize, trace: &mut Vec<SimStep>| {
         s.step = *step_no;
         s.from_state = format!("{}.{}", region, s.from_state);
         s.to_state = format!("{}.{}", region, s.to_state);
@@ -197,7 +197,7 @@ fn simulate_parallel(machine: &StateMachineModel, config: &SimConfig) -> Simulat
 
     // Fire completion (triggerless) transitions per region until each is
     // quiescent or revisits a state within this phase (cycle).
-    let mut run_completion =
+    let run_completion =
         |sims: &mut Vec<SimulationState>, trace: &mut Vec<SimStep>, step_no: &mut usize| -> bool {
             let mut any = false;
             for (i, region) in machine.regions.iter().enumerate() {
