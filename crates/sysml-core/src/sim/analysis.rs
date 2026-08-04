@@ -397,6 +397,98 @@ pub fn evaluate_analysis(
     }
 }
 
+/// Outcome of solving an analysis case's constraint equations.
+#[derive(Debug, Clone, Default)]
+pub struct SolveOutcome {
+    /// Variables solved by substitution, in solve order.
+    pub solved: Vec<(String, f64)>,
+    /// Free variables that remain unbound after solving.
+    pub unbound: Vec<String>,
+}
+
+/// Solve `X == <expr>` equations by iterative substitution: whenever one
+/// side of an equality is an unbound variable and the other side fully
+/// evaluates, bind it and repeat until no progress. Reports remaining
+/// unbound variables so callers can explain *why* a value could not be
+/// computed instead of failing silently.
+pub fn solve_equations(
+    equations: &[crate::sim::expr::Expr],
+    env: &mut crate::sim::expr::Env,
+) -> SolveOutcome {
+    use crate::sim::eval::evaluate;
+    use crate::sim::expr::{BinOp, Expr, Value};
+
+    let mut outcome = SolveOutcome::default();
+    loop {
+        let mut progress = false;
+        for eq in equations {
+            let Expr::BinaryOp { op: BinOp::Eq, lhs, rhs } = eq else {
+                continue;
+            };
+            let try_bind = |var: &Expr,
+                            other: &Expr,
+                            env: &mut crate::sim::expr::Env,
+                            outcome: &mut SolveOutcome|
+             -> bool {
+                if let Expr::Var(name) = var {
+                    if env.get(name).is_none() {
+                        if let Ok(Value::Number(v)) = evaluate(other, env) {
+                            env.bind(name.clone(), Value::Number(v));
+                            outcome.solved.push((name.clone(), v));
+                            return true;
+                        }
+                    }
+                }
+                false
+            };
+            if try_bind(lhs, rhs, env, &mut outcome)
+                || try_bind(rhs, lhs, env, &mut outcome)
+            {
+                progress = true;
+            }
+        }
+        if !progress {
+            break;
+        }
+    }
+
+    // Anything still free is why remaining equations can't be solved.
+    let mut unbound: Vec<String> = Vec::new();
+    for eq in equations {
+        collect_free_vars(eq, env, &mut unbound);
+    }
+    unbound.sort();
+    unbound.dedup();
+    outcome.unbound = unbound;
+    outcome
+}
+
+fn collect_free_vars(
+    expr: &crate::sim::expr::Expr,
+    env: &crate::sim::expr::Env,
+    out: &mut Vec<String>,
+) {
+    use crate::sim::expr::Expr;
+    match expr {
+        Expr::Var(name) => {
+            if env.get(name).is_none() {
+                out.push(name.clone());
+            }
+        }
+        Expr::BinaryOp { lhs, rhs, .. } => {
+            collect_free_vars(lhs, env, out);
+            collect_free_vars(rhs, env, out);
+        }
+        Expr::UnaryOp { operand, .. } => collect_free_vars(operand, env, out),
+        Expr::FunctionCall { args, .. } => {
+            for a in args {
+                collect_free_vars(a, env, out);
+            }
+        }
+        _ => {}
+    }
+}
+
 /// Evaluate a trade study: score each alternative and pick the best.
 pub fn evaluate_trade_study(_model: &Model, case: &AnalysisCaseModel) -> TradeResult {
     let objective = case
@@ -641,5 +733,45 @@ mod tests {
         let result = evaluate_trade_study(&model, case);
         assert_eq!(result.alternatives.len(), 2);
         assert_eq!(result.objective, ObjectiveKind::Maximize);
+    }
+
+    #[test]
+    fn solve_equations_by_substitution() {
+        use crate::sim::expr::{Env, Value};
+        // t == 10; vmax == v0 + a * t   with v0, a bound
+        let source = r#"
+            analysis def A {
+                in attribute v0;
+                return vmax;
+                assert constraint c1 { t == 10 }
+                assert constraint c2 { vmax == v0 + a * t }
+            }
+        "#;
+        let constraints = crate::sim::constraint_eval::extract_constraints("t.sysml", source);
+        let equations: Vec<_> = constraints.into_iter().filter_map(|c| c.expression).collect();
+        assert_eq!(equations.len(), 2, "both assert constraints extracted");
+
+        let mut env = Env::new();
+        env.bind("v0", Value::Number(5.0));
+        env.bind("a", Value::Number(2.0));
+        let outcome = solve_equations(&equations, &mut env);
+        assert!(outcome.unbound.is_empty(), "unbound: {:?}", outcome.unbound);
+        assert_eq!(env.get("vmax").and_then(|v| v.as_number()), Some(25.0));
+    }
+
+    #[test]
+    fn solve_reports_unbound() {
+        use crate::sim::expr::Env;
+        let source = r#"
+            analysis def A {
+                assert constraint c { vmax == v0 + a * t }
+            }
+        "#;
+        let constraints = crate::sim::constraint_eval::extract_constraints("t.sysml", source);
+        let equations: Vec<_> = constraints.into_iter().filter_map(|c| c.expression).collect();
+        let mut env = Env::new();
+        let outcome = solve_equations(&equations, &mut env);
+        assert!(outcome.solved.is_empty());
+        assert_eq!(outcome.unbound, vec!["a", "t", "v0", "vmax"]);
     }
 }

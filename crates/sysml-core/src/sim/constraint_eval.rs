@@ -99,6 +99,46 @@ fn collect_constraints(node: Node, source: &[u8], file: &str, results: &mut Vec<
         }
     }
 
+    // Constraint usages — `[assert|require|assume] constraint [name] { expr }`
+    // inside analysis cases, parts, connection defs, etc.
+    if node.kind() == "constraint_usage" {
+        let name = node
+            .child_by_field_name("name")
+            .map(|n| node_text(&n, source).to_string())
+            .unwrap_or_else(|| format!("constraint@{}", node.start_position().row + 1));
+        let mut params = Vec::new();
+        let mut expression = None;
+        let mut cursor = node.walk();
+        for child in node.children(&mut cursor) {
+            if child.kind() == "constraint_body" {
+                extract_constraint_body(&child, source, &mut params, &mut expression);
+                // The body may hold a bare expression node rather than an
+                // expression_statement.
+                if expression.is_none() {
+                    let mut bc = child.walk();
+                    for bchild in child.children(&mut bc) {
+                        if bchild.is_named()
+                            && !matches!(bchild.kind(), "line_comment" | "block_comment")
+                        {
+                            if let Ok(expr) = extract_expr(&bchild, source) {
+                                expression = Some(expr);
+                                break;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        if expression.is_some() {
+            results.push(ConstraintModel {
+                name,
+                params,
+                expression,
+                span: Span::from_node(&node),
+            });
+        }
+    }
+
     let mut cursor = node.walk();
     for child in node.children(&mut cursor) {
         collect_constraints(child, source, file, results);

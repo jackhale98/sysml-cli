@@ -168,6 +168,21 @@ pub fn extract_expr(node: &Node, source: &[u8]) -> Result<Expr, EvalError> {
             Ok(Expr::FunctionCall { name, args })
         }
 
+        // Value with unit bracket: `100 [SI::'km/h']` — evaluate the
+        // numeric part (units are informational at expression level).
+        "bracket_expression" => {
+            let mut cursor = node.walk();
+            for child in node.children(&mut cursor) {
+                if child.is_named() {
+                    return extract_expr(&child, source);
+                }
+                if child.kind() == "[" {
+                    break;
+                }
+            }
+            Err(EvalError::new("empty bracket expression"))
+        }
+
         "paren_expression" | "parenthesized_expression" => {
             // Unwrap to inner expression
             let mut cursor = node.walk();

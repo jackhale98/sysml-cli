@@ -118,6 +118,38 @@ fn run_execute(cli: &Cli, files: &[PathBuf], name: Option<&str>, bindings: &[Str
     // Evaluate the analysis case
     let eval_result = evaluate_analysis(&model, case, &env);
 
+    // Solve the case's assert-constraint equations by substitution so a
+    // declared `return` can actually be computed (or explained).
+    let mut solve_env = env.clone();
+    for (n, v) in &eval_result.bindings {
+        solve_env.bind(n.clone(), sysml_core::sim::expr::Value::Number(*v));
+    }
+    let mut equations = Vec::new();
+    for file_path in files {
+        if let Ok(source) = std::fs::read_to_string(file_path) {
+            for c in sysml_core::sim::constraint_eval::extract_constraints(
+                &file_path.to_string_lossy(),
+                &source,
+            ) {
+                // Only constraints declared inside this analysis case
+                if c.span.start_byte >= case.span.start_byte
+                    && c.span.end_byte <= case.span.end_byte
+                {
+                    if let Some(expr) = c.expression {
+                        equations.push(expr);
+                    }
+                }
+            }
+        }
+    }
+    let solve = sysml_core::sim::analysis::solve_equations(&equations, &mut solve_env);
+    let return_value = eval_result.return_value.or_else(|| {
+        case.return_decl
+            .as_ref()
+            .and_then(|r| solve_env.get(&r.name))
+            .and_then(|v| v.as_number())
+    });
+
     match cli.format.as_str() {
         "json" => {
             let json = serde_json::json!({
@@ -136,7 +168,11 @@ fn run_execute(cli: &Cli, files: &[PathBuf], name: Option<&str>, bindings: &[Str
                 "computed_bindings": eval_result.bindings.iter().map(|(n, v)| {
                     serde_json::json!({"name": n, "value": v})
                 }).collect::<Vec<_>>(),
-                "return_value": eval_result.return_value,
+                "solved": solve.solved.iter().map(|(n, v)| {
+                    serde_json::json!({"name": n, "value": v})
+                }).collect::<Vec<_>>(),
+                "unbound": solve.unbound,
+                "return_value": return_value,
                 "return": case.return_decl.as_ref().map(|r| serde_json::json!({
                     "name": r.name,
                     "type": r.type_ref,
@@ -187,9 +223,14 @@ fn run_execute(cli: &Cli, files: &[PathBuf], name: Option<&str>, bindings: &[Str
                     println!("    {} = {:.4}", name, val);
                 }
             }
+            if !solve.solved.is_empty() {
+                println!("  Solved:");
+                for (n, v) in &solve.solved {
+                    println!("    {} = {:.4}", n, v);
+                }
+            }
             if let Some(ref ret) = case.return_decl {
-                let computed = eval_result
-                    .return_value
+                let computed = return_value
                     .map(|v| format!(" => {:.4}", v))
                     .unwrap_or_default();
                 println!(
@@ -205,6 +246,33 @@ fn run_execute(cli: &Cli, files: &[PathBuf], name: Option<&str>, bindings: &[Str
                         .unwrap_or_default(),
                     computed,
                 );
+                if return_value.is_none() {
+                    // Only fail when computation was clearly intended:
+                    // equations or a value expression exist but couldn't
+                    // produce a value. A purely structural case just echoes.
+                    if !equations.is_empty() && !solve.unbound.is_empty() {
+                        eprintln!(
+                            "error: could not compute `{}` — unbound: {}",
+                            ret.name,
+                            solve.unbound.join(", ")
+                        );
+                        eprintln!(
+                            "hint: bind unknowns with -b (e.g. -b {}=<value>)",
+                            solve.unbound[0]
+                        );
+                        return ExitCode::FAILURE;
+                    }
+                    if ret.value_expr.is_some() || !equations.is_empty() {
+                        eprintln!(
+                            "error: could not compute `{}` — no equation defines it",
+                            ret.name
+                        );
+                        return ExitCode::FAILURE;
+                    }
+                    println!(
+                        "  (no value expression or constraint equations — nothing to compute)"
+                    );
+                }
             }
         }
     }
