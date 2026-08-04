@@ -33,9 +33,10 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
-
-      - name: Clone tree-sitter-sysml grammar
-        run: git clone https://github.com/jackhale98/tree-sitter-sysml.git ../tree-sitter-sysml
+        with:
+          # Grammar + sysml-v2-release submodules: the embedded standard
+          # library and parser are built from these.
+          submodules: recursive
 
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable

@@ -409,6 +409,10 @@ mod tests {
 
     #[test]
     fn stdlib_member_validated() {
+        if crate::stdlib::stdlib_files().is_empty() {
+            eprintln!("SKIP: stdlib not embedded");
+            return;
+        }
         // A stdlib package prefix does not blanket-approve members:
         // `ISQ::doesNotExist` must warn while `ISQ::mass` resolves.
         let source = r#"
