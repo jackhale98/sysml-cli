@@ -296,21 +296,23 @@ fn check_ref_exists(
     }
 }
 
+/// True when `name` is a `Pkg::member` reference into the embedded
+/// standard library AND the member actually exists there. A stdlib
+/// package prefix with a nonexistent member returns false so W004 fires
+/// (previously a prefix whitelist accepted `ISQ::doesNotExist`).
 fn is_qualified_stdlib(name: &str) -> bool {
-    name.starts_with("ISQ::")
-        || name.starts_with("SI::")
-        || name.starts_with("ScalarValues::")
-        || name.starts_with("Quantities::")
-        || name.starts_with("MeasurementReferences::")
-        || name.starts_with("SampledFunctions::")
-        || name.starts_with("VerificationCases::")
-        || name.starts_with("TradeStudies::")
-        || name.starts_with("BaseFunctions::")
-        || name.starts_with("ControlFunctions::")
-        || name.starts_with("DataFunctions::")
-        || name.starts_with("NumericalFunctions::")
-        || name.starts_with("SequenceFunctions::")
-        || name.starts_with("TrigFunctions::")
+    let Some((pkg, member)) = name.split_once("::") else {
+        return false;
+    };
+    let member = crate::model::simple_name(member);
+    let stdlib = crate::stdlib::stdlib_package_defs();
+    match stdlib.get(pkg) {
+        Some(defs) => defs
+            .iter()
+            .any(|d| d.name == member || crate::model::unquote_name(&d.name) == member),
+        // Not a stdlib package prefix at all
+        None => false,
+    }
 }
 
 #[cfg(test)]
@@ -403,5 +405,28 @@ mod tests {
         );
         let suggestion = vehicel_diag.unwrap().suggestion.as_deref();
         assert_eq!(suggestion, Some("did you mean `Vehicle`?"));
+    }
+
+    #[test]
+    fn stdlib_member_validated() {
+        // A stdlib package prefix does not blanket-approve members:
+        // `ISQ::doesNotExist` must warn while `ISQ::mass` resolves.
+        let source = r#"
+            part def X {
+                attribute bad :> ISQ::doesNotExist;
+                attribute good :> ISQ::mass;
+            }
+        "#;
+        let model = crate::parser::parse_file("test.sysml", source);
+        let diags = UnresolvedTypeCheck.run(&model);
+        assert!(
+            diags.iter().any(|d| d.message.contains("ISQ::doesNotExist")),
+            "nonexistent stdlib member must be flagged: {:?}",
+            diags.iter().map(|d| &d.message).collect::<Vec<_>>()
+        );
+        assert!(
+            diags.iter().all(|d| !d.message.contains("ISQ::mass")),
+            "real stdlib member must resolve"
+        );
     }
 }
