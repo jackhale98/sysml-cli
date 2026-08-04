@@ -1,10 +1,44 @@
 use sysml_core::model::{simple_name, Model};
+
+/// Hover for a standard-library symbol: kind, package, and doc.
+fn stdlib_hover(name: &str) -> Option<String> {
+    let simple = simple_name(name);
+    // Prefer a package-qualified lookup when the reference names one
+    for (pkg, defs) in sysml_core::stdlib::stdlib_package_defs() {
+        if let Some((ref_pkg, _)) = name.split_once("::") {
+            if ref_pkg != pkg {
+                continue;
+            }
+        }
+        if let Some(def) = defs.iter().find(|d| d.name == simple) {
+            let mut parts = vec![format!(
+                "**{}** `{}` — `{}` (stdlib)",
+                def.kind.label(),
+                def.name,
+                pkg
+            )];
+            if let Some(ref st) = def.super_type {
+                parts[0].push_str(&format!(" : `{}`", st));
+            }
+            if let Some(ref doc) = def.doc {
+                parts.push(String::new());
+                parts.push(doc.clone());
+            }
+            return Some(parts.join("\n"));
+        }
+    }
+    None
+}
+
 use sysml_core::sim::rollup::{evaluate_rollup, AggregationMethod};
 
 /// Build a markdown hover string for a definition name in the model.
 pub fn hover_info(model: &Model, name: &str) -> Option<String> {
     let simple = simple_name(name);
-    let def = model.find_def(simple)?;
+    let Some(def) = model.find_def(simple) else {
+        // Fall back to the embedded standard library (Real, ISQ::mass, ...)
+        return stdlib_hover(name);
+    };
 
     let mut parts = Vec::new();
 

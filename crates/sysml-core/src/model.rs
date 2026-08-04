@@ -370,6 +370,9 @@ pub struct Import {
     pub path: String,
     pub is_wildcard: bool,
     pub is_recursive: bool,
+    /// Whether the import re-exports (`public import`); private imports
+    /// are visible only inside the importing namespace.
+    pub is_public: bool,
     pub span: Span,
 }
 

@@ -17,12 +17,29 @@ pub enum CompletionFilter {
     Specialization,
     /// After `.` — show members of the preceding element.
     MemberAccess(String),
+    /// After `Pkg::` — show members of that (stdlib or workspace) package.
+    QualifiedAccess(String),
 }
 
 /// Determine completion context from the text before the cursor.
 pub fn detect_context(source: &str, offset: usize) -> CompletionFilter {
     let before = &source[..offset.min(source.len())];
     let trimmed = before.trim_end();
+
+    // Check for qualified access: "Pkg::" — scoped package members
+    if let Some(prefix) = trimmed.strip_suffix("::") {
+        let name: String = prefix
+            .chars()
+            .rev()
+            .take_while(|c| c.is_alphanumeric() || *c == '_')
+            .collect::<String>()
+            .chars()
+            .rev()
+            .collect();
+        if !name.is_empty() {
+            return CompletionFilter::QualifiedAccess(name);
+        }
+    }
 
     // Check for member access: "something."
     if let Some(prefix) = trimmed.strip_suffix('.') {
@@ -90,6 +107,11 @@ pub fn completions(
     if let CompletionFilter::MemberAccess(ref parent) = filter {
         return member_completions(model, parent);
     }
+    // For qualified access, return the package's members (stdlib first,
+    // then workspace definitions inside a matching package).
+    if let CompletionFilter::QualifiedAccess(ref pkg) = filter {
+        return qualified_completions(model, workspace_defs, pkg);
+    }
     let is_type_position = matches!(
         filter,
         CompletionFilter::TypePosition | CompletionFilter::Specialization
@@ -135,22 +157,121 @@ pub fn completions(
         }
     }
 
-    // Standard library definitions — skip in type position (too noisy)
-    if !is_type_position {
-        for stdlib_model in stdlib::parse_stdlib() {
-            for def in &stdlib_model.definitions {
-                if seen.insert(def.name.clone()) {
-                    items.push(CompletionItem {
-                        label: def.name.clone(),
-                        kind: Some(def_kind_to_completion_kind(def.kind)),
-                        detail: Some(format!("{} (stdlib)", def.kind.label())),
-                        documentation: def
-                            .doc
-                            .as_ref()
-                            .map(|d| tower_lsp::lsp_types::Documentation::String(d.clone())),
-                        ..Default::default()
-                    });
-                }
+    // Standard library definitions — always available, ranked below
+    // workspace items via sort_text so `attribute mass : ` offers Real,
+    // MassValue, ISQ quantities, ... without drowning local types.
+    for stdlib_model in stdlib::parse_stdlib() {
+        for def in &stdlib_model.definitions {
+            if is_type_position && def.kind == DefKind::Package {
+                continue;
+            }
+            if seen.insert(def.name.clone()) {
+                items.push(CompletionItem {
+                    label: def.name.clone(),
+                    kind: Some(def_kind_to_completion_kind(def.kind)),
+                    detail: Some(format!("{} (stdlib)", def.kind.label())),
+                    sort_text: Some(format!("1{}", def.name)),
+                    documentation: def
+                        .doc
+                        .as_ref()
+                        .map(|d| tower_lsp::lsp_types::Documentation::String(d.clone())),
+                    ..Default::default()
+                });
+            }
+        }
+    }
+
+    // Package members that are usages in the stdlib source (KerML
+    // `datatype Real`, `attribute mass`, ...) — exposed via the enriched
+    // package index.
+    for defs in stdlib::stdlib_package_defs().values() {
+        for def in defs {
+            if is_type_position && def.kind == DefKind::Package {
+                continue;
+            }
+            if seen.insert(def.name.clone()) {
+                items.push(CompletionItem {
+                    label: def.name.clone(),
+                    kind: Some(def_kind_to_completion_kind(def.kind)),
+                    detail: Some(format!("{} (stdlib)", def.kind.label())),
+                    sort_text: Some(format!("1{}", def.name)),
+                    documentation: def
+                        .doc
+                        .as_ref()
+                        .map(|d| tower_lsp::lsp_types::Documentation::String(d.clone())),
+                    ..Default::default()
+                });
+            }
+        }
+    }
+
+    // Rank workspace/file items above stdlib
+    for item in &mut items {
+        if item.sort_text.is_none() {
+            item.sort_text = Some(format!("0{}", item.label));
+        }
+    }
+
+    items
+}
+
+/// Members of `Pkg::` — stdlib package members plus workspace definitions
+/// whose enclosing package matches.
+fn qualified_completions(
+    model: &Model,
+    workspace_defs: &[DefLocation],
+    pkg: &str,
+) -> Vec<CompletionItem> {
+    let mut seen = HashSet::new();
+    let mut items = Vec::new();
+
+    if let Some(defs) = stdlib::stdlib_package_defs().get(pkg) {
+        for def in defs {
+            if seen.insert(def.name.clone()) {
+                items.push(CompletionItem {
+                    label: def.name.clone(),
+                    kind: Some(def_kind_to_completion_kind(def.kind)),
+                    detail: Some(format!("{} ({})", def.kind.label(), pkg)),
+                    documentation: def
+                        .doc
+                        .as_ref()
+                        .map(|d| tower_lsp::lsp_types::Documentation::String(d.clone())),
+                    ..Default::default()
+                });
+            }
+        }
+    }
+
+    // Definitions in the current file under a package with this name
+    for def in &model.definitions {
+        if def.parent_def.as_deref().map(sysml_core::model::unquote_name) == Some(pkg)
+            && seen.insert(def.name.clone())
+        {
+            items.push(CompletionItem {
+                label: def.name.clone(),
+                kind: Some(def_kind_to_completion_kind(def.kind)),
+                detail: Some(format!("{} ({})", def.kind.label(), pkg)),
+                ..Default::default()
+            });
+        }
+    }
+
+    // Workspace definitions whose qualified name lives under the package
+    for loc in workspace_defs {
+        if let Some(ref qn) = loc.qualified_name {
+            let in_pkg = qn
+                .rsplit_once("::")
+                .map(|(prefix, _)| {
+                    prefix == pkg || prefix.ends_with(&format!("::{}", pkg))
+                })
+                .unwrap_or(false);
+            if in_pkg && seen.insert(loc.name.clone()) {
+                items.push(CompletionItem {
+                    label: loc.name.clone(),
+                    kind: Some(def_kind_to_completion_kind(loc.kind)),
+                    detail: Some(format!("{} ({})", loc.kind.label(), pkg)),
+                    ..Default::default()
+                });
             }
         }
     }
@@ -161,6 +282,16 @@ pub fn completions(
 /// Generate completions for members of a named element.
 fn member_completions(model: &Model, parent_name: &str) -> Vec<CompletionItem> {
     let mut items = Vec::new();
+    // `drone.` where drone is a usage: enumerate the members of its TYPE
+    // (feature chains are written through usage names in practice).
+    let resolved: &str = model
+        .usages
+        .iter()
+        .find(|u| u.name == parent_name)
+        .and_then(|u| u.type_ref.as_deref())
+        .map(sysml_core::model::simple_name)
+        .unwrap_or(parent_name);
+    let parent_name = resolved;
     // Find usages with this parent
     for usage in model.usages_in_def(parent_name) {
         items.push(CompletionItem {
@@ -324,6 +455,67 @@ mod tests {
         assert!(
             names.contains(&"mass"),
             "should include attribute member: {:?}",
+            names
+        );
+    }
+
+    #[test]
+    fn detect_qualified_access() {
+        let source = "attribute m :> ISQ::";
+        let ctx = detect_context(source, source.len());
+        assert!(matches!(ctx, CompletionFilter::QualifiedAccess(ref p) if p == "ISQ"));
+    }
+
+    #[test]
+    fn qualified_access_lists_stdlib_members() {
+        if sysml_core::stdlib::stdlib_files().is_empty() {
+            return;
+        }
+        let model = parse_file("test.sysml", "part def X;\n");
+        let items = completions(
+            &model,
+            &[],
+            &CompletionFilter::QualifiedAccess("ISQ".to_string()),
+        );
+        let names: Vec<_> = items.iter().map(|i| i.label.as_str()).collect();
+        assert!(
+            names.contains(&"mass"),
+            "ISQ:: must offer mass, got {} items: {:?}",
+            names.len(),
+            names.iter().take(15).collect::<Vec<_>>()
+        );
+    }
+
+    #[test]
+    fn type_position_includes_stdlib_ranked_below() {
+        if sysml_core::stdlib::stdlib_files().is_empty() {
+            return;
+        }
+        let model = parse_file("test.sysml", "part def Vehicle;\n");
+        let items = completions(&model, &[], &CompletionFilter::TypePosition);
+        let real = items.iter().find(|i| i.label == "Real");
+        assert!(real.is_some(), "type position must offer stdlib Real");
+        let vehicle = items.iter().find(|i| i.label == "Vehicle").unwrap();
+        assert!(
+            vehicle.sort_text.as_deref() < real.unwrap().sort_text.as_deref(),
+            "workspace types rank above stdlib"
+        );
+    }
+
+    #[test]
+    fn member_access_through_usage_name() {
+        let source =
+            "part def Drone { attribute mass : Real; }\npart def Fleet { part drone : Drone; }\n";
+        let model = parse_file("test.sysml", source);
+        let items = completions(
+            &model,
+            &[],
+            &CompletionFilter::MemberAccess("drone".to_string()),
+        );
+        let names: Vec<_> = items.iter().map(|i| i.label.as_str()).collect();
+        assert!(
+            names.contains(&"mass"),
+            "usage-name member access must resolve through the type: {:?}",
             names
         );
     }

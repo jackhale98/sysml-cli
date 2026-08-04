@@ -1042,6 +1042,7 @@ fn walk_node_scoped(
             let full_text = node_text(&node, source).to_string();
             let is_wildcard = full_text.contains("::*");
             let is_recursive = full_text.contains("::**");
+            let is_public = !full_text.trim_start().starts_with("private");
             // Extract the qualified_name child
             let mut cursor = node.walk();
             for child in node.children(&mut cursor) {
@@ -1051,6 +1052,7 @@ fn walk_node_scoped(
                         path,
                         is_wildcard,
                         is_recursive,
+                        is_public,
                         span: Span::from_node(&node),
                     });
                     break;
