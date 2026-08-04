@@ -107,8 +107,38 @@ pub struct ListFilter {
     pub variations_only: bool,
     /// Only show variant choices (`variant` usages).
     pub variants_only: bool,
+    /// Only show elements annotated with this metadata type (Ch 36).
+    pub metadata: Option<String>,
+    /// Metadata value constraints as (key, value) — all must match.
+    pub metadata_where: Vec<(String, String)>,
     /// Filter by visibility.
     pub visibility: Option<Visibility>,
+}
+
+/// True when the element passes the filter's metadata constraints:
+/// an annotation of the requested type targets it, and every
+/// `--where key=value` clause matches (values compare loosely — quotes
+/// and qualified-name prefixes are ignored).
+fn metadata_matches(model: &Model, element: &str, filter: &ListFilter) -> bool {
+    let Some(ref meta_type) = filter.metadata else {
+        return true;
+    };
+    use crate::model::unquote_name;
+    let loose = |v: &str| {
+        unquote_name(
+            simple_name(v.trim().trim_matches('"')),
+        )
+        .to_string()
+    };
+    model.annotations.iter().any(|a| {
+        a.target.as_deref().map(unquote_name) == Some(unquote_name(element))
+            && simple_name(&a.metadata_type) == meta_type.as_str()
+            && filter.metadata_where.iter().all(|(k, want)| {
+                a.values
+                    .iter()
+                    .any(|(n, v)| n == k && loose(v) == loose(want))
+            })
+    })
 }
 
 /// List model elements matching the given filter.
@@ -162,6 +192,9 @@ pub fn list_elements<'a>(model: &'a Model, filter: &ListFilter) -> Vec<Element<'
             if filter.variants_only {
                 continue; // variants are usages, never defs
             }
+            if !metadata_matches(model, &def.name, filter) {
+                continue;
+            }
             if let Some(vis) = &filter.visibility {
                 if def.visibility.as_ref() != Some(vis) {
                     continue;
@@ -200,6 +233,9 @@ pub fn list_elements<'a>(model: &'a Model, filter: &ListFilter) -> Vec<Element<'
                 continue;
             }
             if filter.variants_only && !usage.is_variant {
+                continue;
+            }
+            if !metadata_matches(model, &usage.name, filter) {
                 continue;
             }
             results.push(Element::Usage(usage));
@@ -1875,5 +1911,59 @@ mod tests {
         // Should be between 0 and 100
         assert!(report.summary.overall_score >= 0.0);
         assert!(report.summary.overall_score <= 100.0);
+    }
+
+    #[test]
+    fn metadata_filter_matches_annotated_elements() {
+        let source = r#"
+            metadata def Status { attribute status : String; }
+            part def Engine { @Status { status = "draft"; } }
+            part def Chassis { @Status { status = "released"; } }
+            part def Wheel;
+        "#;
+        let model = parse_file("test.sysml", source);
+        let filter = ListFilter {
+            metadata: Some("Status".to_string()),
+            ..Default::default()
+        };
+        let elements = list_elements(&model, &filter);
+        let names: Vec<&str> = elements
+            .iter()
+            .map(|e| e.name())
+            .filter(|n| *n != "Status")
+            .collect();
+        assert!(names.contains(&"Engine"), "{names:?}");
+        assert!(names.contains(&"Chassis"), "{names:?}");
+        assert!(!names.contains(&"Wheel"), "unannotated excluded: {names:?}");
+
+        let filter = ListFilter {
+            metadata: Some("Status".to_string()),
+            metadata_where: vec![("status".to_string(), "draft".to_string())],
+            ..Default::default()
+        };
+        let elements = list_elements(&model, &filter);
+        let names: Vec<&str> = elements.iter().map(|e| e.name()).collect();
+        assert!(names.contains(&"Engine"), "{names:?}");
+        assert!(!names.contains(&"Chassis"), "where clause filters: {names:?}");
+    }
+
+    #[test]
+    fn metadata_where_matches_enum_values_loosely() {
+        let source = r#"
+            metadata def Status { attribute status : StatusKind; }
+            part def Engine { @Status { status = StatusKind::draft; } }
+        "#;
+        let model = parse_file("test.sysml", source);
+        let filter = ListFilter {
+            metadata: Some("Status".to_string()),
+            metadata_where: vec![("status".to_string(), "draft".to_string())],
+            ..Default::default()
+        };
+        let elements = list_elements(&model, &filter);
+        let names: Vec<&str> = elements.iter().map(|e| e.name()).collect();
+        assert!(
+            names.contains(&"Engine"),
+            "StatusKind::draft matches draft: {names:?}"
+        );
     }
 }

@@ -52,6 +52,18 @@ sysml list -f json model.sysml               # JSON output
 | `--visibility <VIS>` | Filter by `public`, `private`, `protected` |
 | `--view <NAME>` | Apply a SysML v2 view definition as a filter preset |
 
+### Metadata queries (Ch 36)
+
+Filter by metadata annotations and their values:
+
+```sh
+sysml list --metadata Status model.sysml                       # annotated elements
+sysml list --metadata Status --where status=draft model.sysml  # value constraint
+```
+
+Values compare loosely: `status=draft` matches both `"draft"` and
+`StatusKind::draft`. `--where` is repeatable; all clauses must match.
+
 ## show
 
 Show detailed information about a specific element.

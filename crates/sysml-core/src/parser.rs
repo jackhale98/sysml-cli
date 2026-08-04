@@ -1241,32 +1241,90 @@ fn walk_node_scoped(
         // --- Metadata annotation (@Risk { ... }) ---
         "metadata_annotation" => {
             let mut cursor = node.walk();
+            let mut meta_type: Option<String> = None;
+            let mut about_target: Option<String> = None;
+            let mut values: Vec<(String, String)> = Vec::new();
+            let mut after_about = false;
             for child in node.children(&mut cursor) {
-                if matches!(
-                    child.kind(),
-                    "qualified_name" | "identifier" | "feature_chain"
-                ) {
-                    let meta_name = node_text(&child, source).to_string();
-                    model.usages.push(Usage {
-                        kind: "metadata".to_string(),
-                        name: meta_name,
-                        type_ref: None,
-                        span: Span::from_node(&node),
-                        direction: None,
-                        is_conjugated: false,
-                        parent_def: parent_def_name.map(|s| s.to_string()),
-                        multiplicity: None,
-                        value_expr: None,
-                        short_name: None,
-                        redefinition: None,
-                        subsets: None,
-                        doc: None,
+                match child.kind() {
+                    "qualified_name" | "identifier" | "feature_chain" => {
+                        let text = node_text(&child, source).to_string();
+                        if meta_type.is_none() {
+                            meta_type = Some(text);
+                        } else if after_about {
+                            about_target = Some(text);
+                        }
+                    }
+                    "about" => after_about = true,
+                    "metadata_body" => {
+                        // `name = value;` assignments and `:>> name = value;`
+                        let mut bc = child.walk();
+                        for bchild in child.children(&mut bc) {
+                            match bchild.kind() {
+                                "assignment_statement" => {
+                                    if let (Some(n), Some(v)) = (
+                                        bchild.child_by_field_name("name"),
+                                        bchild
+                                            .children(&mut bchild.walk())
+                                            .find(|c| c.kind() == "value_assignment"),
+                                    ) {
+                                        let vtext = node_text(&v, source)
+                                            .trim_start_matches(['=', ' '])
+                                            .trim()
+                                            .to_string();
+                                        values.push((
+                                            node_text(&n, source).to_string(),
+                                            vtext,
+                                        ));
+                                    }
+                                }
+                                "metadata_body_usage" => {
+                                    let text = node_text(&bchild, source);
+                                    if let Some((n, v)) = text.split_once('=') {
+                                        let n = n
+                                            .trim()
+                                            .trim_start_matches([':', '>', ' '])
+                                            .trim()
+                                            .to_string();
+                                        values.push((
+                                            n,
+                                            v.trim().trim_end_matches(';').trim().to_string(),
+                                        ));
+                                    }
+                                }
+                                _ => {}
+                            }
+                        }
+                    }
+                    _ => {}
+                }
+            }
+            if let Some(meta_name) = meta_type {
+                model.annotations.push(MetadataAnnotation {
+                    metadata_type: meta_name.clone(),
+                    values,
+                    target: about_target
+                        .or_else(|| parent_def_name.map(|s| s.to_string())),
+                    span: Span::from_node(&node),
+                });
+                model.usages.push(Usage {
+                    kind: "metadata".to_string(),
+                    name: meta_name,
+                    type_ref: None,
+                    span: Span::from_node(&node),
+                    direction: None,
+                    is_conjugated: false,
+                    parent_def: parent_def_name.map(|s| s.to_string()),
+                    multiplicity: None,
+                    value_expr: None,
+                    short_name: None,
+                    redefinition: None,
+                    subsets: None,
+                    doc: None,
                     is_variant: false,
                     is_variation: false,
                     qualified_name: None,
-                    });
-                    break;
-                }
+                });
             }
         }
 

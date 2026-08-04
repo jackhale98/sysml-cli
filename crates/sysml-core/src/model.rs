@@ -300,6 +300,21 @@ pub struct Usage {
     pub qualified_name: Option<crate::qualified_name::QualifiedName>,
 }
 
+/// A metadata annotation (`@Status { status = "draft"; }`) applied to an
+/// element (Ch 36 Reflection).
+#[derive(Debug, Clone, Serialize)]
+pub struct MetadataAnnotation {
+    /// Metadata type, possibly qualified (`RiskMetadata::Risk`).
+    pub metadata_type: String,
+    /// Body value assignments as (name, value-expression-text).
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub values: Vec<(String, String)>,
+    /// Name of the annotated element (enclosing def, or `about` target).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub target: Option<String>,
+    pub span: Span,
+}
+
 #[derive(Debug, Clone, Serialize)]
 pub struct Connection {
     pub name: Option<String>,
@@ -413,6 +428,9 @@ pub struct Model {
     /// false positives.
     #[serde(skip_serializing_if = "Vec::is_empty")]
     pub external_references: Vec<String>,
+    /// Metadata annotations (`@Type { ... }`) with values and targets.
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub annotations: Vec<MetadataAnnotation>,
 }
 
 impl Model {
@@ -433,6 +451,7 @@ impl Model {
             views: Vec::new(),
             resolved_imports: Vec::new(),
             external_references: Vec::new(),
+            annotations: Vec::new(),
         }
     }
 

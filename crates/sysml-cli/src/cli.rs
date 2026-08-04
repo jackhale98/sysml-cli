@@ -117,6 +117,16 @@ pub(crate) enum Command {
         #[arg(long)]
         variants: bool,
 
+        /// Show only elements annotated with this metadata type
+        /// (e.g. --metadata Status).
+        #[arg(long)]
+        metadata: Option<String>,
+
+        /// Constrain metadata values: KEY=VALUE (repeatable, use with
+        /// --metadata; e.g. --where status=draft).
+        #[arg(long = "where", value_name = "KEY=VALUE")]
+        where_clauses: Vec<String>,
+
         /// Filter by visibility (public, private, protected).
         #[arg(long)]
         visibility: Option<String>,

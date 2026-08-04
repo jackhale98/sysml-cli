@@ -16,6 +16,8 @@ pub(crate) fn run(
     abstract_only: bool,
     variations: bool,
     variants: bool,
+    metadata: Option<&str>,
+    where_clauses: &[String],
     visibility: Option<&str>,
     view: Option<&str>,
 ) -> ExitCode {
@@ -63,6 +65,14 @@ pub(crate) fn run(
         abstract_only,
         variations_only: variations,
         variants_only: variants,
+        metadata: metadata.map(|s| s.to_string()),
+        metadata_where: where_clauses
+            .iter()
+            .filter_map(|w| {
+                w.split_once('=')
+                    .map(|(k, v)| (k.trim().to_string(), v.trim().to_string()))
+            })
+            .collect(),
         visibility: vis_filter,
     };
 

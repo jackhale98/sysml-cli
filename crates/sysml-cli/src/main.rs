@@ -34,6 +34,8 @@ fn main() -> ExitCode {
             abstract_only,
             variations,
             variants,
+            metadata,
+            where_clauses,
             visibility,
             view,
         } => commands::list::run(
@@ -46,6 +48,8 @@ fn main() -> ExitCode {
             *abstract_only,
             *variations,
             *variants,
+            metadata.as_deref(),
+            where_clauses,
             visibility.as_deref(),
             view.as_deref(),
         ),
