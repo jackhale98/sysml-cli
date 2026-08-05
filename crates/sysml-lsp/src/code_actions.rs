@@ -1,5 +1,6 @@
-use tower_lsp::lsp_types::{
-    self, CodeAction, CodeActionKind, NumberOrString, Position, Range, TextEdit, Url, WorkspaceEdit,
+use tower_lsp_server::ls_types::{
+    self as lsp_types, CodeAction, CodeActionKind, NumberOrString, Position, Range, TextEdit, Uri,
+    WorkspaceEdit,
 };
 
 use std::collections::HashMap;
@@ -7,7 +8,7 @@ use std::collections::HashMap;
 /// Extract quick-fix code actions from diagnostics in the given range.
 /// `workspace_names` enables "add import" suggestions for unresolved types.
 pub fn code_actions(
-    uri: &Url,
+    uri: &Uri,
     diagnostics: &[lsp_types::Diagnostic],
     source: Option<&str>,
     workspace_names: Option<&[String]>,
@@ -162,7 +163,7 @@ fn expand_range_to_full_lines(source: &str, range: &Range) -> Range {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use tower_lsp::lsp_types::DiagnosticSeverity;
+    use tower_lsp_server::ls_types::DiagnosticSeverity;
 
     fn make_diag(
         code: &str,
@@ -210,7 +211,7 @@ mod tests {
 
     #[test]
     fn quickfix_from_unresolved_type() {
-        let uri = Url::parse("file:///test.sysml").unwrap();
+        let uri = "file:///test.sysml".parse::<Uri>().unwrap();
         let diags = vec![make_diag(
             "W004",
             "type `Vehicel` is not defined\nSuggestion: did you mean `Vehicle`?",
@@ -228,7 +229,7 @@ mod tests {
     #[test]
     fn remove_unused_definition() {
         let source = "part def Unused;\npart def Used;\n";
-        let uri = Url::parse("file:///test.sysml").unwrap();
+        let uri = "file:///test.sysml".parse::<Uri>().unwrap();
         let diag = lsp_types::Diagnostic {
             range: Range::new(Position::new(0, 0), Position::new(0, 16)),
             severity: Some(DiagnosticSeverity::INFORMATION),
@@ -256,7 +257,7 @@ mod tests {
 
     #[test]
     fn no_actions_for_diag_without_suggestion() {
-        let uri = Url::parse("file:///test.sysml").unwrap();
+        let uri = "file:///test.sysml".parse::<Uri>().unwrap();
         let diags = vec![make_diag("E002", "duplicate definition `A`", 0, 0, 10)];
         let actions = code_actions(&uri, &diags, None, None);
         assert!(actions.is_empty());
@@ -264,7 +265,7 @@ mod tests {
 
     #[test]
     fn multiple_suggestions_multiple_actions() {
-        let uri = Url::parse("file:///test.sysml").unwrap();
+        let uri = "file:///test.sysml".parse::<Uri>().unwrap();
         let diags = vec![
             make_diag("W004", "Suggestion: did you mean `Vehicle`?", 1, 15, 22),
             make_diag("W004", "Suggestion: did you mean `Engine`?", 2, 15, 21),
@@ -282,7 +283,7 @@ mod tests {
         let model = parse_file("test.sysml", source);
         let diags = compute_diagnostics(&model, source, &[], &[]);
 
-        let uri = Url::parse("file:///test.sysml").unwrap();
+        let uri = "file:///test.sysml".parse::<Uri>().unwrap();
         let actions = code_actions(&uri, &diags, Some(source), None);
 
         let fixes: Vec<_> = actions

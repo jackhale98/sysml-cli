@@ -1,7 +1,7 @@
 use sysml_core::checks;
 use sysml_core::diagnostic::Severity;
 use sysml_core::model::Model;
-use tower_lsp::lsp_types::{self, DiagnosticSeverity, NumberOrString};
+use tower_lsp_server::ls_types::{self as lsp_types, DiagnosticSeverity, NumberOrString};
 
 use crate::convert::span_to_range;
 

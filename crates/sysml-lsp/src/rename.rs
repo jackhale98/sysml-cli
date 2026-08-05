@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 
 use sysml_core::model::{simple_name, Model};
-use tower_lsp::lsp_types::{TextEdit, Url, WorkspaceEdit};
+use tower_lsp_server::ls_types::{TextEdit, Uri, WorkspaceEdit};
 
 /// A text occurrence of a name in source: byte start and byte end.
 #[derive(Debug)]
@@ -204,21 +204,21 @@ pub fn rename_symbol(
     old_name: &str,
     new_name: &str,
 ) -> Option<WorkspaceEdit> {
-    let mut changes: HashMap<Url, Vec<TextEdit>> = HashMap::new();
+    let mut changes: HashMap<Uri, Vec<TextEdit>> = HashMap::new();
 
     for &(uri_str, source, model) in models {
         let occs = find_occurrences(model, source, old_name);
         if occs.is_empty() {
             continue;
         }
-        let uri = Url::parse(uri_str).ok()?;
+        let uri = uri_str.parse::<Uri>().ok()?;
         let edits: Vec<TextEdit> = occs
             .iter()
             .map(|occ| {
                 let start = crate::convert::offset_to_position(source, occ.start_byte);
                 let end = crate::convert::offset_to_position(source, occ.end_byte);
                 TextEdit {
-                    range: tower_lsp::lsp_types::Range::new(start, end),
+                    range: tower_lsp_server::ls_types::Range::new(start, end),
                     new_text: new_name.to_string(),
                 }
             })
@@ -241,7 +241,7 @@ pub fn prepare_rename(
     model: &Model,
     source: &str,
     offset: usize,
-) -> Option<(String, tower_lsp::lsp_types::Range)> {
+) -> Option<(String, tower_lsp_server::ls_types::Range)> {
     // Check definitions
     for def in &model.definitions {
         if def.span.start_byte <= offset && offset < def.span.end_byte {
@@ -254,7 +254,7 @@ pub fn prepare_rename(
                     let end = crate::convert::offset_to_position(source, abs_end);
                     return Some((
                         def.name.clone(),
-                        tower_lsp::lsp_types::Range::new(start, end),
+                        tower_lsp_server::ls_types::Range::new(start, end),
                     ));
                 }
             }
@@ -273,7 +273,7 @@ pub fn prepare_rename(
                     let end = crate::convert::offset_to_position(source, abs_end);
                     return Some((
                         usage.name.clone(),
-                        tower_lsp::lsp_types::Range::new(start, end),
+                        tower_lsp_server::ls_types::Range::new(start, end),
                     ));
                 }
             }
@@ -330,7 +330,7 @@ mod tests {
         assert!(edit.is_some());
         let edit = edit.unwrap();
         let changes = edit.changes.unwrap();
-        let uri = Url::parse("file:///test.sysml").unwrap();
+        let uri = "file:///test.sysml".parse::<Uri>().unwrap();
         let edits = changes.get(&uri).unwrap();
         assert!(edits.len() >= 2, "should rename def + type ref");
         assert!(edits.iter().all(|e| e.new_text == "Motor"));
@@ -349,8 +349,8 @@ mod tests {
         let edit = rename_symbol(&models, "Engine", "Motor");
         assert!(edit.is_some());
         let changes = edit.unwrap().changes.unwrap();
-        assert!(changes.contains_key(&Url::parse("file:///a.sysml").unwrap()));
-        assert!(changes.contains_key(&Url::parse("file:///b.sysml").unwrap()));
+        assert!(changes.contains_key(&"file:///a.sysml".parse::<Uri>().unwrap()));
+        assert!(changes.contains_key(&"file:///b.sysml".parse::<Uri>().unwrap()));
     }
 
     #[test]

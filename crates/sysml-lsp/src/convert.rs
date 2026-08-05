@@ -1,5 +1,5 @@
 use sysml_core::model::Span;
-use tower_lsp::lsp_types::{Position, Range};
+use tower_lsp_server::ls_types::{Position, Range};
 
 /// Convert a sysml-core Span to an LSP Range with UTF-16 columns (the LSP
 /// default position encoding). Uses the span's byte offsets against

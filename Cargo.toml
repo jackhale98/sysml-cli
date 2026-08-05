@@ -11,3 +11,8 @@ version = "0.5.0"
 edition = "2021"
 license = "GPL-3.0-or-later"
 repository = "https://github.com/jackhale98/sysml-cli"
+
+[patch.crates-io]
+# ls-types 0.0.6 + the missing ServerCapabilities.type_hierarchy_provider
+# field (LSP 3.17). See third_party/ls-types/PATCH.md.
+ls-types = { path = "third_party/ls-types" }

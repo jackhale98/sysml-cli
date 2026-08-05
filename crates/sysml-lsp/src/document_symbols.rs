@@ -1,5 +1,5 @@
 use sysml_core::model::{DefKind, Model};
-use tower_lsp::lsp_types::{DocumentSymbol, SymbolKind};
+use tower_lsp_server::ls_types::{DocumentSymbol, SymbolKind};
 
 use crate::convert::span_to_range;
 

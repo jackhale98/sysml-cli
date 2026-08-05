@@ -6,7 +6,7 @@
 //! the title — a future revision can attach a goto-usages command.
 
 use sysml_core::model::{simple_name, DefKind, Model};
-use tower_lsp::lsp_types::{CodeLens, Position, Range};
+use tower_lsp_server::ls_types::{CodeLens, Position, Range};
 
 use crate::convert::span_to_range;
 
@@ -27,7 +27,7 @@ pub fn code_lenses(model: &Model, source: &str) -> Vec<CodeLens> {
             let range = lens_position(&span_to_range(&def.span, source));
             lenses.push(CodeLens {
                 range,
-                command: Some(tower_lsp::lsp_types::Command {
+                command: Some(tower_lsp_server::ls_types::Command {
                     title,
                     command: String::new(),
                     arguments: None,

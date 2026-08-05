@@ -1,5 +1,5 @@
 use sysml_core::model::Model;
-use tower_lsp::lsp_types::{FoldingRange, FoldingRangeKind};
+use tower_lsp_server::ls_types::{FoldingRange, FoldingRangeKind};
 
 /// Compute folding ranges from model definitions that have a body block.
 /// Each definition with `has_body == true` gets a folding range from its

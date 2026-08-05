@@ -12,7 +12,7 @@
 use std::collections::HashMap;
 
 use sysml_core::model::{simple_name, Model};
-use tower_lsp::lsp_types::{DocumentLink, Url};
+use tower_lsp_server::ls_types::{DocumentLink, Uri};
 
 use crate::convert::span_to_range;
 
@@ -71,14 +71,14 @@ pub fn document_links(model: &Model, source: &str, name_to_file: &HashMap<String
     links
 }
 
-fn path_to_url(path: &str) -> Option<Url> {
+fn path_to_url(path: &str) -> Option<Uri> {
     if path.is_empty() {
         return None;
     }
     let absolute = std::path::Path::new(path)
         .canonicalize()
         .unwrap_or_else(|_| std::path::PathBuf::from(path));
-    Url::from_file_path(absolute).ok()
+    Uri::from_file_path(absolute)
 }
 
 #[cfg(test)]

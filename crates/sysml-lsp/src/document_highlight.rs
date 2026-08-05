@@ -1,5 +1,5 @@
 use sysml_core::model::{simple_name, Model};
-use tower_lsp::lsp_types::{DocumentHighlight, DocumentHighlightKind};
+use tower_lsp_server::ls_types::{DocumentHighlight, DocumentHighlightKind};
 
 use crate::convert::span_to_range;
 

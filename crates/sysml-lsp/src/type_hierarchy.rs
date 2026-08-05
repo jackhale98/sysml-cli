@@ -1,11 +1,11 @@
 use sysml_core::model::{simple_name, DefKind, Model};
-use tower_lsp::lsp_types::{TypeHierarchyItem, Url};
+use tower_lsp_server::ls_types::{TypeHierarchyItem, Uri};
 
 use crate::convert::span_to_range;
 use crate::document_symbols::def_kind_to_symbol_kind;
 
 /// Build a TypeHierarchyItem for a definition by name.
-pub fn prepare_type_hierarchy(model: &Model, source: &str, uri: &Url, name: &str) -> Option<TypeHierarchyItem> {
+pub fn prepare_type_hierarchy(model: &Model, source: &str, uri: &Uri, name: &str) -> Option<TypeHierarchyItem> {
     let def = model.find_def(name)?;
     Some(make_item(
         &def.name,
@@ -29,7 +29,7 @@ pub fn supertypes(models: &[(&str, &str, &Model)], name: &str) -> Vec<TypeHierar
                 // Find the supertype definition
                 for (st_uri, st_source, st_model) in models {
                     if let Some(st_def) = st_model.find_def(st_name) {
-                        if let Ok(uri) = Url::parse(st_uri) {
+                        if let Ok(uri) = st_uri.parse::<Uri>() {
                             return vec![make_item(
                                 &st_def.name,
                                 st_def.kind,
@@ -57,7 +57,7 @@ pub fn subtypes(models: &[(&str, &str, &Model)], name: &str) -> Vec<TypeHierarch
         for def in &model.definitions {
             if let Some(ref st) = def.super_type {
                 if simple_name(st) == target {
-                    if let Ok(uri) = Url::parse(uri_str) {
+                    if let Ok(uri) = uri_str.parse::<Uri>() {
                         result.push(make_item(
                             &def.name,
                             def.kind,
@@ -78,7 +78,7 @@ pub fn subtypes(models: &[(&str, &str, &Model)], name: &str) -> Vec<TypeHierarch
 fn make_item(
     name: &str,
     kind: DefKind,
-    uri: &Url,
+    uri: &Uri,
     span: &sysml_core::model::Span,
     detail: Option<&str>,
     source: &str,
@@ -105,7 +105,7 @@ mod tests {
     fn prepare_finds_definition() {
         let source = "part def Vehicle;\n";
         let model = parse_file("test.sysml", source);
-        let uri = Url::parse("file:///test.sysml").unwrap();
+        let uri = "file:///test.sysml".parse::<Uri>().unwrap();
         let item = prepare_type_hierarchy(&model, source, &uri, "Vehicle");
         assert!(item.is_some());
         assert_eq!(item.unwrap().name, "Vehicle");
@@ -115,7 +115,7 @@ mod tests {
     fn prepare_returns_none_for_unknown() {
         let source = "part def Vehicle;\n";
         let model = parse_file("test.sysml", source);
-        let uri = Url::parse("file:///test.sysml").unwrap();
+        let uri = "file:///test.sysml".parse::<Uri>().unwrap();
         assert!(prepare_type_hierarchy(&model, source, &uri, "Unknown").is_none());
     }
 

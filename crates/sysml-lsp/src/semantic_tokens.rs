@@ -1,4 +1,4 @@
-use tower_lsp::lsp_types::{SemanticToken, SemanticTokenType, SemanticTokensLegend};
+use tower_lsp_server::ls_types::{SemanticToken, SemanticTokenType, SemanticTokensLegend};
 use tree_sitter::{Parser, Query, QueryCursor, StreamingIterator};
 
 use sysml_core::parser::get_language;

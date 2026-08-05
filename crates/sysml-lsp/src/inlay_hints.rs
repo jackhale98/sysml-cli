@@ -1,5 +1,5 @@
 use sysml_core::model::Model;
-use tower_lsp::lsp_types::{InlayHint, InlayHintKind, InlayHintLabel, Position};
+use tower_lsp_server::ls_types::{InlayHint, InlayHintKind, InlayHintLabel, Position};
 
 use crate::convert::span_to_range;
 

@@ -1,4 +1,4 @@
-use tower_lsp::lsp_types::{FormattingOptions, Position, Range, TextEdit};
+use tower_lsp_server::ls_types::{FormattingOptions, Position, Range, TextEdit};
 
 use sysml_core::codegen::format::{format_source, FormatOptions};
 

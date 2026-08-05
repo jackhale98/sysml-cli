@@ -1,4 +1,4 @@
-use tower_lsp::lsp_types::{Location, SymbolInformation, Url};
+use tower_lsp_server::ls_types::{Location, SymbolInformation, Uri};
 
 use crate::convert::span_to_range;
 use crate::document_symbols::def_kind_to_symbol_kind;
@@ -11,7 +11,7 @@ pub fn workspace_symbols(query: &str, defs: &[DefLocation]) -> Vec<SymbolInforma
     defs.iter()
         .filter(|loc| query.is_empty() || loc.name.to_lowercase().contains(&query_lower))
         .filter_map(|loc| {
-            let uri = Url::parse(&loc.uri).ok()?;
+            let uri = loc.uri.parse::<Uri>().ok()?;
             Some(SymbolInformation {
                 name: loc.name.clone(),
                 kind: def_kind_to_symbol_kind(loc.kind),
@@ -31,7 +31,7 @@ pub fn workspace_symbols(query: &str, defs: &[DefLocation]) -> Vec<SymbolInforma
 mod tests {
     use super::*;
     use sysml_core::model::{DefKind, Span};
-    use tower_lsp::lsp_types::SymbolKind;
+    use tower_lsp_server::ls_types::SymbolKind;
 
     fn make_def(name: &str, kind: DefKind) -> DefLocation {
         DefLocation {

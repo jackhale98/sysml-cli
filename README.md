@@ -37,7 +37,7 @@ The build compiles the [tree-sitter-sysml](https://github.com/jackhale98/tree-si
 
 ### Language server (LSP)
 
-The `sysml-lsp` binary is a full-featured language server for SysML v2 with 19 capabilities: diagnostics, go-to-definition, find references, hover (with rollup values), contextual completions (stdlib-aware: `attribute m : ` offers `Real`/ISQ quantities ranked below workspace types, `ISQ::` lists the package members, hover resolves stdlib symbols), document outline, workspace symbols, semantic highlighting, code actions (quick-fix + add import), formatting, document highlight, folding, rename, type hierarchy, inlay hints, **code lens** (satisfy / verify / usage counts above each definition), and **document link** (clickable imports and super-types).
+The `sysml-lsp` binary is a full-featured language server for SysML v2 with 19 capabilities: diagnostics, go-to-definition, find references, hover (with rollup values), contextual completions (stdlib-aware: `attribute m : ` offers `Real`/ISQ quantities ranked below workspace types, `ISQ::` lists the package members, hover resolves stdlib symbols), document outline, workspace symbols, semantic highlighting, code actions (quick-fix + add import), formatting, document highlight, folding, rename (workspace-wide), type hierarchy (advertised via LSP 3.17 typeHierarchyProvider), inlay hints, **code lens** (satisfy / verify / usage counts above each definition), and **document link** (clickable imports and super-types).
 
 ```sh
 cargo install --path crates/sysml-lsp
@@ -376,7 +376,7 @@ sysml pipeline run ci
 | `doc` | Generate Markdown documentation from model structure and comments | |
 | `completions` | Generate shell completion scripts | |
 | **Language Server** | | [editor setup](docs/ci-integration.md#language-server-sysml-lsp) |
-| `sysml-lsp` | LSP server with 19 capabilities: diagnostics, go-to-def, references, hover (with rollups), contextual completions (stdlib-aware: `attribute m : ` offers `Real`/ISQ quantities ranked below workspace types, `ISQ::` lists the package members, hover resolves stdlib symbols), outline, workspace symbols, semantic tokens, code actions, formatting, document highlight, folding, rename, type hierarchy, inlay hints, code lens, document link | |
+| `sysml-lsp` | LSP server with 19 capabilities: diagnostics, go-to-def, references, hover (with rollups), contextual completions (stdlib-aware: `attribute m : ` offers `Real`/ISQ quantities ranked below workspace types, `ISQ::` lists the package members, hover resolves stdlib symbols), outline, workspace symbols, semantic tokens, code actions, formatting, document highlight, folding, rename (workspace-wide), type hierarchy (advertised via LSP 3.17 typeHierarchyProvider), inlay hints, code lens, document link | |
 
 ## License
 

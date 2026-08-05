@@ -1,6 +1,6 @@
 use sysml_core::model::{DefKind, Model};
 use sysml_core::stdlib;
-use tower_lsp::lsp_types::{CompletionItem, CompletionItemKind};
+use tower_lsp_server::ls_types::{CompletionItem, CompletionItemKind};
 
 use std::collections::HashSet;
 
@@ -132,7 +132,7 @@ pub fn completions(
                 documentation: def
                     .doc
                     .as_ref()
-                    .map(|d| tower_lsp::lsp_types::Documentation::String(d.clone())),
+                    .map(|d| tower_lsp_server::ls_types::Documentation::String(d.clone())),
                 ..Default::default()
             });
         }
@@ -151,7 +151,7 @@ pub fn completions(
                 documentation: loc
                     .doc
                     .as_ref()
-                    .map(|d| tower_lsp::lsp_types::Documentation::String(d.clone())),
+                    .map(|d| tower_lsp_server::ls_types::Documentation::String(d.clone())),
                 ..Default::default()
             });
         }
@@ -174,7 +174,7 @@ pub fn completions(
                     documentation: def
                         .doc
                         .as_ref()
-                        .map(|d| tower_lsp::lsp_types::Documentation::String(d.clone())),
+                        .map(|d| tower_lsp_server::ls_types::Documentation::String(d.clone())),
                     ..Default::default()
                 });
             }
@@ -198,7 +198,7 @@ pub fn completions(
                     documentation: def
                         .doc
                         .as_ref()
-                        .map(|d| tower_lsp::lsp_types::Documentation::String(d.clone())),
+                        .map(|d| tower_lsp_server::ls_types::Documentation::String(d.clone())),
                     ..Default::default()
                 });
             }
@@ -235,7 +235,7 @@ fn qualified_completions(
                     documentation: def
                         .doc
                         .as_ref()
-                        .map(|d| tower_lsp::lsp_types::Documentation::String(d.clone())),
+                        .map(|d| tower_lsp_server::ls_types::Documentation::String(d.clone())),
                     ..Default::default()
                 });
             }

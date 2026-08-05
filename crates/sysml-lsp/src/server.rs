@@ -1,8 +1,8 @@
 use std::path::PathBuf;
 
-use tower_lsp::jsonrpc::Result;
-use tower_lsp::lsp_types::*;
-use tower_lsp::{Client, LanguageServer};
+use tower_lsp_server::jsonrpc::Result;
+use tower_lsp_server::ls_types::*;
+use tower_lsp_server::{Client, LanguageServer};
 
 use sysml_core::model::qualify_model;
 use sysml_core::parser;
@@ -64,7 +64,7 @@ impl SysmlLanguageServer {
         refs.into_iter().collect()
     }
 
-    async fn on_change(&self, uri: Url, text: String, version: i32) {
+    async fn on_change(&self, uri: Uri, text: String, version: i32) {
         let uri_str = uri.to_string();
         let mut model = parser::parse_file(&uri_str, &text);
         qualify_model(&mut model);
@@ -98,8 +98,9 @@ impl SysmlLanguageServer {
         for path in files {
             let path_str = path.to_string_lossy().to_string();
             if let Ok(source) = std::fs::read_to_string(&path) {
-                let uri = Url::from_file_path(&path)
-                    .unwrap_or_else(|_| Url::parse(&format!("file://{}", path_str)).unwrap());
+                let Some(uri) = Uri::from_file_path(&path) else {
+                    continue;
+                };
                 let uri_str = uri.to_string();
                 let mut model = parser::parse_file(&path_str, &source);
                 qualify_model(&mut model);
@@ -138,13 +139,23 @@ fn collect_sysml_files(dir: &PathBuf, files: &mut Vec<PathBuf>) {
     }
 }
 
-#[tower_lsp::async_trait]
 impl LanguageServer for SysmlLanguageServer {
     async fn initialize(&self, params: InitializeParams) -> Result<InitializeResult> {
-        // Discover workspace root
-        if let Some(root_uri) = params.root_uri {
-            if let Ok(root_path) = root_uri.to_file_path() {
-                self.scan_workspace(&root_path);
+        // Discover workspace roots (workspace_folders, with root_uri kept
+        // for older clients)
+        let mut roots: Vec<Uri> = Vec::new();
+        if let Some(folders) = params.workspace_folders {
+            roots.extend(folders.into_iter().map(|f| f.uri));
+        }
+        #[allow(deprecated)]
+        if roots.is_empty() {
+            if let Some(root_uri) = params.root_uri {
+                roots.push(root_uri);
+            }
+        }
+        for root in roots {
+            if let Some(root_path) = root.to_file_path() {
+                self.scan_workspace(&root_path.to_path_buf());
             }
         }
 
@@ -188,13 +199,13 @@ impl LanguageServer for SysmlLanguageServer {
                     resolve_provider: Some(false),
                     work_done_progress_options: WorkDoneProgressOptions::default(),
                 }),
-                // NOTE: lsp-types 0.94 (pinned by tower-lsp 0.20) has no
-                // type_hierarchy_provider field, so the implemented type
-                // hierarchy cannot be advertised until tower-lsp is
-                // upgraded. Clients that probe the methods anyway get
-                // working responses.
+                // Via the vendored ls-types patch (see
+                // third_party/ls-types/PATCH.md): the published crates
+                // lack this LSP 3.17 field entirely.
+                type_hierarchy_provider: Some(OneOf::Left(true)),
                 ..Default::default()
             },
+            offset_encoding: None,
             server_info: Some(ServerInfo {
                 name: "sysml-lsp".to_string(),
                 version: Some(env!("CARGO_PKG_VERSION").to_string()),
@@ -248,7 +259,7 @@ impl LanguageServer for SysmlLanguageServer {
         // Replace the buffer state with the on-disk content so the file
         // remains visible to workspace-wide operations after closing.
         self.state.files.remove(&uri_str);
-        if let Ok(path) = params.text_document.uri.to_file_path() {
+        if let Some(path) = params.text_document.uri.to_file_path() {
             if let Ok(source) = std::fs::read_to_string(&path) {
                 let mut model = parser::parse_file(&path.to_string_lossy(), &source);
                 qualify_model(&mut model);
@@ -314,7 +325,7 @@ impl LanguageServer for SysmlLanguageServer {
         let target_url = if target_uri == uri_str {
             uri
         } else {
-            Url::parse(&target_uri).unwrap_or(uri)
+            target_uri.parse::<Uri>().unwrap_or(uri)
         };
 
         let target_source = self
@@ -368,7 +379,7 @@ impl LanguageServer for SysmlLanguageServer {
             if let Some(fs) = self.state.files.get(uri_key) {
                 let file_refs = references::find_references_in_model(&fs.model, uri_key, &name);
                 for r in file_refs {
-                    if let Ok(loc_uri) = Url::parse(&r.uri) {
+                    if let Ok(loc_uri) = r.uri.parse::<Uri>() {
                         all_refs.push(Location {
                             uri: loc_uri,
                             range: span_to_range(&r.span, &fs.source),
@@ -379,7 +390,7 @@ impl LanguageServer for SysmlLanguageServer {
                 // Include declaration if requested
                 if include_declaration {
                     if let Some(def) = fs.model.find_def(sysml_core::model::simple_name(&name)) {
-                        if let Ok(loc_uri) = Url::parse(uri_key) {
+                        if let Ok(loc_uri) = uri_key.parse::<Uri>() {
                             all_refs.push(Location {
                                 uri: loc_uri,
                                 range: span_to_range(&def.span, &fs.source),
@@ -470,7 +481,7 @@ impl LanguageServer for SysmlLanguageServer {
     async fn symbol(
         &self,
         params: WorkspaceSymbolParams,
-    ) -> Result<Option<Vec<SymbolInformation>>> {
+    ) -> Result<Option<WorkspaceSymbolResponse>> {
         let defs: Vec<_> = self
             .state
             .workspace_defs
@@ -482,7 +493,7 @@ impl LanguageServer for SysmlLanguageServer {
         if symbols.is_empty() {
             Ok(None)
         } else {
-            Ok(Some(symbols))
+            Ok(Some(WorkspaceSymbolResponse::Flat(symbols)))
         }
     }
 

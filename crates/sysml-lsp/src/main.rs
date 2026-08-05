@@ -19,7 +19,7 @@ mod state;
 mod type_hierarchy;
 mod workspace_symbols;
 
-use tower_lsp::{LspService, Server};
+use tower_lsp_server::{LspService, Server};
 use tracing_subscriber::EnvFilter;
 
 #[tokio::main]
