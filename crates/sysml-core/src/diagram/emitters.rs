@@ -41,7 +41,12 @@ pub fn render(graph: &DiagramGraph, format: DiagramFormat) -> String {
 fn render_mermaid(graph: &DiagramGraph) -> String {
     let mut out = String::new();
     out.push_str("---\n");
-    out.push_str(&format!("title: {}\n", graph.title));
+    // Quoted so bracketed titles like `gv [Drone]` stay valid YAML —
+    // GitHub's mermaid renderer rejects the whole block otherwise.
+    out.push_str(&format!(
+        "title: \"{}\"\n",
+        graph.title.replace('\\', "\\\\").replace('"', "\\\"")
+    ));
     out.push_str("---\n");
 
     match graph.kind {

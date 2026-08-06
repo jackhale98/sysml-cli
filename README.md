@@ -249,7 +249,7 @@ package DroneSystem {
 
 ```mermaid
 ---
-title: gv [drone.sysml]
+title: "gv [drone.sysml]"
 ---
 classDiagram
     class DroneSystem {
@@ -308,7 +308,7 @@ classDiagram
 
 ```mermaid
 ---
-title: iv [Drone]
+title: "iv [Drone]"
 ---
 classDiagram
     class commPort {
@@ -332,7 +332,7 @@ classDiagram
 
 ```mermaid
 ---
-title: stv [DroneStates]
+title: "stv [DroneStates]"
 ---
 stateDiagram-v2
     off : off
