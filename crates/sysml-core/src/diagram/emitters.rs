@@ -84,17 +84,20 @@ fn render_mermaid_class_diagram(out: &mut String, graph: &DiagramGraph) {
         }
     }
 
-    // Edges
+    // Edges — mermaid marker placement depends on operand order, so the
+    // order is chosen per kind: the specialization triangle sits at the
+    // supertype (target), the composition diamond at the whole (source),
+    // and dashed satisfy/verify/dependency arrows point AT their target.
     for edge in &graph.edges {
-        let arrow = match edge.kind {
-            EdgeKind::Specialization => "<|--",
-            EdgeKind::Composition => "*--",
-            EdgeKind::Connection => "--",
-            EdgeKind::Satisfy => "..>",
-            EdgeKind::Verify => "..>",
-            EdgeKind::Dependency => "..>",
-            EdgeKind::ConstraintBinding => "--",
-            _ => "-->",
+        let (arrow, left, right) = match edge.kind {
+            EdgeKind::Specialization => ("<|--", &edge.target, &edge.source),
+            EdgeKind::Composition => ("*--", &edge.source, &edge.target),
+            EdgeKind::Connection => ("--", &edge.source, &edge.target),
+            EdgeKind::Satisfy | EdgeKind::Verify | EdgeKind::Dependency => {
+                ("..>", &edge.source, &edge.target)
+            }
+            EdgeKind::ConstraintBinding => ("--", &edge.source, &edge.target),
+            _ => ("-->", &edge.source, &edge.target),
         };
         let label = edge
             .label
@@ -103,9 +106,9 @@ fn render_mermaid_class_diagram(out: &mut String, graph: &DiagramGraph) {
             .unwrap_or_default();
         out.push_str(&format!(
             "    {} {} {}{}\n",
-            mermaid_id(&edge.target),
+            mermaid_id(left),
             arrow,
-            mermaid_id(&edge.source),
+            mermaid_id(right),
             label
         ));
     }

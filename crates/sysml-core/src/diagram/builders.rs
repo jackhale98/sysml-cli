@@ -47,10 +47,11 @@ pub fn build_bdd(model: &Model, scope: Option<&str>) -> DiagramGraph {
                 .as_ref()
                 .map(|m| format!(" {}", m))
                 .unwrap_or_default();
+            let conj = if u.is_conjugated { "~" } else { "" };
             let type_str = if t.is_empty() {
                 String::new()
             } else {
-                format!(" : {}", t)
+                format!(" : {}{}", conj, t)
             };
             attrs.push((u.kind.clone(), format!("{}{}{}", u.name, type_str, mult)));
         }
@@ -138,7 +139,12 @@ fn collect_ports_recursive(
             } else {
                 format!("{}.{}", prefix, cu.name)
             };
-            ports.push((format!("{}port {}", dir, name), format!("{}{}", conj, pt)));
+            let typed = if pt.is_empty() {
+                name.clone()
+            } else {
+                format!("{} : {}{}", name, conj, pt)
+            };
+            ports.push((format!("{}port", dir), typed));
         } else if cu.kind == "part" {
             let nested_prefix = if prefix.is_empty() {
                 cu.name.clone()
@@ -167,7 +173,30 @@ pub fn build_ibd(model: &Model, def_name: &str) -> DiagramGraph {
         if u.kind == "part" {
             let t = u.type_ref.as_deref().unwrap_or("");
             // Collect ports recursively from this part and its nested parts
-            let child_ports = collect_ports_recursive(model, &u.name, &u.span, "");
+            let mut child_ports = collect_ports_recursive(model, &u.name, &u.span, "");
+            // Ports usually live on the part's TYPE definition
+            // (`part battery : Battery` — Battery declares the ports).
+            if child_ports.is_empty() {
+                if let Some(type_name) = u.type_ref.as_deref().map(simple_name) {
+                    for pu in model.usages_in_def(type_name) {
+                        if pu.kind == "port" {
+                            let pt = pu.type_ref.as_deref().unwrap_or("");
+                            let dir = pu
+                                .direction
+                                .map(|d| format!("{} ", d.label()))
+                                .unwrap_or_default();
+                            let conj = if pu.is_conjugated { "~" } else { "" };
+                            let typed = if pt.is_empty() {
+                                pu.name.clone()
+                            } else {
+                                format!("{} : {}{}", pu.name, conj, pt)
+                            };
+                            child_ports.push((format!("{}port", dir), typed));
+                        }
+                    }
+                }
+            }
+            let child_ports = child_ports;
             graph.add_node(DiagramNode {
                 id: u.name.clone(),
                 label: if t.is_empty() {
@@ -204,12 +233,23 @@ pub fn build_ibd(model: &Model, def_name: &str) -> DiagramGraph {
     for conn in &model.connections {
         let src = root_name(&conn.source);
         let tgt = root_name(&conn.target);
+        // Port paths (`flightController.escOut`) become the edge label so
+        // the diagram shows WHICH ports connect.
+        let port_label = {
+            let sp = conn.source.strip_prefix(src).unwrap_or("").trim_start_matches('.');
+            let tp = conn.target.strip_prefix(tgt).unwrap_or("").trim_start_matches('.');
+            if sp.is_empty() && tp.is_empty() {
+                None
+            } else {
+                Some(format!("{} to {}", sp, tp))
+            }
+        };
         // Only include connections between elements in this definition
         if graph.has_node(src) || graph.has_node(tgt) {
             graph.add_edge(DiagramEdge {
                 source: src.to_string(),
                 target: tgt.to_string(),
-                label: conn.name.clone(),
+                label: conn.name.clone().or(port_label),
                 kind: EdgeKind::Connection,
             });
         }

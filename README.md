@@ -4,7 +4,7 @@ A fast, standalone SysML v2 command-line toolchain and language server for model
 
 Built on [tree-sitter](https://tree-sitter.github.io/) for reliable parsing of SysML v2 textual notation. Zero runtime dependencies — just a single binary.
 
-Validated against the 169 code listings in the *SysML v2 Book* (Weilkiens, 2026-05 pre-release): 165 parse cleanly — the remaining 4 are deliberate fragments/errata in the book itself. Fully-qualified names resolve from the root namespace without imports, package short names (`package <LIB> 'Library Package'`) work everywhere, and values carry their units (`250 [SI::kg]`).
+Fully-qualified names resolve from the root namespace without imports, package short names (`package <LIB> 'Library Package'`) work everywhere, and values carry their units (`250 [SI::kg]`).
 
 ## Documentation
 
@@ -100,7 +100,7 @@ Requirement          Satisfied By         Verified By
 Coverage: 3/3 satisfied (100%), 2/3 verified (67%)
 ```
 
-Requirements modeled as usages with `<ID>` short names (the book's house style) are first-class trace rows; satisfy/verify statements match by name, qualified name, feature chain, or `<ID>`. Look up any element by its ID with `sysml show model.sysml REQ2`.
+Requirements modeled as usages with `<ID>` short names are first-class trace rows; satisfy/verify statements match by name, qualified name, feature chain, or `<ID>`. Look up any element by its ID with `sysml show model.sysml REQ2`.
 
 ### Attribute rollups — mass, cost, power, tolerance budgets
 
@@ -197,51 +197,154 @@ sysml diagram -t grv model.sysml                        # Grid View (requirement
 
 Legacy names still work: `bdd`=`gv`, `ibd`=`iv`, `stm`=`stv`, `act`=`afv`, `pkg`=`bv`, `req`=`grv`.
 
-Definitions render with **square corners**, usages with **rounded corners** (SysML v2 graphical convention).
+The examples below are actual CLI output for this model (`drone.sysml`):
 
-**Block Definition Diagram (BDD):**
+```sysml
+package DroneSystem {
+    part def Drone {
+        attribute mass = 1.2 [SI::kg];
+        port commPort : CommPort;
+        part battery : Battery;
+        part flightController : FlightController;
+        part motors : Motor [4];
+        connect flightController.escOut to motors.escIn;
+        connect battery.powerOut to flightController.powerIn;
+    }
+    part def Battery {
+        attribute mass = 0.45 [SI::kg];
+        attribute capacity : ISQ::energy;
+        port powerOut : PowerPort;
+    }
+    part def FlightController {
+        attribute mass = 0.08 [SI::kg];
+        port powerIn : ~PowerPort;
+        port escOut : EscPort;
+    }
+    part def Motor {
+        attribute mass = 0.06 [SI::kg];
+        port escIn : ~EscPort;
+    }
+    port def PowerPort;
+    port def EscPort;
+    port def CommPort;
 
-```mermaid
-classDiagram
-    class Vehicle {
-        <<part def>>
-        +part engine : Engine
-        +part transmission : Transmission
-        +part wheel : Wheel [4]
-        +attribute mass : MassValue
+    state def DroneStates {
+        entry; then off;
+        state off;
+        transition off_to_armed
+            first off accept ArmCmd then armed;
+        state armed;
+        transition armed_to_flying
+            first armed accept TakeoffCmd then flying;
+        state flying;
+        transition flying_to_armed
+            first flying accept LandCmd then armed;
+        transition armed_to_off
+            first armed accept DisarmCmd then off;
     }
-    class Engine {
-        <<part def>>
-        +port fuelIn : FuelPort
-        +attribute displacement : VolumeValue
-    }
-    class Transmission {
-        <<part def>>
-        +attribute gearCount : Integer
-    }
-    class Wheel {
-        <<part def>>
-        +attribute diameter : LengthValue
-    }
-    Engine *-- Vehicle : engine
-    Transmission *-- Vehicle : transmission
-    Wheel *-- Vehicle : wheel
+}
 ```
 
-**State Machine Diagram:**
+**General View** — `sysml diagram -t gv drone.sysml` — definitions with their members, composition (diamond at the whole), and multiplicities:
 
 ```mermaid
+---
+title: gv [drone.sysml]
+---
+classDiagram
+    class DroneSystem {
+        <<package>>
+    }
+    class Drone {
+        <<part def>>
+        +attribute mass
+        +port commPort : CommPort
+        +part battery : Battery
+        +part flightController : FlightController
+        +part motors : Motor [4]
+    }
+    class Battery {
+        <<part def>>
+        +attribute mass
+        +attribute capacity : ISQ::energy
+        +port powerOut : PowerPort
+    }
+    class FlightController {
+        <<part def>>
+        +attribute mass
+        +port powerIn : ~PowerPort
+        +port escOut : EscPort
+    }
+    class Motor {
+        <<part def>>
+        +attribute mass
+        +port escIn : ~EscPort
+    }
+    class PowerPort {
+        <<port def>>
+    }
+    class EscPort {
+        <<port def>>
+    }
+    class CommPort {
+        <<port def>>
+    }
+    class DroneStates {
+        <<state def>>
+        +state off
+        +transition off_to_armed : armed
+        +state armed
+        +transition armed_to_flying : flying
+        +state flying
+        +transition flying_to_armed : armed
+        +transition armed_to_off : off
+    }
+    Drone *-- Battery : battery
+    Drone *-- FlightController : flightController
+    Drone *-- Motor : motors
+```
+
+**Interconnection View** — `sysml diagram -t iv --scope Drone drone.sysml` — the parts inside `Drone`, their ports (resolved from the part's type, `~` marking conjugated ends), and which ports each connection joins:
+
+```mermaid
+---
+title: iv [Drone]
+---
+classDiagram
+    class commPort {
+        <<port>>
+    }
+    class battery {
+        +port powerOut : PowerPort
+    }
+    class flightController {
+        +port powerIn : ~PowerPort
+        +port escOut : EscPort
+    }
+    class motors {
+        +port escIn : ~EscPort
+    }
+    flightController -- motors : escOut to escIn
+    battery -- flightController : powerOut to powerIn
+```
+
+**State Transition View** — `sysml diagram -t stv --scope DroneStates drone.sysml` — initial state and triggered transitions:
+
+```mermaid
+---
+title: stv [DroneStates]
+---
 stateDiagram-v2
     off : off
-    starting : starting
-    running : running
-    stopping : stopping
+    armed : armed
+    flying : flying
     [*] --> off
-    off --> starting : startCmd
-    starting --> running
-    running --> stopping : stopCmd
-    stopping --> off
+    off --> armed : ArmCmd
+    armed --> flying : TakeoffCmd
+    flying --> armed : LandCmd
+    armed --> off : DisarmCmd
 ```
+
 
 ### Query and explore
 
