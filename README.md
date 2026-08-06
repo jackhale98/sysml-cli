@@ -55,84 +55,130 @@ sysml completions fish > ~/.config/fish/completions/sysml.fish
 
 ## Quick Start
 
-The primary way to use sysml is through its **interactive wizard**. No SysML syntax knowledge required:
+Write SysML v2 as plain text in your editor of choice (there's an
+[Emacs mode](https://github.com/jackhale98/sysml2-mode) and an LSP
+server for everything else). The CLI is the analysis engine for the
+models you write:
 
 ```sh
-sysml init                                      # Initialize a project
-sysml add                                       # Launch interactive wizard
-sysml add model.sysml                           # Wizard with model-aware suggestions
-```
-
-For automation and scripting, every operation has a flag-based equivalent:
-
-```sh
-sysml add model.sysml part-def Vehicle --doc "A passenger vehicle"
-sysml add model.sysml part engine -t Engine --inside Vehicle
-sysml add model.sysml connection c1 --connect "a.x to b.y" --inside Vehicle
-sysml lint model.sysml
-sysml diagram -t bdd model.sysml
-sysml simulate sm model.sysml -n StationStates -e powerOn,startSensors
+sysml check src/*.sysml                                          # validate (18 checks)
+sysml trace --check --min-coverage 80 src/*.sysml                # requirements coverage gate
+sysml rollup compute src/*.sysml --root Vehicle --attr mass      # mass budget with units
+sysml simulate state-machine model.sysml -n DroneStates -e TurnOn,StartMission
+sysml diagram -t iv --scope Vehicle model.sysml                  # interconnection view
 ```
 
 ## Highlights
 
-### Interactive model authoring — no SysML syntax required
+### Validation that understands SysML v2 semantics
 
-`sysml add` launches a guided wizard. Pick what you're building, name it, and the tool generates valid SysML v2:
+18 structural checks with root-namespace name resolution: files passed
+together share a root namespace, so fully-qualified cross-file
+references resolve without imports, package short names
+(`package <LIB> 'Library Package'`) work everywhere, and references
+into the embedded standard library are member-checked
+(`ISQ::doesNotExist` warns, `ISQ::mass` resolves). Diagnostics carry
+did-you-mean suggestions and machine-readable JSON output for CI. See
+[Validation & Diagnostics](docs/validation.md).
 
-```
-$ sysml add model.sysml
-Available types: Sensor, Controller, Display, PowerSupply
-? What are you creating? > Part definition (component type)
-? Name: TemperatureSensor
-? Brief description: Measures ambient temperature
-? Extend another type? > Sensor
-? Add members (comma-separated)? status:SensorStatus, range:Real
 
-Preview:
-  part def TemperatureSensor :> Sensor {
-      doc /* Measures ambient temperature */
-      attribute status : SensorStatus;
-      attribute range : Real;
-  }
 
-Wrote TemperatureSensor to model.sysml
-```
 
-Power users skip the wizard: `sysml add model.sysml part-def TemperatureSensor --extends Sensor -m "attribute status:SensorStatus,attribute range:Real"`
 
-### Full SysML generation — state machines, actions, constraints, calcs
 
-Generate complete elements with internal structure, not just skeletons:
+
+### Requirements traceability
 
 ```sh
-# State machine with states and transitions
-sysml add model.sysml state-def EngineStates \
-    -m "state off,state starting,state running" \
-    -m "transition first off accept startCmd then starting" \
-    -m "transition first starting then running"
+$ sysml trace requirements.sysml model.sysml
+Requirement          Satisfied By         Verified By
+------------------------------------------------------------
+<REQ1> tempAccuracy  TemperatureSensor    TestTempAccuracy
+<REQ2> opRange       WeatherStationUnit   -
+<REQ3> batteryLife   PowerSupply          TestBatteryLife
 
-# Action with steps and successions
-sysml add model.sysml action-def ReadSensors \
-    -m "action readTemp,action processData,action updateDisplay" \
-    -m "first readTemp then processData" \
-    -m "first processData then updateDisplay"
+Coverage: 3/3 satisfied (100%), 2/3 verified (67%)
+```
 
-# Constraint with expression
-sysml add model.sysml constraint-def TempLimit \
-    -m "in attribute temp:Real" \
-    -m "constraint temp >= -40 and temp <= 60"
+Requirements modeled as usages with `<ID>` short names (the book's house style) are first-class trace rows; satisfy/verify statements match by name, qualified name, feature chain, or `<ID>`. Look up any element by its ID with `sysml show model.sysml REQ2`.
 
-# Calc with return type
-sysml add model.sysml calc-def BatteryRuntime \
-    -m "in attribute capacity:Real,in attribute consumption:Real" \
-    -m "return hours:Real"
+### Attribute rollups — mass, cost, power, tolerance budgets
 
-# Verification case with objective
-sysml add model.sysml verification-def TestTempAccuracy \
-    --doc "Verify temperature sensor accuracy" \
-    -m "subject testSubject" \
-    -m "requirement tempReq:TemperatureAccuracy"
+Compute any numeric attribute across the part hierarchy. Works for mass budgets, cost rollups, power budgets, tolerance stackups — anything with a numeric attribute:
+
+```sh
+$ sysml rollup compute model.sysml --root Vehicle --attr mass
+Rollup: mass (sum) for Vehicle
+  Vehicle                                   total: 900.0000
+    (own)                                        20.0000
+    engine : Engine       180.0000 => 180.0000 (20.0%)
+    chassis : Chassis     250.0000 => 250.0000 (27.8%)
+    wheels : Wheel [4]     12.5000 =>  50.0000 (5.6%)
+    body : Body           400.0000 => 400.0000 (44.4%)
+
+$ sysml rollup budget model.sysml --root Vehicle --attr mass --limit 1000
+Budget: mass for Vehicle
+  Total:  900.0000
+  Limit:  1000.0000
+  Margin: 100.0000 (10.0%)
+  Status: PASS
+```
+
+Values may carry unit brackets — `attribute mass = 250 [SI::kg];` — and mixed units convert automatically (kg/g, m/mm, h/min, ...) into the root's unit, which is shown in the output.
+
+Aggregation methods: `sum` (default), `rss` (tolerance stackups), `product`, `min`, `max`. Use `--format json` for CI integration.
+
+**Variant configurations** (SysML v2 variations, Ch 35): select variants per variation point and compute the configured system:
+
+```sh
+$ sysml list --variants model.sysml                    # what can vary?
+$ sysml rollup compute model.sysml --root Drone --attr mass \
+      --variant battery=powerBattery                   # configure, then compute
+```
+
+Unselected variation points include all variants; unknown choices error with the list of available variants.
+
+Parametric sweeps and what-if scenarios:
+
+```sh
+$ sysml rollup sweep model.sysml --root Vehicle --attr mass --param engine --from 100 --to 300 --steps 5
+$ sysml rollup what-if model.sysml --root Vehicle --attr mass -s "light:engine=100" -s "heavy:engine=300"
+```
+
+### Simulate state machines and evaluate constraints
+
+```sh
+$ sysml simulate sm model.sysml -n EngineStates -e startCmd,stopCmd
+State Machine: EngineStates
+Initial state: off
+  Step 0: off -- [startCmd]--> starting
+  Step 1: starting --> running
+  Step 2: running -- [stopCmd]--> stopping
+  Step 3: stopping --> off
+
+$ sysml simulate eval constraints.sysml -n PowerBudget -b consumption=450
+constraint PowerBudget: satisfied
+```
+
+Parallel state regions simulate concurrently with broadcast events
+(`positioning.stabilizing ----> positioning.moving`), and action flows
+follow real succession semantics — forks branch, decides take exactly
+one path, guards are evaluated:
+
+```sh
+sysml simulate action-flow mission.sysml -n PerformMission
+sysml analyze run analysis.sysml -n MaxSpeedAnalysis -b v0=0,d=100   # solves the constraint system
+```
+
+When an analysis can't be solved, the CLI says why: `could not compute
+\`vmax\` — unbound: t, vehicle.maxAcceleration` with a `-b` hint.
+
+### Trade studies
+
+Compare alternatives against a maximize/minimize objective:
+
+```sh
+sysml analyze trade model.sysml -n EngineTradeOff
 ```
 
 ### SysML v2 standard views, 4 output formats
@@ -197,82 +243,19 @@ stateDiagram-v2
     stopping --> off
 ```
 
-### Simulate state machines and evaluate constraints
+### Query and explore
+
+Slice the model from the shell — including by metadata (Ch 36):
 
 ```sh
-$ sysml simulate sm model.sysml -n EngineStates -e startCmd,stopCmd
-State Machine: EngineStates
-Initial state: off
-  Step 0: off -- [startCmd]--> starting
-  Step 1: starting --> running
-  Step 2: running -- [stopCmd]--> stopping
-  Step 3: stopping --> off
-
-$ sysml simulate eval constraints.sysml -n PowerBudget -b consumption=450
-constraint PowerBudget: satisfied
+sysml list --kind requirements src/*.sysml
+sysml list --variants model.sysml                          # variation points (Ch 35)
+sysml list --metadata Status --where status=draft src/*.sysml
+sysml show model.sysml REQ2                                # look up by <ID>
+sysml deps model.sysml Engine --transitive
 ```
 
-### Requirements traceability
-
-```sh
-$ sysml trace requirements.sysml model.sysml
-Requirement          Satisfied By         Verified By
-------------------------------------------------------------
-<REQ1> tempAccuracy  TemperatureSensor    TestTempAccuracy
-<REQ2> opRange       WeatherStationUnit   -
-<REQ3> batteryLife   PowerSupply          TestBatteryLife
-
-Coverage: 3/3 satisfied (100%), 2/3 verified (67%)
-```
-
-Requirements modeled as usages with `<ID>` short names (the book's house style) are first-class trace rows; satisfy/verify statements match by name, qualified name, feature chain, or `<ID>`. Look up any element by its ID with `sysml show model.sysml REQ2`.
-
-### Attribute rollups — mass, cost, power, tolerance budgets
-
-Compute any numeric attribute across the part hierarchy. Works for mass budgets, cost rollups, power budgets, tolerance stackups — anything with a numeric attribute:
-
-```sh
-$ sysml rollup compute model.sysml --root Vehicle --attr mass
-Rollup: mass (sum) for Vehicle
-  Vehicle                                   total: 900.0000
-    (own)                                        20.0000
-    engine : Engine       180.0000 => 180.0000 (20.0%)
-    chassis : Chassis     250.0000 => 250.0000 (27.8%)
-    wheels : Wheel [4]     12.5000 =>  50.0000 (5.6%)
-    body : Body           400.0000 => 400.0000 (44.4%)
-
-$ sysml rollup budget model.sysml --root Vehicle --attr mass --limit 1000
-Budget: mass for Vehicle
-  Total:  900.0000
-  Limit:  1000.0000
-  Margin: 100.0000 (10.0%)
-  Status: PASS
-```
-
-Values may carry unit brackets — `attribute mass = 250 [SI::kg];` — and mixed units convert automatically (kg/g, m/mm, h/min, ...) into the root's unit, which is shown in the output.
-
-Aggregation methods: `sum` (default), `rss` (tolerance stackups), `product`, `min`, `max`. Use `--format json` for CI integration.
-
-**Variant configurations** (SysML v2 variations, Ch 35): select variants per variation point and compute the configured system:
-
-```sh
-$ sysml list --variants model.sysml                    # what can vary?
-$ sysml rollup compute model.sysml --root Drone --attr mass \
-      --variant battery=powerBattery                   # configure, then compute
-```
-
-Unselected variation points include all variants; unknown choices error with the list of available variants.
-
-Parametric sweeps and what-if scenarios:
-
-```sh
-$ sysml rollup sweep model.sysml --root Vehicle --attr mass --param engine --from 100 --to 300 --steps 5
-$ sysml rollup what-if model.sysml --root Vehicle --attr mass -s "light:engine=100" -s "heavy:engine=300"
-```
-
-### Interactive REPL — explore models conversationally
-
-`sysml repl` loads your project and lets you navigate, query, and analyze interactively:
+Or interactively: `sysml repl` loads your project with stateful navigation:
 
 ```
 sysml> cd Vehicle                          # Focus on Vehicle
@@ -285,16 +268,6 @@ sysml [Vehicle]> connections               # Connections involving Vehicle
 sysml [Vehicle]> trace                     # Requirements traceability
 sysml> usages in:Engine kind:port          # Combined filter
 sysml> supertypes Sedan                    # Walk inheritance chain
-```
-
-### Analysis cases and trade studies
-
-Execute SysML v2 analysis cases and compare alternatives:
-
-```sh
-sysml analyze list model.sysml
-sysml analyze run model.sysml -n FuelEconomyAnalysis
-sysml analyze trade model.sysml -n EngineTradeOff
 ```
 
 ### Semantic diff — compare models, not text
@@ -322,6 +295,17 @@ steps = [
 sysml pipeline run ci
 ```
 
+### Scripted editing, when you need it
+
+Models are text — your editor is the primary authoring tool. For
+automation, refactoring, and CI, the editing commands operate on the
+model rather than lines: `sysml rename Engine Motor --project` updates
+every reference (imports, satisfies, connections) across files;
+`sysml add`/`remove` insert or delete whole elements (with an
+interactive wizard if you want it); `sysml fmt` formats. All emit
+structured JSON envelopes under `-f json`. See
+[editing commands](docs/commands/editing.md).
+
 ### Global Options
 
 | Flag | Description |
@@ -335,11 +319,6 @@ sysml pipeline run ci
 
 | Command | Description | Docs |
 |---------|-------------|------|
-| **Editing** | | [editing](docs/commands/editing.md) |
-| `add` | Add elements interactively, to a file, or to stdout | |
-| `remove` (`rm`) | Remove an element from a SysML file | |
-| `rename` | Rename an element and update all references (`--project` for cross-file) | |
-| `fmt` | Format SysML v2 source files | |
 | **Analysis** | | [analysis](docs/commands/analysis.md) |
 | `check` | Validate models against 17 structural rules (also: `lint`) | |
 | `list` (`ls`) | List model elements with filters | |
@@ -373,6 +352,11 @@ sysml pipeline run ci
 | `index` | Build or rebuild project index | |
 | `pipeline` | Run named validation pipelines from config | |
 | `repl` | Interactive REPL with stateful navigation, relationship queries, and filtering | |
+| **Editing** | | [editing](docs/commands/editing.md) |
+| `fmt` | Format SysML v2 source files | |
+| `rename` | Rename an element and update all references (`--project` for cross-file) | |
+| `add` | Add elements to a file or stdout (flag-based or interactive) | |
+| `remove` (`rm`) | Remove an element from a SysML file | |
 | `doc` | Generate Markdown documentation from model structure and comments | |
 | `completions` | Generate shell completion scripts | |
 | **Language Server** | | [editor setup](docs/ci-integration.md#language-server-sysml-lsp) |
