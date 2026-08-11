@@ -24,6 +24,11 @@ pub struct Project {
     pub models: Vec<Model>,
     /// Package name -> definitions available from that package.
     package_defs: HashMap<String, Vec<Definition>>,
+    /// Package name -> member usage names from that package. Wildcard imports
+    /// must expose these too: inherited members of an imported definition
+    /// (e.g. a subsetting target like `:> contributions`) are usages, not
+    /// definitions.
+    package_usages: HashMap<String, Vec<String>>,
     /// Package short name (unquoted, e.g. `LIB` from `package <LIB> 'Library
     /// Package'`) -> full package name (unquoted).
     package_aliases: HashMap<String, String>,
@@ -71,6 +76,7 @@ impl Project {
         let mut project = Project {
             models,
             package_defs: HashMap::new(),
+            package_usages: HashMap::new(),
             package_aliases: HashMap::new(),
             qualified_names: HashSet::new(),
         };
@@ -144,6 +150,33 @@ impl Project {
                         .entry(file_stem.to_string())
                         .or_default()
                         .push(def.clone());
+                }
+            }
+
+            // Register member usage names under every package this model
+            // defines (and the file-stem namespace), so wildcard imports
+            // expose inherited members — e.g. subsetting `:> contributions`
+            // where `contributions` lives on an imported analysis def.
+            if !model.usages.is_empty() {
+                let usage_names: Vec<String> =
+                    model.usages.iter().map(|u| u.name.clone()).collect();
+                for def in &model.definitions {
+                    if def.kind == crate::model::DefKind::Package {
+                        self.package_usages
+                            .entry(unquote(&def.name).to_string())
+                            .or_default()
+                            .extend(usage_names.iter().cloned());
+                    }
+                }
+                let file_stem = Path::new(&model.file)
+                    .file_stem()
+                    .and_then(|s| s.to_str())
+                    .unwrap_or("");
+                if !file_stem.is_empty() {
+                    self.package_usages
+                        .entry(file_stem.to_string())
+                        .or_default()
+                        .extend(usage_names);
                 }
             }
         }
@@ -245,6 +278,18 @@ impl Project {
                         }
                     }
                 }
+                // Member usages of the imported package resolve too:
+                // inherited members referenced by subsetting or redefinition
+                // are usages of the imported defs, not defs themselves.
+                for (pkg_name, names) in &self.package_usages {
+                    if pkg_name.starts_with(path.as_str()) || path.starts_with(pkg_name) {
+                        for name in names {
+                            if !resolved.contains(name) {
+                                resolved.push(name.clone());
+                            }
+                        }
+                    }
+                }
             } else {
                 // import Vehicles::Car; — specific name import
                 let parts: Vec<&str> = path.split("::").collect();
@@ -253,6 +298,19 @@ impl Project {
                 }
                 // Also add the full qualified name
                 resolved.push(path.clone());
+                // Members of the imported definition (inherited or owned)
+                // may be referenced by subsetting/redefinition; expose the
+                // containing package's usage names.
+                if parts.len() > 1 {
+                    let pkg = parts[..parts.len() - 1].join("::");
+                    if let Some(names) = self.package_usages.get(&pkg) {
+                        for name in names {
+                            if !resolved.contains(name) {
+                                resolved.push(name.clone());
+                            }
+                        }
+                    }
+                }
             }
         }
 
@@ -415,6 +473,95 @@ mod tests {
         assert!(
             msgs.iter().all(|m| !m.contains("Deep")),
             "nested qualified ref must resolve: {msgs:?}"
+        );
+    }
+
+    #[test]
+    fn imported_member_subset_resolves_wildcard() {
+        // Subsetting an inherited member of an imported def: `contributions`
+        // is a usage inside Lib::Stackup, referenced from another file.
+        let proj = project(&[
+            (
+                "lib.sysml",
+                "package Lib {\n\
+                     attribute def Contribution;\n\
+                     analysis def Stackup {\n\
+                         attribute contributions : Contribution[0..*] ordered;\n\
+                     }\n\
+                 }\n",
+            ),
+            (
+                "use.sysml",
+                "package Use {\n\
+                     private import Lib::*;\n\
+                     part def Asm {\n\
+                         analysis gap : Stackup {\n\
+                             attribute c1 :> contributions;\n\
+                         }\n\
+                     }\n\
+                 }\n",
+            ),
+        ]);
+        let msgs = check_with_project(&proj, "use.sysml");
+        assert!(
+            msgs.iter().all(|m| !m.contains("contributions")),
+            "imported member subset target must resolve: {msgs:?}"
+        );
+    }
+
+    #[test]
+    fn imported_member_subset_resolves_specific() {
+        // Same, but via a specific-name import of the def itself.
+        let proj = project(&[
+            (
+                "lib.sysml",
+                "package Lib {\n\
+                     attribute def Contribution;\n\
+                     analysis def Stackup {\n\
+                         attribute contributions : Contribution[0..*] ordered;\n\
+                     }\n\
+                 }\n",
+            ),
+            (
+                "use.sysml",
+                "package Use {\n\
+                     private import Lib::Stackup;\n\
+                     part def Asm {\n\
+                         analysis gap : Stackup {\n\
+                             attribute c1 :> contributions;\n\
+                         }\n\
+                     }\n\
+                 }\n",
+            ),
+        ]);
+        let msgs = check_with_project(&proj, "use.sysml");
+        assert!(
+            msgs.iter().all(|m| !m.contains("contributions")),
+            "specific import must expose package members: {msgs:?}"
+        );
+    }
+
+    #[test]
+    fn unrelated_member_still_unresolved() {
+        // The fix must not blanket-approve arbitrary names: a name that is
+        // neither a def nor a member of any imported package still warns.
+        let proj = project(&[
+            ("lib.sysml", "package Lib { part def Thing; }\n"),
+            (
+                "use.sysml",
+                "package Use {\n\
+                     private import Lib::*;\n\
+                     part def Asm {\n\
+                         part t : Thing;\n\
+                         attribute c1 :> doesNotExistAnywhere;\n\
+                     }\n\
+                 }\n",
+            ),
+        ]);
+        let msgs = check_with_project(&proj, "use.sysml");
+        assert!(
+            msgs.iter().any(|m| m.contains("doesNotExistAnywhere")),
+            "unknown subset target must still warn: {msgs:?}"
         );
     }
 }

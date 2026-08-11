@@ -58,6 +58,11 @@ impl Check for NamingConventionCheck {
             if is_intentionally_skipped(&u.name) {
                 continue;
             }
+            // Metadata annotations (`@Fmea { ... }`) are recorded as usages
+            // named after the metadata def — PascalCase by definition.
+            if u.kind == "metadata" {
+                continue;
+            }
             // Skip if name is also a known definition (shadowing is fine).
             if model.find_def(&u.name).is_some() {
                 continue;
@@ -154,6 +159,27 @@ mod tests {
         assert!(
             diags.iter().all(|d| !d.message.contains("Engine`")),
             "usage name that matches a def name should be exempt"
+        );
+    }
+
+    #[test]
+    fn metadata_annotation_not_flagged() {
+        // `@Fmea { ... }` usages take the metadata def's PascalCase name by
+        // design; the def typically lives in an imported library file.
+        let source = r#"
+            part def Battery;
+            part battery : Battery {
+                @Fmea {
+                    severity = 9;
+                }
+            }
+        "#;
+        let model = parse_file("test.sysml", source);
+        let diags = NamingConventionCheck.run(&model);
+        assert!(
+            diags.iter().all(|d| !d.message.contains("Fmea")),
+            "metadata annotation usage must not trigger naming lint: {:?}",
+            diags.iter().map(|d| &d.message).collect::<Vec<_>>()
         );
     }
 
