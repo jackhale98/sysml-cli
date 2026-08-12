@@ -62,9 +62,17 @@ are given), they share a root namespace, per SysML v2 name resolution:
 - Fully-qualified references (`LIB::Widget`) resolve without an import.
 - Package short names (`package <LIB> 'Library Package'`) resolve in
   imports and references, quoted or not.
+- Imports expose package *members* as well as definitions: subsetting or
+  redefining an inherited member of an imported def
+  (`attribute x :> contributions` where `contributions` lives on an
+  imported `analysis def`) resolves without a W004.
 - W001 (unused) counts references from sibling files as uses.
-- W002/W003/W014 treat a requirement def as traced when any usage
-  typing it — or that usage's `<ID>` short name — is satisfied/verified.
+- W002/W003/W014 treat a requirement def as traced when a satisfy/verify
+  anywhere in the invocation targets it — directly, through a usage typing
+  it (or that usage's `<ID>` short name), or through a def that
+  specializes it: satisfying `Derived :> Base` satisfies `Base`.
+- W013 (naming) exempts metadata annotations (`@Fmea { ... }`), which take
+  their metadata def's PascalCase name by design.
 
 ## Output Formats
 

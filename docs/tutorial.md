@@ -28,6 +28,13 @@ cp -r /path/to/sysml-cli/libraries .
 sysml init --force    # Re-init to detect libraries/
 ```
 
+These are pure SysML v2 packages — usable from any conformant tool, not
+just this CLI. The engineering-analysis set (`Tolerancing`, `Uncertainty`,
+`RiskAnalysis`, `HazardAnalysis`) covers toleranced dimensions and GD&T,
+tolerance stackups, FMEA, and RAAML-aligned hazard analysis; see
+`libraries/README.md` for provenance and the design docs in the
+sysml-domain-libraries project.
+
 Explore built-in help:
 
 ```sh

@@ -1,5 +1,25 @@
 # Changelog
 
+## Unreleased
+
+### Name resolution & checks
+- Imports expose package members, not just definitions: subsetting or
+  redefining an inherited member of an imported def
+  (`attribute x :> contributions`) no longer raises a false W004
+- Requirement coverage (W002/W003/W014) is project-wide and closed over
+  specialization: a requirement def satisfied/verified in a sibling file —
+  including through a usage of a specializing def (`Derived :> Base`) —
+  counts as traced
+- W013 (naming) no longer flags metadata annotations (`@Fmea { ... }`),
+  whose usages take the metadata def's PascalCase name by design
+
+### Domain libraries
+- `libraries/` now ships the engineering-analysis packages from the
+  sysml-domain-libraries project — `Uncertainty`, `Tolerancing`,
+  `RiskAnalysis`, and `HazardAnalysis` (RAAML-Core-aligned hazard chains
+  driving FMEA severity) — replacing the earlier `sysml-tolerance` and
+  `sysml-risk` sketches
+
 ## 0.6.0 — 2026-08-05
 
 The book-review release: every finding from the systematic review
