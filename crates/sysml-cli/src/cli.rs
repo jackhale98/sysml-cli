@@ -82,6 +82,10 @@ pub(crate) enum Command {
         #[arg(short, long)]
         name: Option<String>,
 
+        /// Filter by documentation text (substring match in doc comments).
+        #[arg(long)]
+        doc: Option<String>,
+
         /// Filter by parent definition.
         #[arg(short, long)]
         parent: Option<String>,
@@ -156,19 +160,6 @@ pub(crate) enum Command {
         /// Minimum coverage percentage required (used with --check).
         #[arg(long, default_value = "0")]
         min_coverage: f64,
-    },
-    /// Analyze port interfaces and connections.
-    ///
-    /// Lists ports across definitions and identifies unconnected ports.
-    /// In SysML v2, ports define the interaction points of parts.
-    Interfaces {
-        /// SysML v2 files to analyze.
-        #[arg(required = true)]
-        files: Vec<PathBuf>,
-
-        /// Show only unconnected ports (gaps in the interface).
-        #[arg(long)]
-        unconnected: bool,
     },
     /// Generate a diagram from a SysML v2 model.
     ///
@@ -450,14 +441,6 @@ pub(crate) enum Command {
         /// Shell: bash, zsh, fish, elvish, powershell.
         #[arg(required = true)]
         shell: String,
-    },
-    /// Show model statistics and metrics.
-    ///
-    /// Displays aggregate metrics: element counts by kind, documentation
-    /// coverage, nesting depth, relationship counts, and more.
-    Stats {
-        /// SysML v2 files to analyze (omit to scan project).
-        files: Vec<PathBuf>,
     },
     /// Analyze dependencies and impact of a model element.
     ///

@@ -24,6 +24,7 @@ fn main() -> ExitCode {
             files,
             kind,
             name,
+            doc,
             parent,
             unused,
             abstract_only,
@@ -38,6 +39,7 @@ fn main() -> ExitCode {
             files,
             kind.as_deref(),
             name.as_deref(),
+            doc.as_deref(),
             parent.as_deref(),
             *unused,
             *abstract_only,
@@ -54,9 +56,6 @@ fn main() -> ExitCode {
             check,
             min_coverage,
         } => commands::trace::run(&cli, files, *check, *min_coverage),
-        Command::Interfaces { files, unconnected } => {
-            commands::interfaces::run(&cli, files, *unconnected)
-        }
         Command::Diagram {
             file,
             diagram_type,
@@ -141,7 +140,6 @@ fn main() -> ExitCode {
             generate_completions(shell);
             ExitCode::SUCCESS
         }
-        Command::Stats { files } => commands::stats::run(&cli, files),
         Command::Deps {
             files,
             target,

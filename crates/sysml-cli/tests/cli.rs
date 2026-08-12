@@ -473,26 +473,45 @@ fn export_list() {
 }
 
 // ========================================================================
-// stats
+// view replaces stats / interfaces
 // ========================================================================
 
 #[test]
-fn stats_basic() {
+fn view_model_stats() {
     cmd()
-        .args(["stats", &fixture("simple-vehicle.sysml")])
+        .args([
+            "view",
+            "ModelStats",
+            &fixture("simple-vehicle.sysml"),
+            "../../libraries/StandardViews.sysml",
+            "../../libraries/Reporting.sysml",
+        ])
         .assert()
         .success()
-        .stdout(predicate::str::contains("Definitions:"))
-        .stdout(predicate::str::contains("Usages:"));
+        .stdout(predicate::str::contains("part def"));
 }
 
 #[test]
-fn stats_json() {
+fn view_port_table() {
     cmd()
-        .args(["stats", "-f", "json", &fixture("simple-vehicle.sysml")])
+        .args([
+            "view",
+            "PortTable",
+            &fixture("ConnectionTest.sysml"),
+            "../../libraries/StandardViews.sysml",
+            "../../libraries/Reporting.sysml",
+        ])
         .assert()
-        .success()
-        .stdout(predicate::str::contains("\"total_definitions\""));
+        .success();
+}
+
+#[test]
+fn list_doc_filter() {
+    // find's doc-substring search lives on list now.
+    cmd()
+        .args(["list", "--doc", "vehicle", &fixture("simple-vehicle.sysml")])
+        .assert()
+        .success();
 }
 
 // ========================================================================
@@ -1335,18 +1354,6 @@ fn check_severity_error() {
             "error",
             &fixture("simple-vehicle.sysml"),
         ])
-        .assert()
-        .success();
-}
-
-// ========================================================================
-// interfaces command
-// ========================================================================
-
-#[test]
-fn interfaces_basic() {
-    cmd()
-        .args(["interfaces", &fixture("simple-vehicle.sysml")])
         .assert()
         .success();
 }

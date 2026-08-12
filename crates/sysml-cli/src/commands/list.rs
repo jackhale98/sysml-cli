@@ -11,6 +11,7 @@ pub(crate) fn run(
     files: &[PathBuf],
     kind: Option<&str>,
     name: Option<&str>,
+    doc: Option<&str>,
     parent: Option<&str>,
     unused: bool,
     abstract_only: bool,
@@ -60,6 +61,7 @@ pub(crate) fn run(
     let mut filter = ListFilter {
         kind: kind_filter,
         name_pattern: name.map(|s| s.to_string()),
+        doc_pattern: doc.map(|s| s.to_string()),
         parent: parent.map(|s| s.to_string()),
         unused_only: unused,
         abstract_only,

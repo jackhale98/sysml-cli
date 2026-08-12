@@ -97,6 +97,8 @@ pub struct ListFilter {
     pub kind: Option<KindFilter>,
     /// Filter by name pattern (substring match).
     pub name_pattern: Option<String>,
+    /// Filter by documentation text (substring match in doc comments).
+    pub doc_pattern: Option<String>,
     /// Filter by parent definition name.
     pub parent: Option<String>,
     /// Only show unused definitions.
@@ -178,6 +180,11 @@ pub fn list_elements<'a>(model: &'a Model, filter: &ListFilter) -> Vec<Element<'
                     continue;
                 }
             }
+            if let Some(pat) = &filter.doc_pattern {
+                if !def.doc.as_deref().unwrap_or("").contains(pat.as_str()) {
+                    continue;
+                }
+            }
             if let Some(parent) = &filter.parent {
                 if def.parent_def.as_deref() != Some(parent.as_str()) {
                     continue;
@@ -221,6 +228,11 @@ pub fn list_elements<'a>(model: &'a Model, filter: &ListFilter) -> Vec<Element<'
             }
             if let Some(pat) = &filter.name_pattern {
                 if !usage.name.contains(pat.as_str()) {
+                    continue;
+                }
+            }
+            if let Some(pat) = &filter.doc_pattern {
+                if !usage.doc.as_deref().unwrap_or("").contains(pat.as_str()) {
                     continue;
                 }
             }

@@ -44,7 +44,7 @@ constraint (pre-release). Items are checked off as they land.
 - [x] `pipeline` (task runner with broken quoting; use make/just/CI)
 - [x] `export interfaces` (debug view of modelica/ssp input)
 - [x] `rollup query` (≡ `list -k attributes -n <attr>`)
-- [x] `find` (strict subset of `list`; doc-substring filter on `list` still pending — Phase C)
+- [x] `find` (strict subset of `list`; `list --doc` covers doc-substring search)
 
 ## C. Views replace report commands
 
@@ -55,8 +55,8 @@ constraint (pre-release). Items are checked off as they land.
       HazardLog, StackupSummary, FitTable)
 - [x] `StandardViews.sysml`: PortTable, AllocationMatrix,
       RequirementsTraceMatrix, ModelStats
-- [ ] `interfaces` deleted (→ view PortTable)
-- [ ] `stats` deleted (→ view ModelStats)
+- [x] `interfaces` deleted (→ view PortTable)
+- [x] `stats` deleted (→ view ModelStats)
 - [ ] `trace` / `coverage` / `allocation` render through the view engine;
       `--check` gates retained on the commands until model-declared
       constraints are evaluated by `check` (then the gates move into
@@ -69,8 +69,9 @@ constraint (pre-release). Items are checked off as they land.
 - [x] Uncertainty analyzer on one extraction path (landed)
 - [ ] `simulate eval` and `analyze run` share the solve path (two
       evaluators with different capabilities today)
-- [ ] REPL dispatches into the real command implementations (771-line
-      parallel CLI with divergent filter semantics)
+- [ ] REPL dispatches into the real command implementations — deferred;
+      its kind-filter now uses the same parse_kind_filter vocabulary as
+      `list` (the concrete divergence), and its loader merges all fields
 
 ## E. Docs truth
 

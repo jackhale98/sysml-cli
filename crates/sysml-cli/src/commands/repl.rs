@@ -88,19 +88,9 @@ fn load_model(files: &[PathBuf]) -> Model {
     let mut merged = Model::new("repl".to_string());
     for file_path in files {
         let path_str = file_path.to_string_lossy().to_string();
-        if let Ok(source) = std::fs::read_to_string(file_path) {
-            let m = sysml_parser::parse_file(&path_str, &source);
-            merged.definitions.extend(m.definitions);
-            merged.usages.extend(m.usages);
-            merged.connections.extend(m.connections);
-            merged.flows.extend(m.flows);
-            merged.satisfactions.extend(m.satisfactions);
-            merged.verifications.extend(m.verifications);
-            merged.allocations.extend(m.allocations);
-            merged.type_references.extend(m.type_references);
-            merged.imports.extend(m.imports);
-            merged.comments.extend(m.comments);
-            merged.views.extend(m.views);
+        match std::fs::read_to_string(file_path) {
+            Ok(source) => merged.merge(sysml_parser::parse_file(&path_str, &source)),
+            Err(e) => eprintln!("warning: cannot read `{}`: {}", path_str, e),
         }
     }
     merged
@@ -609,10 +599,14 @@ fn cmd_show(model: &Model, name: &str) {
 }
 
 fn cmd_list(model: &Model, args: &str, focus: &Option<String>) {
+    // Same kind vocabulary as `sysml list` — the REPL used to substring-
+    // match labels, so `repl list part` and `sysml list -k part` disagreed.
+    use sysml_core::query::{parse_kind_filter, KindFilter};
     let kind_filter = if args.is_empty() {
         None
     } else {
-        Some(args.to_lowercase())
+        parse_kind_filter(&args.to_lowercase())
+            .or_else(|| Some(KindFilter::UsageKind(args.to_lowercase())))
     };
     let mut count = 0;
 
@@ -622,10 +616,14 @@ fn cmd_list(model: &Model, args: &str, focus: &Option<String>) {
                 continue;
             }
         }
-        if let Some(ref k) = kind_filter {
-            if !def.kind.label().contains(k.as_str()) {
-                continue;
+        match &kind_filter {
+            Some(KindFilter::DefKind(k)) | Some(KindFilter::Both(k, _)) => {
+                if def.kind != *k {
+                    continue;
+                }
             }
+            Some(KindFilter::UsageKind(_)) | Some(KindFilter::Usages) => continue,
+            Some(KindFilter::Definitions) | Some(KindFilter::All) | None => {}
         }
         println!(
             "  {:14} {}{}",
@@ -644,10 +642,14 @@ fn cmd_list(model: &Model, args: &str, focus: &Option<String>) {
                 continue;
             }
         }
-        if let Some(ref k) = kind_filter {
-            if !usage.kind.contains(k.as_str()) {
-                continue;
+        match &kind_filter {
+            Some(KindFilter::UsageKind(k)) | Some(KindFilter::Both(_, k)) => {
+                if usage.kind != *k {
+                    continue;
+                }
             }
+            Some(KindFilter::DefKind(_)) | Some(KindFilter::Definitions) => continue,
+            Some(KindFilter::Usages) | Some(KindFilter::All) | None => {}
         }
         println!(
             "  {:14} {}{} (in {})",
