@@ -16,40 +16,31 @@ fn fixture(name: &str) -> String {
 }
 
 // ========================================================================
-// lint
+// check
 // ========================================================================
 
 #[test]
-fn lint_valid_file() {
+fn check_missing_file() {
     cmd()
-        .args(["lint", &fixture("simple-vehicle.sysml")])
-        .assert()
-        .success()
-        .stderr(predicate::str::contains("Found"));
-}
-
-#[test]
-fn lint_missing_file() {
-    cmd()
-        .args(["lint", "nonexistent.sysml"])
+        .args(["check", "nonexistent.sysml"])
         .assert()
         .failure()
         .stderr(predicate::str::contains("cannot read"));
 }
 
 #[test]
-fn lint_json_format() {
+fn check_json_format() {
     cmd()
-        .args(["lint", "-f", "json", &fixture("simple-vehicle.sysml")])
+        .args(["check", "-f", "json", &fixture("simple-vehicle.sysml")])
         .assert()
         .success()
         .stdout(predicate::str::contains("\"code\""));
 }
 
 #[test]
-fn lint_disable_check() {
+fn check_disable_check() {
     cmd()
-        .args(["lint", "-d", "unused", &fixture("simple-vehicle.sysml")])
+        .args(["check", "-d", "unused", &fixture("simple-vehicle.sysml")])
         .assert()
         .success();
 }
@@ -178,7 +169,7 @@ fn diagram_bdd_plantuml() {
             "diagram",
             "-t",
             "bdd",
-            "-o",
+            "-r",
             "plantuml",
             &fixture("simple-vehicle.sysml"),
         ])
@@ -194,7 +185,7 @@ fn diagram_bdd_dot() {
             "diagram",
             "-t",
             "bdd",
-            "-o",
+            "-r",
             "dot",
             &fixture("simple-vehicle.sysml"),
         ])
@@ -210,7 +201,7 @@ fn diagram_bdd_d2() {
             "diagram",
             "-t",
             "bdd",
-            "-o",
+            "-r",
             "d2",
             &fixture("simple-vehicle.sysml"),
         ])
@@ -259,9 +250,26 @@ fn simulate_list() {
 #[test]
 fn simulate_eval() {
     cmd()
+        .args([
+            "simulate",
+            "eval",
+            &fixture("simulation.sysml"),
+            "-b",
+            "speed=50,temp=25,mass=1000,velocity=10,friction=0.7",
+        ])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("satisfied"));
+}
+
+#[test]
+fn simulate_eval_unbound_fails() {
+    // Unbound variables make expressions error; eval must exit non-zero.
+    cmd()
         .args(["simulate", "eval", &fixture("simulation.sysml")])
         .assert()
-        .success();
+        .failure()
+        .stdout(predicate::str::contains("error"));
 }
 
 #[test]
@@ -618,124 +626,20 @@ fn completions_zsh() {
 }
 
 // ========================================================================
-// lint suggestions ("did you mean")
+// check suggestions ("did you mean")
 // ========================================================================
 
 #[test]
-fn lint_suggests_closest_match() {
+fn check_suggests_closest_match() {
     let dir = tempfile::tempdir().unwrap();
     let file = dir.path().join("typo.sysml");
     fs::write(&file, "part def Vehicle;\npart car : Vehicel;\n").unwrap();
 
     cmd()
-        .args(["lint", file.to_str().unwrap()])
+        .args(["check", file.to_str().unwrap()])
         .assert()
         .success()
         .stdout(predicate::str::contains("did you mean `Vehicle`?"));
-}
-
-// ========================================================================
-// pipeline
-// ========================================================================
-
-#[test]
-fn pipeline_list_no_project() {
-    // Running without .sysml/config.toml should fail
-    cmd()
-        .args(["pipeline", "list"])
-        .current_dir(std::env::temp_dir())
-        .assert()
-        .failure()
-        .stderr(predicate::str::contains("config.toml"));
-}
-
-#[test]
-fn pipeline_run_no_project() {
-    cmd()
-        .args(["pipeline", "run", "ci"])
-        .current_dir(std::env::temp_dir())
-        .assert()
-        .failure()
-        .stderr(predicate::str::contains("config.toml"));
-}
-
-#[test]
-fn pipeline_list_with_config() {
-    let tmp = std::env::temp_dir().join("sysml_pipeline_test_list");
-    let _ = std::fs::remove_dir_all(&tmp);
-    std::fs::create_dir_all(tmp.join(".sysml")).unwrap();
-    std::fs::write(
-        tmp.join(".sysml/config.toml"),
-        r#"
-[project]
-name = "PipeTest"
-
-[[pipeline]]
-name = "ci"
-steps = ["lint *.sysml", "fmt --check *.sysml"]
-"#,
-    )
-    .unwrap();
-
-    cmd()
-        .args(["pipeline", "list"])
-        .current_dir(&tmp)
-        .assert()
-        .success()
-        .stdout(predicate::str::contains("ci"))
-        .stdout(predicate::str::contains("2 steps"));
-
-    let _ = std::fs::remove_dir_all(&tmp);
-}
-
-#[test]
-fn pipeline_run_dry_run() {
-    let tmp = std::env::temp_dir().join("sysml_pipeline_test_dry");
-    let _ = std::fs::remove_dir_all(&tmp);
-    std::fs::create_dir_all(tmp.join(".sysml")).unwrap();
-    std::fs::write(
-        tmp.join(".sysml/config.toml"),
-        r#"
-[project]
-name = "DryTest"
-
-[[pipeline]]
-name = "check"
-steps = ["lint model.sysml"]
-"#,
-    )
-    .unwrap();
-
-    cmd()
-        .args(["pipeline", "run", "check", "--dry-run"])
-        .current_dir(&tmp)
-        .assert()
-        .success()
-        .stdout(predicate::str::contains("Pipeline: check"))
-        .stdout(predicate::str::contains("dry run"));
-
-    let _ = std::fs::remove_dir_all(&tmp);
-}
-
-#[test]
-fn pipeline_run_unknown_name() {
-    let tmp = std::env::temp_dir().join("sysml_pipeline_test_unknown");
-    let _ = std::fs::remove_dir_all(&tmp);
-    std::fs::create_dir_all(tmp.join(".sysml")).unwrap();
-    std::fs::write(
-        tmp.join(".sysml/config.toml"),
-        "[project]\nname = \"Test\"\n",
-    )
-    .unwrap();
-
-    cmd()
-        .args(["pipeline", "run", "nonexistent"])
-        .current_dir(&tmp)
-        .assert()
-        .failure()
-        .stderr(predicate::str::contains("no pipeline named"));
-
-    let _ = std::fs::remove_dir_all(&tmp);
 }
 
 #[test]
@@ -745,37 +649,11 @@ fn stdlib_path_flag_accepted() {
         .args([
             "--stdlib-path",
             "/nonexistent/stdlib",
-            "lint",
+            "check",
             &fixture("simple-vehicle.sysml"),
         ])
         .assert()
         .success();
-}
-
-#[test]
-fn pipeline_create_adds_to_config() {
-    let tmp = std::env::temp_dir().join("sysml_pipeline_test_create");
-    let _ = std::fs::remove_dir_all(&tmp);
-    std::fs::create_dir_all(tmp.join(".sysml")).unwrap();
-    std::fs::write(
-        tmp.join(".sysml/config.toml"),
-        "[project]\nname = \"CreateTest\"\n",
-    )
-    .unwrap();
-
-    cmd()
-        .args(["pipeline", "create", "deploy"])
-        .current_dir(&tmp)
-        .assert()
-        .success()
-        .stdout(predicate::str::contains("Created pipeline"));
-
-    // Verify the config was updated
-    let config_content = std::fs::read_to_string(tmp.join(".sysml/config.toml")).unwrap();
-    assert!(config_content.contains("[[pipeline]]"));
-    assert!(config_content.contains("deploy"));
-
-    let _ = std::fs::remove_dir_all(&tmp);
 }
 
 // ========================================================================
@@ -908,23 +786,6 @@ fn rollup_sensitivity() {
         .success()
         .stdout(predicate::str::contains("body"))
         .stdout(predicate::str::contains("44.4%"));
-}
-
-#[test]
-fn rollup_query() {
-    cmd()
-        .args([
-            "rollup",
-            "query",
-            &fixture("rollup-vehicle.sysml"),
-            "--attr",
-            "mass",
-        ])
-        .assert()
-        .success()
-        .stdout(predicate::str::contains("Engine"))
-        .stdout(predicate::str::contains("Wheel"))
-        .stdout(predicate::str::contains("Vehicle"));
 }
 
 #[test]
@@ -1161,84 +1022,6 @@ fn analyze_uncertainty_unknown_method() {
 }
 
 // ========================================================================
-// find
-// ========================================================================
-
-#[test]
-fn find_by_name() {
-    cmd()
-        .args([
-            "find",
-            &fixture("rollup-vehicle.sysml"),
-            "--pattern",
-            "Engine",
-        ])
-        .assert()
-        .success()
-        .stdout(predicate::str::contains("Engine"));
-}
-
-#[test]
-fn find_by_attribute() {
-    cmd()
-        .args([
-            "find",
-            &fixture("rollup-vehicle.sysml"),
-            "--pattern",
-            "mass",
-        ])
-        .assert()
-        .success()
-        .stdout(predicate::str::contains("5 match"));
-}
-
-#[test]
-fn find_defs_only() {
-    cmd()
-        .args([
-            "find",
-            &fixture("rollup-vehicle.sysml"),
-            "--pattern",
-            "Engine",
-            "--kind",
-            "defs",
-        ])
-        .assert()
-        .success()
-        .stdout(predicate::str::contains("1 match"));
-}
-
-#[test]
-fn find_no_matches() {
-    cmd()
-        .args([
-            "find",
-            &fixture("rollup-vehicle.sysml"),
-            "--pattern",
-            "nonexistent",
-        ])
-        .assert()
-        .success()
-        .stderr(predicate::str::contains("No matches"));
-}
-
-#[test]
-fn find_json() {
-    cmd()
-        .args([
-            "-f",
-            "json",
-            "find",
-            &fixture("rollup-vehicle.sysml"),
-            "--pattern",
-            "Vehicle",
-        ])
-        .assert()
-        .success()
-        .stdout(predicate::str::contains("\"name\": \"Vehicle\""));
-}
-
-// ========================================================================
 // rollup sweep and what-if
 // ========================================================================
 
@@ -1306,9 +1089,9 @@ fn rollup_what_if() {
             "Vehicle",
             "--attr",
             "mass",
-            "-s",
+            "--scenario",
             "light:engine=100",
-            "-s",
+            "--scenario",
             "heavy:engine=300",
         ])
         .assert()
@@ -1331,7 +1114,7 @@ fn rollup_what_if_json() {
             "Vehicle",
             "--attr",
             "mass",
-            "-s",
+            "--scenario",
             "test:engine=150",
         ])
         .assert()

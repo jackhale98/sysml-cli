@@ -21,7 +21,7 @@ pub(crate) fn run(
     visibility: Option<&str>,
     view: Option<&str>,
 ) -> ExitCode {
-    let (files, _) = crate::files_or_project(files);
+    let (files, _) = crate::files_or_project(files, cli.quiet);
     if files.is_empty() {
         eprintln!("error: no SysML files found.");
         return ExitCode::FAILURE;

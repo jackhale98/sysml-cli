@@ -126,7 +126,8 @@ fn run_project_wide(
     dry_run: bool,
 ) -> ExitCode {
     // Discover all project files
-    let (files, _) = crate::files_or_project(std::slice::from_ref(&start_file.to_path_buf()));
+    let (files, _) =
+        crate::files_or_project(std::slice::from_ref(&start_file.to_path_buf()), cli.quiet);
     if files.is_empty() {
         eprintln!("error: no SysML files found in project.");
         return ExitCode::FAILURE;

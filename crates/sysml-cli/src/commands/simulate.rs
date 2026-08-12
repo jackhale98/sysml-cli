@@ -76,10 +76,14 @@ fn run_sim_eval(cli: &Cli, file: &PathBuf, bindings: &[String], name: Option<&st
 
     let is_json = cli.format == "json";
     let mut results = Vec::new();
+    let mut failed = false;
 
     for c in &target_constraints {
         if let Some(ref expr) = c.expression {
             let result = eval::evaluate_constraint(expr, &env);
+            if !matches!(result, Ok(true)) {
+                failed = true;
+            }
             if is_json {
                 results.push(serde_json::json!({
                     "kind": "constraint",
@@ -105,6 +109,9 @@ fn run_sim_eval(cli: &Cli, file: &PathBuf, bindings: &[String], name: Option<&st
     for c in &target_calcs {
         if let Some(ref expr) = c.return_expr {
             let result = eval::evaluate(expr, &env);
+            if result.is_err() {
+                failed = true;
+            }
             if is_json {
                 results.push(serde_json::json!({
                     "kind": "calculation",
@@ -127,7 +134,11 @@ fn run_sim_eval(cli: &Cli, file: &PathBuf, bindings: &[String], name: Option<&st
         println!("{}", serde_json::to_string_pretty(&results).unwrap());
     }
 
-    ExitCode::SUCCESS
+    if failed {
+        ExitCode::FAILURE
+    } else {
+        ExitCode::SUCCESS
+    }
 }
 
 fn run_sim_state_machine(
@@ -193,7 +204,10 @@ fn run_sim_state_machine(
 
     // If no events provided and the machine has signal triggers, prompt interactively
     let effective_events = if events.is_empty() && !available_signals.is_empty() {
-        prompt_events(&available_signals)
+        match prompt_events(&available_signals) {
+            Some(ev) => ev,
+            None => return ExitCode::FAILURE,
+        }
     } else {
         events.to_vec()
     };

@@ -1,32 +1,14 @@
 use std::path::PathBuf;
 use std::process::ExitCode;
 
-use sysml_core::parser as sysml_parser;
-
-use crate::{read_source, Cli};
+use crate::Cli;
 
 pub(crate) fn run(cli: &Cli, files: &[PathBuf], check: bool, min_coverage: f64) -> ExitCode {
-    let (files, _) = crate::files_or_project(files);
-    if files.is_empty() {
-        eprintln!("error: no SysML files found.");
-        return ExitCode::FAILURE;
-    }
-
     use sysml_core::query;
 
-    // Parse all files into a merged model
-    let mut merged = sysml_core::model::Model::new("(merged)".to_string());
-    for file_path in &files {
-        let (path_str, source) = match read_source(file_path) {
-            Ok(v) => v,
-            Err(code) => return code,
-        };
-        let model = sysml_parser::parse_file(&path_str, &source);
-        merged.definitions.extend(model.definitions);
-        merged.usages.extend(model.usages);
-        merged.satisfactions.extend(model.satisfactions);
-        merged.verifications.extend(model.verifications);
-    }
+    let Some(merged) = crate::load_model(cli, files) else {
+        return ExitCode::FAILURE;
+    };
 
     let rows = query::trace_requirements(&merged);
     let coverage = query::trace_coverage(&rows);

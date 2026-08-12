@@ -333,7 +333,10 @@ pub fn step(
         // Check guard
         let guard_result = match &transition.guard {
             None => true,
-            Some(expr) => eval::evaluate_constraint(expr, &state.env).unwrap_or(false),
+            Some(expr) => eval::evaluate_constraint(expr, &state.env).unwrap_or_else(|e| {
+                eprintln!("warning: guard failed to evaluate ({}); treating as false", e.message);
+                false
+            }),
         };
 
         if !guard_result {

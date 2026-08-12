@@ -4,7 +4,6 @@ use std::path::PathBuf;
 use std::process::ExitCode;
 
 use sysml_core::model::Model;
-use sysml_core::parser as sysml_parser;
 use sysml_core::sim::rollup::{
     evaluate_rollup, format_rollup_text, AggregationMethod, RollupResult,
 };
@@ -28,7 +27,12 @@ pub fn run(cli: &Cli, kind: &RollupCommand) -> ExitCode {
             limit,
             method,
         } => run_budget(cli, files, root, attr, *limit, method),
-        RollupCommand::Sensitivity { files, root, attr } => run_sensitivity(cli, files, root, attr),
+        RollupCommand::Sensitivity {
+            files,
+            root,
+            attr,
+            method,
+        } => run_sensitivity(cli, files, root, attr, method),
         RollupCommand::Sweep {
             files,
             root,
@@ -37,43 +41,20 @@ pub fn run(cli: &Cli, kind: &RollupCommand) -> ExitCode {
             from,
             to,
             steps,
-        } => run_sweep(cli, files, root, attr, param, *from, *to, *steps),
+            method,
+        } => run_sweep(cli, files, root, attr, param, *from, *to, *steps, method),
         RollupCommand::WhatIf {
             files,
             root,
             attr,
             scenarios,
-        } => run_what_if(cli, files, root, attr, scenarios),
-        RollupCommand::Query { files, attr } => run_query(cli, files, attr),
+            method,
+        } => run_what_if(cli, files, root, attr, scenarios, method),
     }
 }
 
-fn parse_and_merge(files: &[PathBuf]) -> Option<Model> {
-    let mut merged = Model::new("merged".to_string());
-    for file_path in files {
-        let path_str = file_path.to_string_lossy().to_string();
-        let source = match std::fs::read_to_string(file_path) {
-            Ok(s) => s,
-            Err(e) => {
-                eprintln!("error: cannot read `{}`: {}", path_str, e);
-                return None;
-            }
-        };
-        let model = sysml_parser::parse_file(&path_str, &source);
-        // Merge into combined model
-        merged.definitions.extend(model.definitions);
-        merged.usages.extend(model.usages);
-        merged.connections.extend(model.connections);
-        merged.flows.extend(model.flows);
-        merged.satisfactions.extend(model.satisfactions);
-        merged.verifications.extend(model.verifications);
-        merged.allocations.extend(model.allocations);
-        merged.type_references.extend(model.type_references);
-        merged.imports.extend(model.imports);
-        merged.comments.extend(model.comments);
-        merged.views.extend(model.views);
-    }
-    Some(merged)
+fn parse_and_merge(cli: &Cli, files: &[PathBuf]) -> Option<Model> {
+    crate::load_model(cli, files)
 }
 
 fn run_compute(
@@ -84,7 +65,7 @@ fn run_compute(
     method: &str,
     variant: &[String],
 ) -> ExitCode {
-    let Some(model) = parse_and_merge(files) else {
+    let Some(model) = parse_and_merge(cli, files) else {
         return ExitCode::FAILURE;
     };
     let Some(agg) = AggregationMethod::from_str(method) else {
@@ -134,13 +115,26 @@ fn run_compute(
     let result = sysml_core::sim::rollup::evaluate_rollup_with_variants(
         &model, root, attr, agg, &selections,
     );
+    print_conversion_warnings(&result);
 
     match cli.format.as_str() {
         "json" => println!("{}", format_rollup_json(&result)),
         _ => print!("{}", format_rollup_text(&result)),
     }
 
-    ExitCode::SUCCESS
+    if result.conversion_warnings.is_empty() {
+        ExitCode::SUCCESS
+    } else {
+        ExitCode::FAILURE
+    }
+}
+
+/// Unit conversions that silently failed make the total wrong — say so
+/// loudly and fail the command.
+fn print_conversion_warnings(result: &RollupResult) {
+    for w in &result.conversion_warnings {
+        eprintln!("error: {w}");
+    }
 }
 
 fn run_budget(
@@ -151,7 +145,7 @@ fn run_budget(
     limit: f64,
     method: &str,
 ) -> ExitCode {
-    let Some(model) = parse_and_merge(files) else {
+    let Some(model) = parse_and_merge(cli, files) else {
         return ExitCode::FAILURE;
     };
     let Some(agg) = AggregationMethod::from_str(method) else {
@@ -164,6 +158,7 @@ fn run_budget(
     }
 
     let result = evaluate_rollup(&model, root, attr, agg);
+    print_conversion_warnings(&result);
     let margin = limit - result.total;
     let margin_pct = if limit > 0.0 {
         (margin / limit) * 100.0
@@ -215,8 +210,15 @@ fn run_budget(
     }
 }
 
-fn run_sensitivity(cli: &Cli, files: &[PathBuf], root: &str, attr: &str) -> ExitCode {
-    let Some(model) = parse_and_merge(files) else {
+fn run_sensitivity(cli: &Cli, files: &[PathBuf], root: &str, attr: &str, method: &str) -> ExitCode {
+    let Some(model) = parse_and_merge(cli, files) else {
+        return ExitCode::FAILURE;
+    };
+    let Some(agg) = AggregationMethod::from_str(method) else {
+        eprintln!(
+            "error: unknown aggregation method `{}`. Use: sum, rss, product, min, max",
+            method
+        );
         return ExitCode::FAILURE;
     };
     if model.find_def(root).is_none() {
@@ -224,7 +226,8 @@ fn run_sensitivity(cli: &Cli, files: &[PathBuf], root: &str, attr: &str) -> Exit
         return ExitCode::FAILURE;
     }
 
-    let result = evaluate_rollup(&model, root, attr, AggregationMethod::Sum);
+    let result = evaluate_rollup(&model, root, attr, agg);
+    print_conversion_warnings(&result);
 
     // Flatten and sort contributions by subtotal descending
     let mut flat = Vec::new();
@@ -283,59 +286,6 @@ fn flatten_contributions(
     }
 }
 
-fn run_query(cli: &Cli, files: &[PathBuf], attr: &str) -> ExitCode {
-    let Some(model) = parse_and_merge(files) else {
-        return ExitCode::FAILURE;
-    };
-
-    // Find all usages with this attribute name
-    let mut results: Vec<(String, String, Option<String>)> = Vec::new();
-    for usage in &model.usages {
-        if usage.name == attr && matches!(usage.kind.as_str(), "attribute" | "feature") {
-            results.push((
-                usage.parent_def.clone().unwrap_or_default(),
-                usage.type_ref.clone().unwrap_or_default(),
-                usage.value_expr.clone(),
-            ));
-        }
-    }
-
-    if results.is_empty() {
-        eprintln!("No attributes named `{}` found.", attr);
-        return ExitCode::SUCCESS;
-    }
-
-    match cli.format.as_str() {
-        "json" => {
-            let items: Vec<_> = results
-                .iter()
-                .map(|(parent, type_ref, value)| {
-                    serde_json::json!({
-                        "parent": parent,
-                        "type": type_ref,
-                        "value": value,
-                    })
-                })
-                .collect();
-            println!("{}", serde_json::to_string_pretty(&items).unwrap());
-        }
-        _ => {
-            println!("{:30} {:>15} {:>12}", "Definition", "Type", "Value");
-            println!("{}", "-".repeat(59));
-            for (parent, type_ref, value) in &results {
-                println!(
-                    "{:30} {:>15} {:>12}",
-                    parent,
-                    type_ref,
-                    value.as_deref().unwrap_or("-")
-                );
-            }
-        }
-    }
-
-    ExitCode::SUCCESS
-}
-
 fn format_rollup_json(result: &RollupResult) -> String {
     let json = serde_json::json!({
         "root": result.root,
@@ -372,14 +322,23 @@ fn run_sweep(
     from: f64,
     to: f64,
     steps: usize,
+    method: &str,
 ) -> ExitCode {
-    let Some(model) = parse_and_merge(files) else {
+    let Some(model) = parse_and_merge(cli, files) else {
         return ExitCode::FAILURE;
     };
     if model.find_def(root).is_none() {
         eprintln!("error: definition `{}` not found", root);
         return ExitCode::FAILURE;
     }
+
+    let Some(agg) = AggregationMethod::from_str(method) else {
+        eprintln!(
+            "error: unknown aggregation method `{}`. Use: sum, rss, product, min, max",
+            method
+        );
+        return ExitCode::FAILURE;
+    };
 
     use sysml_core::sim::what_if::{evaluate_sweep, SweepConfig};
     let config = SweepConfig {
@@ -388,7 +347,7 @@ fn run_sweep(
         end: to,
         steps,
     };
-    let result = evaluate_sweep(&model, root, attr, AggregationMethod::Sum, &config);
+    let result = evaluate_sweep(&model, root, attr, agg, &config);
 
     match cli.format.as_str() {
         "json" => {
@@ -427,14 +386,23 @@ fn run_what_if(
     root: &str,
     attr: &str,
     scenario_strs: &[String],
+    method: &str,
 ) -> ExitCode {
-    let Some(model) = parse_and_merge(files) else {
+    let Some(model) = parse_and_merge(cli, files) else {
         return ExitCode::FAILURE;
     };
     if model.find_def(root).is_none() {
         eprintln!("error: definition `{}` not found", root);
         return ExitCode::FAILURE;
     }
+
+    let Some(agg) = AggregationMethod::from_str(method) else {
+        eprintln!(
+            "error: unknown aggregation method `{}`. Use: sum, rss, product, min, max",
+            method
+        );
+        return ExitCode::FAILURE;
+    };
 
     use sysml_core::sim::what_if::{evaluate_what_if, Scenario};
 
@@ -462,7 +430,7 @@ fn run_what_if(
         return ExitCode::FAILURE;
     }
 
-    let result = evaluate_what_if(&model, root, attr, AggregationMethod::Sum, &scenarios);
+    let result = evaluate_what_if(&model, root, attr, agg, &scenarios);
 
     match cli.format.as_str() {
         "json" => {

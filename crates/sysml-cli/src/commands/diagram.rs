@@ -9,7 +9,7 @@ use crate::{read_source, Cli};
 pub(crate) fn run(
     _cli: &Cli,
     file: &PathBuf,
-    diagram_type: &str,
+    diagram_type: &Option<String>,
     output_format: &str,
     scope: Option<&str>,
     view: Option<&str>,
@@ -18,15 +18,19 @@ pub(crate) fn run(
 ) -> ExitCode {
     use sysml_core::diagram::*;
 
-    let kind = match DiagramKind::from_str(diagram_type) {
-        Some(k) => k,
-        None => {
-            eprintln!(
-                "error: unknown diagram type `{}`. Available: bdd, ibd, stm, act, req, pkg, par, trace, alloc, ucd",
-                diagram_type
-            );
-            return ExitCode::from(1);
-        }
+    // Validate an explicit --type up front (before any file IO).
+    let explicit_kind = match diagram_type {
+        Some(t) => match DiagramKind::from_str(t) {
+            Some(k) => Some(k),
+            None => {
+                eprintln!(
+                    "error: unknown diagram type `{}`. Available: bdd, ibd, stm, act, req, pkg, par, trace, alloc, ucd",
+                    t
+                );
+                return ExitCode::from(1);
+            }
+        },
+        None => None,
     };
 
     let format = match DiagramFormat::from_str(output_format) {
@@ -61,6 +65,28 @@ pub(crate) fn run(
     };
 
     let model = sysml_parser::parse_file(&path_str, &source);
+
+    // Without --type, take the diagram kind from the view's `render as` clause.
+    let kind = match explicit_kind {
+        Some(k) => k,
+        None => {
+            let from_view = view.and_then(|view_name| {
+                model
+                    .views
+                    .iter()
+                    .find(|v| v.name == view_name)
+                    .and_then(|v| v.render_as.as_deref())
+                    .and_then(DiagramKind::from_render_clause)
+            });
+            match from_view {
+                Some(k) => k,
+                None => {
+                    eprintln!("error: --type is required (or use --view with a view def that has a 'render as' clause)");
+                    return ExitCode::FAILURE;
+                }
+            }
+        }
+    };
 
     let mut graph = match kind {
         DiagramKind::GeneralView(GeneralViewFlavor::Default) => build_bdd(&model, scope),

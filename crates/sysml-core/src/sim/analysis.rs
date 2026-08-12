@@ -350,7 +350,7 @@ pub fn evaluate_analysis(
                     && matches!(usage.kind.as_str(), "attribute" | "feature")
                 {
                     if let Some(ref val_expr) = usage.value_expr {
-                        if let Ok(v) = val_expr.trim().parse::<f64>() {
+                        if let Some(v) = eval_value_expr(val_expr, &env) {
                             env.bind(usage.name.clone(), Value::Number(v));
                             // Also bind as subject.attr
                             env.bind(format!("{}.{}", subj.name, usage.name), Value::Number(v));
@@ -365,29 +365,21 @@ pub fn evaluate_analysis(
         }
     }
 
-    // Evaluate local bindings in order
+    // Evaluate local bindings in order — full expressions, not just
+    // float literals (a binding of `mass * 2` used to compute nothing).
     for binding in &case.local_bindings {
-        if let Ok(v) = binding.value_expr.trim().parse::<f64>() {
+        if let Some(v) = eval_value_expr(&binding.value_expr, &env) {
             env.bind(binding.name.clone(), Value::Number(v));
             computed_bindings.push((binding.name.clone(), v));
-        } else if let Some(val) = env.get(&binding.value_expr).and_then(|v| v.as_number()) {
-            env.bind(binding.name.clone(), Value::Number(val));
-            computed_bindings.push((binding.name.clone(), val));
         }
     }
 
     // Evaluate return expression
-    let return_value = case.return_decl.as_ref().and_then(|ret| {
-        if let Some(ref expr) = ret.value_expr {
-            if let Ok(v) = expr.trim().parse::<f64>() {
-                return Some(v);
-            }
-            // Try looking up in env
-            env.get(expr.trim()).and_then(|v| v.as_number())
-        } else {
-            None
-        }
-    });
+    let return_value = case
+        .return_decl
+        .as_ref()
+        .and_then(|ret| ret.value_expr.as_ref())
+        .and_then(|expr| eval_value_expr(expr, &env));
 
     AnalysisResult {
         name: case.name.clone(),
@@ -395,6 +387,26 @@ pub fn evaluate_analysis(
         bindings: computed_bindings,
         return_value,
     }
+}
+
+/// Evaluate a `value_expr` string: fast path for numeric literals (with
+/// or without unit brackets), then the full expression parser + evaluator
+/// against the current environment.
+fn eval_value_expr(expr: &str, env: &crate::sim::expr::Env) -> Option<f64> {
+    let expr = expr.trim();
+    if let Ok(v) = expr.parse::<f64>() {
+        return Some(v);
+    }
+    if let Some((v, _unit)) = crate::sim::resolve::parse_value_with_unit(expr) {
+        return Some(v);
+    }
+    if let Some(v) = env.get(expr).and_then(|v| v.as_number()) {
+        return Some(v);
+    }
+    let parsed = crate::sim::expr_parser::parse_expr_str(expr).ok()?;
+    crate::sim::eval::evaluate(&parsed, env)
+        .ok()
+        .and_then(|v| v.as_number())
 }
 
 /// Outcome of solving an analysis case's constraint equations.
@@ -507,7 +519,12 @@ pub fn evaluate_trade_study(_model: &Model, case: &AnalysisCaseModel) -> TradeRe
                 .overrides
                 .iter()
                 .find(|(k, _)| k.contains("cost") || k.contains("mass") || k.contains("eval"))
-                .and_then(|(_, v)| v.trim().parse::<f64>().ok());
+                .and_then(|(_, v)| {
+                    v.trim()
+                        .parse::<f64>()
+                        .ok()
+                        .or_else(|| crate::sim::resolve::parse_value_with_unit(v).map(|(n, _)| n))
+                });
 
             AlternativeScore {
                 name: alt.name.clone(),
@@ -733,6 +750,22 @@ mod tests {
         let result = evaluate_trade_study(&model, case);
         assert_eq!(result.alternatives.len(), 2);
         assert_eq!(result.objective, ObjectiveKind::Maximize);
+    }
+
+    #[test]
+    fn local_binding_expression_evaluates() {
+        // `x = mass * 2` used to silently compute nothing (only float
+        // literals were parsed). The full expression path must work.
+        use crate::sim::expr::{Env, Value};
+        let mut env = Env::new();
+        env.bind("mass", Value::Number(500.0));
+        let v = super::eval_value_expr("mass * 2", &env);
+        assert_eq!(v, Some(1000.0));
+        // Unit-bracket literal
+        let v = super::eval_value_expr("250 [SI::kg]", &env);
+        assert_eq!(v, Some(250.0));
+        // Unresolvable stays None, not a panic
+        assert_eq!(super::eval_value_expr("bogus + 1", &Env::new()), None);
     }
 
     #[test]

@@ -160,10 +160,10 @@ fn evaluate_with_overrides(
         }
     }
 
-    // Re-aggregate manually
-    let own = tree.own_value.unwrap_or(0.0);
-    let child_total = aggregate_tree(&tree.children, method);
-    own + child_total
+    // Aggregate through the shared unit-aware rollup path. Note: an
+    // overridden value is assumed to be in the tree's target unit.
+    let mut warnings = Vec::new();
+    crate::sim::rollup::total_of_tree(&tree, method, &mut warnings)
 }
 
 fn apply_override_to_tree(nodes: &mut [AttributeNode], path: &str, value: f64) {
@@ -183,34 +183,6 @@ fn apply_override_to_tree(nodes: &mut [AttributeNode], path: &str, value: f64) {
                 apply_override_to_tree(&mut node.children, &remaining, value);
             }
         }
-    }
-}
-
-fn aggregate_tree(nodes: &[AttributeNode], method: AggregationMethod) -> f64 {
-    let values: Vec<f64> = nodes
-        .iter()
-        .map(|n| {
-            let own = n.own_value.unwrap_or(0.0);
-            let children = aggregate_tree(&n.children, method);
-            (own + children) * n.quantity as f64
-        })
-        .collect();
-
-    match method {
-        AggregationMethod::Sum => values.iter().sum(),
-        AggregationMethod::Rss => {
-            let sum_sq: f64 = values.iter().map(|v| v * v).sum();
-            sum_sq.sqrt()
-        }
-        AggregationMethod::Product => {
-            if values.is_empty() {
-                0.0
-            } else {
-                values.iter().product()
-            }
-        }
-        AggregationMethod::Min => values.iter().copied().fold(f64::INFINITY, f64::min),
-        AggregationMethod::Max => values.iter().copied().fold(f64::NEG_INFINITY, f64::max),
     }
 }
 

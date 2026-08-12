@@ -81,6 +81,9 @@ pub struct RollupResult {
     pub unit: Option<String>,
     /// Per-child contribution breakdown
     pub contributions: Vec<Contribution>,
+    /// Unit conversions that could not be performed (values passed
+    /// through unconverted). Non-empty means the total is suspect.
+    pub conversion_warnings: Vec<String>,
 }
 
 /// First unit found in the tree, preferring the root's own unit.
@@ -102,13 +105,27 @@ fn pick_target_unit(tree: &crate::sim::resolve::AttributeTree) -> Option<String>
     first_unit(&tree.children)
 }
 
-/// Convert `value` from `from` into `target` where both are known;
-/// values without a unit (or without a known conversion) pass through.
-fn to_target(value: f64, from: &Option<String>, target: &Option<String>) -> f64 {
+/// Convert `value` from `from` into `target` where both are known.
+/// Unknown conversions are NOT silent: the unconverted value passes
+/// through but the failure is recorded — adding grams to kilograms
+/// without saying so is a wrong-answer generator.
+fn to_target(
+    value: f64,
+    from: &Option<String>,
+    target: &Option<String>,
+    label: &str,
+    warnings: &mut Vec<String>,
+) -> f64 {
     match (from, target) {
-        (Some(f), Some(t)) if f != t => {
-            crate::sim::units::convert(value, f, t).unwrap_or(value)
-        }
+        (Some(f), Some(t)) if f != t => match crate::sim::units::convert(value, f, t) {
+            Ok(v) => v,
+            Err(_) => {
+                warnings.push(format!(
+                    "cannot convert `{f}` to `{t}` for `{label}` — value {value} used unconverted"
+                ));
+                value
+            }
+        },
         _ => value,
     }
 }
@@ -143,9 +160,17 @@ pub fn evaluate_rollup_with_variants(
         attribute_name,
         selections,
     );
+    let mut warnings = Vec::new();
     let unit = pick_target_unit(&tree);
-    let own = to_target(tree.own_value.unwrap_or(0.0), &tree.unit, &unit);
-    let (child_total, contributions) = aggregate_children(&tree.children, method, &[], &unit);
+    let own = to_target(
+        tree.own_value.unwrap_or(0.0),
+        &tree.unit,
+        &unit,
+        &tree.root,
+        &mut warnings,
+    );
+    let (child_total, contributions) =
+        aggregate_children(&tree.children, method, &[], &unit, &mut warnings);
     let total = own + child_total;
 
     // Compute percentages
@@ -159,7 +184,28 @@ pub fn evaluate_rollup_with_variants(
         own_value: own,
         unit,
         contributions,
+        conversion_warnings: warnings,
     }
+}
+
+/// Unit-aware total of an already-resolved attribute tree — the single
+/// aggregation path shared by rollup and what-if (they used to diverge:
+/// what-if skipped unit conversion entirely).
+pub fn total_of_tree(
+    tree: &crate::sim::resolve::AttributeTree,
+    method: AggregationMethod,
+    warnings: &mut Vec<String>,
+) -> f64 {
+    let unit = pick_target_unit(tree);
+    let own = to_target(
+        tree.own_value.unwrap_or(0.0),
+        &tree.unit,
+        &unit,
+        &tree.root,
+        warnings,
+    );
+    let (child_total, _) = aggregate_children(&tree.children, method, &[], &unit, warnings);
+    own + child_total
 }
 
 fn aggregate_children(
@@ -167,6 +213,7 @@ fn aggregate_children(
     method: AggregationMethod,
     parent_path: &[String],
     target_unit: &Option<String>,
+    warnings: &mut Vec<String>,
 ) -> (f64, Vec<Contribution>) {
     let mut contributions = Vec::new();
     let mut values: Vec<f64> = Vec::new();
@@ -175,9 +222,15 @@ fn aggregate_children(
         let mut path = parent_path.to_vec();
         path.push(child.name.clone());
 
-        let own = to_target(child.own_value.unwrap_or(0.0), &child.unit, target_unit);
+        let own = to_target(
+            child.own_value.unwrap_or(0.0),
+            &child.unit,
+            target_unit,
+            &path.join("."),
+            warnings,
+        );
         let (child_sum, child_contribs) =
-            aggregate_children(&child.children, method, &path, target_unit);
+            aggregate_children(&child.children, method, &path, target_unit, warnings);
         let subtotal = (own + child_sum) * child.quantity as f64;
 
         values.push(subtotal);

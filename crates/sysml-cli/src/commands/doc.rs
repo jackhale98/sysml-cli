@@ -4,32 +4,13 @@ use std::path::PathBuf;
 use std::process::ExitCode;
 
 use sysml_core::model::{DefKind, Model};
-use sysml_core::parser as sysml_parser;
 
 use crate::Cli;
 
 pub fn run(cli: &Cli, files: &[PathBuf], root: Option<&str>) -> ExitCode {
-    let (files, _) = crate::files_or_project(files);
-    if files.is_empty() {
-        eprintln!("error: no SysML files found.");
+    let Some(merged) = crate::load_model(cli, files) else {
         return ExitCode::FAILURE;
-    }
-
-    let mut merged = Model::new("project".to_string());
-    for file_path in &files {
-        let path_str = file_path.to_string_lossy().to_string();
-        if let Ok(source) = std::fs::read_to_string(file_path) {
-            let m = sysml_parser::parse_file(&path_str, &source);
-            merged.definitions.extend(m.definitions);
-            merged.usages.extend(m.usages);
-            merged.connections.extend(m.connections);
-            merged.flows.extend(m.flows);
-            merged.satisfactions.extend(m.satisfactions);
-            merged.verifications.extend(m.verifications);
-            merged.allocations.extend(m.allocations);
-            merged.comments.extend(m.comments);
-        }
-    }
+    };
 
     let doc = generate_markdown(&merged, root);
 

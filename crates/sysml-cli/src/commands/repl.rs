@@ -11,7 +11,7 @@ use sysml_core::model::{simple_name, Model};
 use sysml_core::parser as sysml_parser;
 
 pub fn run(files: &[PathBuf]) -> ExitCode {
-    let (files, _) = crate::files_or_project(files);
+    let (files, _) = crate::files_or_project(files, false);
     if files.is_empty() {
         eprintln!("error: no SysML files found.");
         return ExitCode::FAILURE;

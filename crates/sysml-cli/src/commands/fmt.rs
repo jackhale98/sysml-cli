@@ -79,6 +79,9 @@ pub(crate) fn run(
             } else {
                 print!("{}", edit::diff(&source, &formatted, &path_str));
             }
+        } else if path_str == "<stdin>" {
+            // stdin formats to stdout — there is no file to rewrite.
+            print!("{}", formatted);
         } else {
             if let Err(e) = std::fs::write(file_path, &formatted) {
                 eprintln!("error: cannot write `{}`: {}", path_str, e);

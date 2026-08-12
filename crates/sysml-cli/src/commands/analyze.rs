@@ -61,7 +61,7 @@ enum UncertaintyOutcome {
 /// Load per-file models (files + resolved include paths) — the uncertainty
 /// extractor needs real per-file byte spans, so no merging here.
 fn load_per_file_models(cli: &Cli, files: &[PathBuf]) -> Option<Vec<sysml_core::model::Model>> {
-    let (files, _) = crate::files_or_project(files);
+    let (files, _) = crate::files_or_project(files, cli.quiet);
     if files.is_empty() {
         eprintln!("error: no SysML files found.");
         return None;
@@ -298,40 +298,12 @@ fn print_uncertainty_text(
     }
 }
 
-fn parse_models(files: &[PathBuf]) -> Option<sysml_core::model::Model> {
-    let (files, _) = crate::files_or_project(files);
-    if files.is_empty() {
-        eprintln!("error: no SysML files found.");
-        return None;
-    }
-    let mut merged = sysml_core::model::Model::new("merged".to_string());
-    for file_path in &files {
-        let path_str = file_path.to_string_lossy().to_string();
-        let source = match std::fs::read_to_string(file_path) {
-            Ok(s) => s,
-            Err(e) => {
-                eprintln!("error: cannot read `{}`: {}", path_str, e);
-                return None;
-            }
-        };
-        let model = sysml_parser::parse_file(&path_str, &source);
-        merged.definitions.extend(model.definitions);
-        merged.usages.extend(model.usages);
-        merged.connections.extend(model.connections);
-        merged.flows.extend(model.flows);
-        merged.satisfactions.extend(model.satisfactions);
-        merged.verifications.extend(model.verifications);
-        merged.allocations.extend(model.allocations);
-        merged.type_references.extend(model.type_references);
-        merged.imports.extend(model.imports);
-        merged.comments.extend(model.comments);
-        merged.views.extend(model.views);
-    }
-    Some(merged)
+fn parse_models(cli: &Cli, files: &[PathBuf]) -> Option<sysml_core::model::Model> {
+    crate::load_model(cli, files)
 }
 
 fn run_list(cli: &Cli, files: &[PathBuf]) -> ExitCode {
-    let Some(model) = parse_models(files) else {
+    let Some(model) = parse_models(cli, files) else {
         return ExitCode::FAILURE;
     };
     let cases = extract_analysis_cases_from_model(&model);
@@ -377,7 +349,7 @@ fn run_list(cli: &Cli, files: &[PathBuf]) -> ExitCode {
 }
 
 fn run_execute(cli: &Cli, files: &[PathBuf], name: Option<&str>, bindings: &[String]) -> ExitCode {
-    let Some(model) = parse_models(files) else {
+    let Some(model) = parse_models(cli, files) else {
         return ExitCode::FAILURE;
     };
     let cases = extract_analysis_cases_from_model(&model);
@@ -555,7 +527,7 @@ fn run_execute(cli: &Cli, files: &[PathBuf], name: Option<&str>, bindings: &[Str
 }
 
 fn run_trade(cli: &Cli, files: &[PathBuf], name: Option<&str>) -> ExitCode {
-    let Some(model) = parse_models(files) else {
+    let Some(model) = parse_models(cli, files) else {
         return ExitCode::FAILURE;
     };
     let cases = extract_analysis_cases_from_model(&model);

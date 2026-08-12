@@ -1,24 +1,14 @@
 use std::path::PathBuf;
 use std::process::ExitCode;
 
-use sysml_core::parser as sysml_parser;
-
-use crate::{read_source, Cli};
+use crate::Cli;
 
 pub(crate) fn run(cli: &Cli, files: &[PathBuf], unconnected_only: bool) -> ExitCode {
     use sysml_core::query;
 
-    let mut merged = sysml_core::model::Model::new("(merged)".to_string());
-    for file_path in files {
-        let (path_str, source) = match read_source(file_path) {
-            Ok(v) => v,
-            Err(code) => return code,
-        };
-        let model = sysml_parser::parse_file(&path_str, &source);
-        merged.definitions.extend(model.definitions);
-        merged.usages.extend(model.usages);
-        merged.connections.extend(model.connections);
-    }
+    let Some(merged) = crate::load_model(cli, files) else {
+        return ExitCode::FAILURE;
+    };
 
     let ports = if unconnected_only {
         query::unconnected_ports(&merged)

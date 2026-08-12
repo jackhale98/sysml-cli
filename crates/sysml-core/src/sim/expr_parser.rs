@@ -5,6 +5,43 @@ use tree_sitter::Node;
 use crate::parser::node_text;
 use crate::sim::expr::*;
 
+/// Parse a bare expression string (e.g. an attribute's `value_expr` text
+/// like `mass * 2` or `250 [SI::kg]`) into an Expr by wrapping it in a
+/// minimal valid SysML source and extracting the value-assignment node.
+pub fn parse_expr_str(expr_src: &str) -> Result<Expr, EvalError> {
+    let source = format!("package __W {{ attribute __x = {expr_src}; }}");
+    let mut parser = tree_sitter::Parser::new();
+    parser
+        .set_language(&crate::parser::get_language())
+        .map_err(|e| EvalError::new(format!("grammar load failed: {e}")))?;
+    let tree = parser
+        .parse(&source, None)
+        .ok_or_else(|| EvalError::new("parse failed"))?;
+
+    fn find_assignment<'a>(node: Node<'a>) -> Option<Node<'a>> {
+        if node.kind() == "value_assignment" {
+            return Some(node);
+        }
+        let mut cursor = node.walk();
+        for child in node.children(&mut cursor) {
+            if let Some(found) = find_assignment(child) {
+                return Some(found);
+            }
+        }
+        None
+    }
+
+    let assignment = find_assignment(tree.root_node())
+        .ok_or_else(|| EvalError::new(format!("not an expression: `{expr_src}`")))?;
+    // The assignment's named children: the expression follows the `=`.
+    let mut cursor = assignment.walk();
+    let expr_node = assignment
+        .children(&mut cursor)
+        .find(|c| c.is_named())
+        .ok_or_else(|| EvalError::new(format!("empty expression: `{expr_src}`")))?;
+    extract_expr(&expr_node, source.as_bytes())
+}
+
 /// Convert a tree-sitter expression node into an Expr AST.
 pub fn extract_expr(node: &Node, source: &[u8]) -> Result<Expr, EvalError> {
     match node.kind() {

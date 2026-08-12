@@ -15,16 +15,15 @@ a textual notation where 'definitions' declare reusable types (part def, port de
 action def, etc.) and 'usages' create instances of those types within a context.
 
 GETTING STARTED:
-  Validate a model:       sysml lint model.sysml
+  Validate a model:       sysml check model.sysml
   List model elements:    sysml list --kind parts model.sysml
   Show element details:   sysml show model.sysml Vehicle
-  Generate a diagram:     sysml diagram -t bdd -o mermaid model.sysml
+  Generate a diagram:     sysml diagram -t bdd model.sysml
   Simulate a state machine: sysml simulate state-machine model.sysml
+  Run an analysis case:   sysml analyze run model.sysml -n GapAnalysis
+  Roll up an attribute:   sysml rollup compute --root Vehicle --attr mass
   Add to a model:         sysml add model.sysml part-def Vehicle --doc 'A vehicle'
-  Interactive wizard:     sysml add
-  Remove from a model:    sysml remove model.sysml Engine
   Format a file:          sysml fmt model.sysml
-  Export to FMI:          sysml export interfaces model.sysml --part MyPart
 
 LEARN MORE:
   SysML v2 spec:          https://www.omgsysml.org/
@@ -35,8 +34,9 @@ pub(crate) struct Cli {
     #[command(subcommand)]
     pub(crate) command: Command,
 
-    /// Output format: text, json.
-    #[arg(short, long, default_value = "text", global = true)]
+    /// Output format.
+    #[arg(short, long, default_value = "text", global = true,
+          value_parser = ["text", "json"])]
     pub(crate) format: String,
 
     /// Suppress summary line on stderr.
@@ -59,21 +59,6 @@ pub(crate) struct Cli {
 #[derive(Subcommand)]
 #[allow(clippy::large_enum_variant)]
 pub(crate) enum Command {
-    /// Lint SysML v2 files (alias for `check --lint-only`).
-    #[command(hide = true)]
-    Lint {
-        /// SysML v2 files to validate.
-        #[arg(required = true)]
-        files: Vec<PathBuf>,
-
-        /// Disable specific checks (comma-separated).
-        #[arg(short, long, value_delimiter = ',')]
-        disable: Vec<String>,
-
-        /// Minimum severity to report: note, warning, error.
-        #[arg(short, long, default_value = "note")]
-        severity: String,
-    },
     /// List model elements with optional filters.
     ///
     /// Lists definitions and usages from SysML v2 files. Filter by kind,
@@ -225,8 +210,9 @@ pub(crate) enum Command {
         #[arg(required = true)]
         file: PathBuf,
 
-        /// Diagram type.
-        #[arg(short = 't', long = "type", required = true,
+        /// Diagram type. Optional when --view names a view def with a
+        /// `render as` clause — the view's declared rendering is used.
+        #[arg(short = 't', long = "type",
               value_parser = ["gv", "iv", "afv", "stv", "sv", "grv", "bv",
                               "bdd", "ibd", "stm", "act", "req", "pkg", "par",
                               "trace", "alloc", "ucd",
@@ -234,10 +220,10 @@ pub(crate) enum Command {
                               "parametric", "traceability", "allocation",
                               "usecase", "use-case", "sequence"],
               help_heading = "Diagram")]
-        diagram_type: String,
+        diagram_type: Option<String>,
 
-        /// Output format: mermaid, plantuml, dot, d2 (and aliases).
-        #[arg(short = 'o', long = "output-format", default_value = "mermaid",
+        /// Diagram renderer: mermaid, plantuml, dot, d2 (and aliases).
+        #[arg(short = 'r', long = "renderer", default_value = "mermaid",
               value_parser = ["mermaid", "mmd", "plantuml", "puml", "dot", "graphviz", "d2", "terrastruct"])]
         output_format: String,
 
@@ -245,16 +231,17 @@ pub(crate) enum Command {
         /// bdd: show only this def and its children/relationships.
         /// ibd: show internal structure (ports, parts, connections).
         /// stm/act: show this specific state machine or action.
-        #[arg(short, long)]
+        #[arg(long)]
         scope: Option<String>,
 
-        /// Apply a named SysML v2 view definition as a filter.
-        /// The view's expose and filter clauses determine which elements appear.
+        /// Apply a named SysML v2 view definition.
+        /// The view's expose and filter clauses determine which elements
+        /// appear, and its `render as` clause supplies the diagram type.
         #[arg(long)]
         view: Option<String>,
 
         /// Layout direction: TB (top-bottom), LR (left-right), BT, RL.
-        #[arg(short, long)]
+        #[arg(long)]
         direction: Option<String>,
 
         /// Maximum nesting depth to display.
@@ -382,10 +369,6 @@ pub(crate) enum Command {
         /// (view-def only) Filter by element kind.
         #[arg(long)]
         filter: Option<String>,
-
-        /// Launch interactive wizard even when args are provided.
-        #[arg(short = 'i', long)]
-        interactive: bool,
     },
     /// Remove a named element from a SysML file.
     ///
@@ -460,9 +443,9 @@ pub(crate) enum Command {
     /// Generate shell completions.
     ///
     /// EXAMPLES:
-    ///   sysml-cli completions bash > ~/.local/share/bash-completion/completions/sysml-cli
-    ///   sysml-cli completions zsh > ~/.zfunc/_sysml-cli
-    ///   sysml-cli completions fish > ~/.config/fish/completions/sysml-cli.fish
+    ///   sysml completions bash > ~/.local/share/bash-completion/completions/sysml-cli
+    ///   sysml completions zsh > ~/.zfunc/_sysml-cli
+    ///   sysml completions fish > ~/.config/fish/completions/sysml-cli.fish
     Completions {
         /// Shell: bash, zsh, fish, elvish, powershell.
         #[arg(required = true)]
@@ -482,9 +465,9 @@ pub(crate) enum Command {
     /// what the element depends on (forward analysis).
     ///
     /// EXAMPLES:
-    ///   sysml-cli deps model.sysml Engine
-    ///   sysml-cli deps model.sysml Vehicle --reverse
-    ///   sysml-cli deps model.sysml Engine --forward
+    ///   sysml deps model.sysml Engine
+    ///   sysml deps model.sysml Vehicle --reverse
+    ///   sysml deps model.sysml Engine --forward
     Deps {
         /// SysML v2 files to analyze.
         #[arg(required = true)]
@@ -508,8 +491,8 @@ pub(crate) enum Command {
     /// changed definitions, usages, and relationships.
     ///
     /// EXAMPLES:
-    ///   sysml-cli diff old.sysml new.sysml
-    ///   sysml-cli diff -f json v1.sysml v2.sysml
+    ///   sysml diff old.sysml new.sysml
+    ///   sysml diff -f json v1.sysml v2.sysml
     Diff {
         /// Original (old) SysML file.
         #[arg(required = true)]
@@ -557,19 +540,14 @@ pub(crate) enum Command {
     ///   sysml index
     ///   sysml index --stats
     Index {
-        /// Rebuild everything including records (default).
-        #[arg(long, default_value = "true")]
-        full: bool,
-
         /// Show index statistics.
         #[arg(long)]
         stats: bool,
     },
-    /// Validate SysML v2 models and check project integrity.
+    /// Validate SysML v2 models.
     ///
-    /// Runs all lint checks plus optional project-level checks (broken
-    /// record references, orphaned records). Use --lint-only for fast
-    /// structural validation without project checks.
+    /// Runs all lint checks: syntax, name resolution (cross-file, with
+    /// include paths), requirement coverage, naming conventions, and more.
     ///
     /// EXAMPLES:
     ///   sysml check model.sysml
@@ -586,10 +564,6 @@ pub(crate) enum Command {
         /// Minimum severity to report: note, warning, error.
         #[arg(short, long, default_value = "note")]
         severity: String,
-
-        /// Run only lint checks (no record or project checks).
-        #[arg(long)]
-        lint_only: bool,
     },
     /// Model completeness and quality report.
     ///
@@ -609,17 +583,6 @@ pub(crate) enum Command {
         /// Minimum acceptable score (0-100, used with --check).
         #[arg(long, default_value = "0")]
         min_score: f64,
-    },
-    /// Read a help topic about SysML or this tool.
-    ///
-    /// EXAMPLES:
-    ///   sysml guide                    List available topics
-    ///   sysml guide getting-started    Tutorial for first-time users
-    ///   sysml guide sysml-basics       SysML v2 language overview
-    #[command(hide = true)]
-    Guide {
-        /// Topic to display (omit to list all topics).
-        topic: Option<String>,
     },
     /// Interactive REPL for exploring SysML models.
     ///
@@ -649,25 +612,6 @@ pub(crate) enum Command {
         /// Root element to start documentation from.
         #[arg(long)]
         root: Option<String>,
-    },
-    /// Search model elements by name pattern.
-    ///
-    /// Finds definitions, usages, and type references matching a
-    /// substring or regex pattern across all model files.
-    ///
-    /// EXAMPLES:
-    ///   sysml find model.sysml --pattern Engine
-    ///   sysml find --pattern "mass|weight"
-    ///   sysml find --pattern ".*Controller" --kind definitions
-    Find {
-        /// SysML v2 files to search (omit to scan project).
-        files: Vec<PathBuf>,
-        /// Pattern to match (substring or regex).
-        #[arg(short, long, required = true)]
-        pattern: String,
-        /// Restrict search: definitions, usages, all (default: all).
-        #[arg(short, long, default_value = "all")]
-        kind: String,
     },
     /// Run analysis cases defined in SysML v2 models.
     ///
@@ -701,20 +645,6 @@ pub(crate) enum Command {
         #[command(subcommand)]
         kind: RollupCommand,
     },
-    /// Run named validation pipelines defined in .sysml/config.toml.
-    ///
-    /// Pipelines are sequences of sysml commands that run in order.
-    /// Define them as [[pipeline]] entries in your project config.
-    ///
-    /// EXAMPLES:
-    ///   sysml pipeline list                     List available pipelines
-    ///   sysml pipeline run ci                    Run the "ci" pipeline
-    ///   sysml pipeline run ci --dry-run          Preview without executing
-    ///   sysml pipeline create pre-commit         Create a new pipeline interactively
-    Pipeline {
-        #[command(subcommand)]
-        kind: PipelineCommand,
-    },
 }
 
 // =========================================================================
@@ -729,8 +659,8 @@ pub(crate) enum SimulateCommand {
     /// and calculation expressions (returns computed values).
     ///
     /// EXAMPLES:
-    ///   sysml-cli simulate eval model.sysml -b speed=100,mass=1500
-    ///   sysml-cli simulate eval model.sysml -n SpeedLimit -b speed=120
+    ///   sysml simulate eval model.sysml -b speed=100,mass=1500
+    ///   sysml simulate eval model.sysml -n SpeedLimit -b speed=120
     Eval {
         /// SysML v2 file containing constraints/calculations.
         #[arg(required = true)]
@@ -753,9 +683,9 @@ pub(crate) enum SimulateCommand {
     /// to select events interactively.
     ///
     /// EXAMPLES:
-    ///   sysml-cli simulate state-machine lights.sysml -e next,next,next
-    ///   sysml-cli simulate state-machine model.sysml -n TrafficLight
-    ///   sysml-cli simulate state-machine model.sysml  (interactive)
+    ///   sysml simulate state-machine lights.sysml -e next,next,next
+    ///   sysml simulate state-machine model.sysml -n TrafficLight
+    ///   sysml simulate state-machine model.sysml  (interactive)
     #[command(visible_alias = "sm")]
     StateMachine {
         /// SysML v2 file containing state machine definitions.
@@ -785,8 +715,8 @@ pub(crate) enum SimulateCommand {
     /// and loops, producing an execution trace.
     ///
     /// EXAMPLES:
-    ///   sysml-cli simulate action-flow model.sysml -n ProvidePower
-    ///   sysml-cli simulate action-flow model.sysml -b fuelLevel=80
+    ///   sysml simulate action-flow model.sysml -n ProvidePower
+    ///   sysml simulate action-flow model.sysml -b fuelLevel=80
     #[command(visible_alias = "af")]
     ActionFlow {
         /// SysML v2 file containing action definitions.
@@ -818,16 +748,11 @@ pub(crate) enum SimulateCommand {
 
 #[derive(Subcommand)]
 pub(crate) enum ExportCommand {
-    /// Extract FMI interface items from a part definition.
-    Interfaces {
-        /// SysML v2 file.
-        #[arg(required = true)]
-        file: PathBuf,
-        /// Part definition name.
-        #[arg(short, long)]
-        part: String,
-    },
     /// Generate Modelica partial model stub.
+    ///
+    /// EXAMPLES:
+    ///   sysml export modelica model.sysml -p Vehicle
+    ///   sysml export modelica model.sysml -p Vehicle -o Vehicle.mo
     Modelica {
         /// SysML v2 file.
         #[arg(required = true)]
@@ -853,27 +778,6 @@ pub(crate) enum ExportCommand {
         /// SysML v2 file.
         #[arg(required = true)]
         file: PathBuf,
-    },
-}
-
-#[derive(Subcommand)]
-pub(crate) enum PipelineCommand {
-    /// List all pipelines defined in config.
-    List,
-    /// Run a named pipeline.
-    Run {
-        /// Pipeline name to run.
-        #[arg(required = true)]
-        name: String,
-        /// Preview commands without executing them.
-        #[arg(long)]
-        dry_run: bool,
-    },
-    /// Create a new pipeline in config (interactive).
-    Create {
-        /// Pipeline name.
-        #[arg(required = true)]
-        name: String,
     },
 }
 
@@ -945,6 +849,9 @@ pub(crate) enum RollupCommand {
         /// Attribute name.
         #[arg(long, required = true)]
         attr: String,
+        /// Aggregation method: sum, rss, product, min, max.
+        #[arg(long, default_value = "sum")]
+        method: String,
     },
     /// Parametric sweep: evaluate rollup across a range of values.
     ///
@@ -972,6 +879,9 @@ pub(crate) enum RollupCommand {
         /// Number of steps.
         #[arg(long, default_value = "10")]
         steps: usize,
+        /// Aggregation method: sum, rss, product, min, max.
+        #[arg(long, default_value = "sum")]
+        method: String,
     },
     /// What-if analysis: compare rollup under different scenarios.
     ///
@@ -988,20 +898,11 @@ pub(crate) enum RollupCommand {
         #[arg(long, required = true)]
         attr: String,
         /// Scenarios as "name:path=value,path=value" (repeatable).
-        #[arg(long = "scenario", short = 's')]
+        #[arg(long = "scenario")]
         scenarios: Vec<String>,
-    },
-    /// Find all occurrences of an attribute across the model.
-    ///
-    /// EXAMPLES:
-    ///   sysml rollup query model.sysml --attr mass
-    Query {
-        /// SysML v2 files to analyze.
-        #[arg(required = true)]
-        files: Vec<PathBuf>,
-        /// Attribute name to search for.
-        #[arg(long, required = true)]
-        attr: String,
+        /// Aggregation method: sum, rss, product, min, max.
+        #[arg(long, default_value = "sum")]
+        method: String,
     },
 }
 

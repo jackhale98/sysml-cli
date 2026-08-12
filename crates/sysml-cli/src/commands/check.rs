@@ -14,14 +14,8 @@ use sysml_core::parser as sysml_parser;
 use crate::output;
 use crate::{collect_files_recursive, resolve_include_paths, Cli};
 
-pub fn run(
-    cli: &Cli,
-    files: &[PathBuf],
-    disable: &[String],
-    severity: &str,
-    _lint_only: bool,
-) -> ExitCode {
-    let (files, _discovered) = crate::files_or_project(files);
+pub fn run(cli: &Cli, files: &[PathBuf], disable: &[String], severity: &str) -> ExitCode {
+    let (files, _discovered) = crate::files_or_project(files, cli.quiet);
     if files.is_empty() {
         eprintln!("error: no SysML files found. Provide file arguments or run inside a project.");
         return ExitCode::FAILURE;
@@ -64,12 +58,10 @@ pub fn run(
     let mut had_parse_error = false;
 
     for file_path in files {
-        let path_str = file_path.to_string_lossy().to_string();
-
-        let source = match std::fs::read_to_string(file_path) {
-            Ok(s) => s,
-            Err(e) => {
-                eprintln!("error: cannot read `{}`: {}", path_str, e);
+        // `-` reads stdin (read_source handles it).
+        let (path_str, source) = match crate::read_source(file_path) {
+            Ok(v) => v,
+            Err(_) => {
                 had_parse_error = true;
                 continue;
             }

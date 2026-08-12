@@ -466,6 +466,31 @@ impl Model {
         }
     }
 
+    /// Merge another parsed model into this one, keeping every element
+    /// list. Commands that operate on a whole project use this via the
+    /// CLI's shared loader — nothing should hand-pick fields to merge
+    /// (historically each command merged a different subset, each
+    /// omission a latent bug).
+    pub fn merge(&mut self, other: Model) {
+        self.definitions.extend(other.definitions);
+        self.usages.extend(other.usages);
+        self.connections.extend(other.connections);
+        self.flows.extend(other.flows);
+        self.satisfactions.extend(other.satisfactions);
+        self.verifications.extend(other.verifications);
+        self.allocations.extend(other.allocations);
+        self.syntax_errors.extend(other.syntax_errors);
+        self.type_references.extend(other.type_references);
+        self.imports.extend(other.imports);
+        self.comments.extend(other.comments);
+        self.views.extend(other.views);
+        self.annotations.extend(other.annotations);
+        self.resolved_imports.extend(other.resolved_imports);
+        self.external_references.extend(other.external_references);
+        self.external_satisfied.extend(other.external_satisfied);
+        self.external_verified.extend(other.external_verified);
+    }
+
     /// All defined names in this model.
     pub fn defined_names(&self) -> std::collections::HashSet<&str> {
         self.definitions.iter().map(|d| d.name.as_str()).collect()

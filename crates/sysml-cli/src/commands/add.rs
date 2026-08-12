@@ -37,7 +37,6 @@ pub(crate) fn run(
     members: &[String],
     exposes: &[String],
     filter: Option<&str>,
-    _interactive: bool,
     connect: Option<&str>,
     satisfy: Option<&str>,
     verify: Option<&str>,

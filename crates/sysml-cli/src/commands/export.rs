@@ -7,65 +7,11 @@ use crate::{read_source, Cli, ExportCommand};
 
 pub(crate) fn run(cli: &Cli, kind: &ExportCommand) -> ExitCode {
     match kind {
-        ExportCommand::Interfaces { file, part } => run_export_interfaces(cli, file, part),
         ExportCommand::Modelica { file, part, output } => {
             run_export_modelica(cli, file, part, output.as_ref())
         }
         ExportCommand::Ssp { file, output } => run_export_ssp(cli, file, output.as_ref()),
         ExportCommand::List { file } => run_export_list(cli, file),
-    }
-}
-
-fn run_export_interfaces(cli: &Cli, file: &PathBuf, part: &str) -> ExitCode {
-    use sysml_core::export::fmi;
-
-    let (path_str, source) = match read_source(file) {
-        Ok(v) => v,
-        Err(code) => return code,
-    };
-
-    let model = sysml_parser::parse_file(&path_str, &source);
-
-    match fmi::extract_interface(&model, part) {
-        Ok(interface) => {
-            if cli.format == "json" {
-                println!("{}", serde_json::to_string_pretty(&interface).unwrap());
-            } else {
-                println!("FMI Interface: {}", interface.part_name);
-                println!("{}", "-".repeat(60));
-                if interface.items.is_empty() {
-                    println!("  No interface items found.");
-                } else {
-                    println!(
-                        "  {:<15} {:<10} {:<12} {:<10} {:<12} Port",
-                        "Name", "Direction", "SysML Type", "FMI Type", "Causality"
-                    );
-                    println!("  {}", "-".repeat(70));
-                    for item in &interface.items {
-                        println!(
-                            "  {:<15} {:<10} {:<12} {:<10} {:<12} {}",
-                            item.name,
-                            item.direction,
-                            item.sysml_type,
-                            item.fmi_type,
-                            item.causality,
-                            item.source_port,
-                        );
-                    }
-                }
-                if !interface.attributes.is_empty() {
-                    println!("\n  Attributes:");
-                    for attr in &interface.attributes {
-                        println!("    {} : {}", attr.name, attr.sysml_type);
-                    }
-                }
-            }
-            ExitCode::SUCCESS
-        }
-        Err(e) => {
-            eprintln!("error: {}", e);
-            ExitCode::from(1)
-        }
     }
 }
 

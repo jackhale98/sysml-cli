@@ -20,11 +20,6 @@ fn main() -> ExitCode {
     let cli = Cli::parse();
 
     match &cli.command {
-        Command::Lint {
-            files,
-            disable,
-            severity,
-        } => commands::check::run(&cli, files, disable, severity, true),
         Command::List {
             files,
             kind,
@@ -102,7 +97,6 @@ fn main() -> ExitCode {
             by,
             exposes,
             filter,
-            interactive,
         } => commands::add::run(
             &cli,
             file.as_ref(),
@@ -120,7 +114,6 @@ fn main() -> ExitCode {
             members,
             exposes,
             filter.as_deref(),
-            *interactive,
             connect.as_deref(),
             satisfy.as_deref(),
             verify.as_deref(),
@@ -168,23 +161,15 @@ fn main() -> ExitCode {
             min_score,
         } => commands::coverage::run(&cli, files, *check, *min_score),
         Command::Init { force } => commands::init::run(&cli, *force),
-        Command::Index { full, stats } => commands::index::run(&cli, *full, *stats),
+        Command::Index { stats } => commands::index::run(&cli, *stats),
         Command::Check {
             files,
             disable,
             severity,
-            lint_only,
-        } => commands::check::run(&cli, files, disable, severity, *lint_only),
+        } => commands::check::run(&cli, files, disable, severity),
         Command::Repl { files } => commands::repl::run(files),
         Command::Doc { files, root } => commands::doc::run(&cli, files, root.as_deref()),
-        Command::Find {
-            files,
-            pattern,
-            kind,
-        } => commands::find::run(&cli, files, pattern, kind),
         Command::Analyze { kind } => commands::analyze::run(&cli, kind),
         Command::Rollup { kind } => commands::rollup::run(&cli, kind),
-        Command::Guide { topic } => commands::help_topics::run(topic.as_deref()),
-        Command::Pipeline { ref kind } => commands::pipeline::run(kind, &cli.format, cli.quiet),
     }
 }
