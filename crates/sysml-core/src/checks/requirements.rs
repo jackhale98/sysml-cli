@@ -22,7 +22,9 @@ impl Check for UnsatisfiedReqCheck {
         let mut diagnostics = Vec::new();
 
         for def in req_defs {
-            if !requirement_traced(model, def, &model.satisfactions, |s| &s.requirement) {
+            if !requirement_traced(model, def, &model.satisfactions, |s| &s.requirement)
+                && !externally_traced(&model.external_satisfied, def)
+            {
                 diagnostics.push(Diagnostic::warning(
                     &model.file,
                     def.span.clone(),
@@ -37,6 +39,16 @@ impl Check for UnsatisfiedReqCheck {
 
         diagnostics
     }
+}
+
+/// True when a requirement def is traced by the project-wide resolved set
+/// (populated by the resolver: satisfy/verify targets anywhere in the
+/// project, resolved through usages and closed over specialization).
+fn externally_traced(traced: &[String], def: &crate::model::Definition) -> bool {
+    use crate::model::target_matches;
+    traced
+        .iter()
+        .any(|t| target_matches(t, &def.name, def.short_name.as_deref()))
 }
 
 /// True when a requirement def is traced by any of `items` — either
@@ -85,7 +97,9 @@ impl Check for UnverifiedReqCheck {
         let mut diagnostics = Vec::new();
 
         for def in req_defs {
-            if !requirement_traced(model, def, &model.verifications, |v| &v.requirement) {
+            if !requirement_traced(model, def, &model.verifications, |v| &v.requirement)
+                && !externally_traced(&model.external_verified, def)
+            {
                 diagnostics.push(Diagnostic::warning(
                     &model.file,
                     def.span.clone(),

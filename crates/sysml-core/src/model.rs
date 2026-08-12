@@ -431,6 +431,15 @@ pub struct Model {
     /// Metadata annotations (`@Type { ... }`) with values and targets.
     #[serde(skip_serializing_if = "Vec::is_empty")]
     pub annotations: Vec<MetadataAnnotation>,
+    /// Requirement names satisfied anywhere in the project, resolved through
+    /// requirement usages and closed over specialization (populated by the
+    /// resolver): satisfying `Derived :> Base` satisfies `Base`.
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub external_satisfied: Vec<String>,
+    /// Requirement names verified anywhere in the project, resolved the same
+    /// way as `external_satisfied` (populated by the resolver).
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub external_verified: Vec<String>,
 }
 
 impl Model {
@@ -452,6 +461,8 @@ impl Model {
             resolved_imports: Vec::new(),
             external_references: Vec::new(),
             annotations: Vec::new(),
+            external_satisfied: Vec::new(),
+            external_verified: Vec::new(),
         }
     }
 

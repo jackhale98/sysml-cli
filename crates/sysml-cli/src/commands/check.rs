@@ -87,6 +87,11 @@ pub fn run(
                 .extend(proj.resolve_root_refs(&model));
             // Defs referenced by sibling files count as used (W001).
             model.external_references = proj.external_references_for(&model);
+            // Requirements satisfied/verified anywhere in the project count
+            // as traced (W002/W003/W014), including through specialization.
+            let (satisfied, verified) = proj.traced_requirements();
+            model.external_satisfied = satisfied.into_iter().collect();
+            model.external_verified = verified.into_iter().collect();
         }
 
         for check in &active_checks {

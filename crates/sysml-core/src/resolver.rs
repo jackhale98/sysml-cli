@@ -317,6 +317,92 @@ impl Project {
         resolved
     }
 
+    /// Project-wide requirement traceability: the names of requirements
+    /// satisfied (resp. verified) anywhere in the project. Satisfy/verify
+    /// targets are resolved through requirement usages (a target naming a
+    /// usage or its `<id>` short name counts for the usage's type), then
+    /// closed over definition specialization: satisfying
+    /// `Derived :> Base` satisfies `Base` too.
+    pub fn traced_requirements(&self) -> (HashSet<String>, HashSet<String>) {
+        use crate::model::{simple_name, unquote_name};
+
+        // requirement usage name / <id> short name -> type simple name
+        let mut usage_types: HashMap<String, String> = HashMap::new();
+        // definition <id> short name -> definition name
+        let mut def_shorts: HashMap<String, String> = HashMap::new();
+        // definition name -> specialization parent simple name
+        let mut parents: HashMap<String, String> = HashMap::new();
+        for m in &self.models {
+            for u in &m.usages {
+                if u.kind != "requirement" {
+                    continue;
+                }
+                if let Some(t) = u.type_ref.as_deref() {
+                    let ty = simple_name(t).to_string();
+                    usage_types.insert(u.name.clone(), ty.clone());
+                    if let Some(sn) = u.short_name.as_deref() {
+                        usage_types.insert(unquote_name(sn).to_string(), ty);
+                    }
+                }
+            }
+            for d in &m.definitions {
+                if let Some(sn) = d.short_name.as_deref() {
+                    def_shorts.insert(unquote_name(sn).to_string(), d.name.clone());
+                }
+                if let Some(s) = d.super_type.as_deref() {
+                    parents.insert(d.name.clone(), simple_name(s).to_string());
+                }
+            }
+        }
+
+        let resolve = |targets: HashSet<String>| -> HashSet<String> {
+            let mut out = targets.clone();
+            // Resolve usage / short-name targets to definition names.
+            for t in &targets {
+                if let Some(ty) = usage_types.get(t) {
+                    out.insert(ty.clone());
+                }
+                if let Some(dn) = def_shorts.get(t) {
+                    out.insert(dn.clone());
+                }
+            }
+            // Close over specialization ancestors.
+            for name in out.clone() {
+                let mut current = name;
+                let mut depth = 0;
+                while let Some(p) = parents.get(&current) {
+                    depth += 1;
+                    if depth > 32 || !out.insert(p.clone()) {
+                        break;
+                    }
+                    current = p.clone();
+                }
+            }
+            out
+        };
+
+        let mut satisfied: HashSet<String> = HashSet::new();
+        let mut verified: HashSet<String> = HashSet::new();
+        for m in &self.models {
+            for s in &m.satisfactions {
+                let t = unquote_name(simple_name(&s.requirement));
+                satisfied.insert(t.to_string());
+                if let Some(last) = t.rsplit('.').next() {
+                    satisfied.insert(last.to_string());
+                }
+            }
+            for v in &m.verifications {
+                let t = unquote_name(simple_name(&v.requirement));
+                verified.insert(t.to_string());
+                if let Some(last) = t.rsplit('.').next() {
+                    verified.insert(last.to_string());
+                }
+            }
+        }
+
+        (resolve(satisfied), resolve(verified))
+    }
+
     /// Simple names referenced by all *other* models in the project.
     /// Used to suppress cross-file unused-definition false positives.
     pub fn external_references_for(&self, model: &Model) -> Vec<String> {
@@ -562,6 +648,82 @@ mod tests {
         assert!(
             msgs.iter().any(|m| m.contains("doesNotExistAnywhere")),
             "unknown subset target must still warn: {msgs:?}"
+        );
+    }
+
+    fn requirement_diags(proj: &Project, file: &str) -> Vec<String> {
+        use crate::checks::orphaned_requirements::OrphanedRequirementCheck;
+        use crate::checks::requirements::{UnsatisfiedReqCheck, UnverifiedReqCheck};
+        let model = proj.models.iter().find(|m| m.file == file).unwrap();
+        let mut model = model.clone();
+        let (satisfied, verified) = proj.traced_requirements();
+        model.external_satisfied = satisfied.into_iter().collect();
+        model.external_verified = verified.into_iter().collect();
+        model.external_references = proj.external_references_for(&model);
+        let mut msgs = Vec::new();
+        msgs.extend(UnsatisfiedReqCheck.run(&model).into_iter().map(|d| d.message));
+        msgs.extend(UnverifiedReqCheck.run(&model).into_iter().map(|d| d.message));
+        msgs.extend(
+            OrphanedRequirementCheck
+                .run(&model)
+                .into_iter()
+                .map(|d| d.message),
+        );
+        msgs
+    }
+
+    #[test]
+    fn cross_file_satisfy_through_specialization_traces_base() {
+        // A library requirement def satisfied+verified in another file via a
+        // usage of a *specializing* def must not raise W002/W003/W014.
+        let proj = project(&[
+            (
+                "lib.sysml",
+                "package Lib { requirement def RiskControl; }\n",
+            ),
+            (
+                "use.sysml",
+                "package Use {\n\
+                     private import Lib::*;\n\
+                     requirement def CutoffReq :> RiskControl;\n\
+                     requirement cutoff : CutoffReq;\n\
+                     part def Bms;\n\
+                     part bms : Bms;\n\
+                     satisfy cutoff by bms;\n\
+                     verification def CutoffTest {\n\
+                         objective {\n\
+                             verify cutoff;\n\
+                         }\n\
+                     }\n\
+                 }\n",
+            ),
+        ]);
+        let msgs = requirement_diags(&proj, "lib.sysml");
+        assert!(
+            msgs.iter().all(|m| !m.contains("RiskControl")),
+            "base requirement satisfied via specialized usage in another \
+             file must be traced: {msgs:?}"
+        );
+    }
+
+    #[test]
+    fn cross_file_untraced_requirement_still_warns() {
+        // The project-wide sets must not blanket-approve: a requirement def
+        // never satisfied anywhere still warns.
+        let proj = project(&[
+            (
+                "lib.sysml",
+                "package Lib { requirement def NeverTouched; }\n",
+            ),
+            (
+                "use.sysml",
+                "package Use { private import Lib::*; part def Bms; }\n",
+            ),
+        ]);
+        let msgs = requirement_diags(&proj, "lib.sysml");
+        assert!(
+            msgs.iter().any(|m| m.contains("NeverTouched")),
+            "untraced requirement must still warn: {msgs:?}"
         );
     }
 }
