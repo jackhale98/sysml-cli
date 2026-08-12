@@ -36,10 +36,24 @@ fn run_sim_eval(cli: &Cli, file: &PathBuf, bindings: &[String], name: Option<&st
         Err(code) => return code,
     };
 
-    let env = parse_bindings(bindings);
+    let mut env = parse_bindings(bindings);
 
     let constraints = extract_constraints(&path_str, &source);
     let calcs = extract_calculations(&path_str, &source);
+
+    // Shared solve path with `analyze run`: equation-form constraints
+    // (`x == expr`) are solved by substitution first, so derived values
+    // need no manual -b bindings and inequalities see solved variables.
+    let equations: Vec<_> = constraints
+        .iter()
+        .filter_map(|c| c.expression.clone())
+        .collect();
+    let solve = sysml_core::sim::analysis::solve_equations(&equations, &mut env);
+    if cli.format != "json" {
+        for (name, value) in &solve.solved {
+            println!("solved {}: {}", name, value);
+        }
+    }
 
     let target_constraints: Vec<&ConstraintModel> = if let Some(n) = name {
         constraints.iter().filter(|c| c.name == n).collect()

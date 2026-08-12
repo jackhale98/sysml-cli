@@ -67,8 +67,8 @@ constraint (pre-release). Items are checked off as they land.
 
 - [x] Parser extracts `:>> name = value;` statements (landed)
 - [x] Uncertainty analyzer on one extraction path (landed)
-- [ ] `simulate eval` and `analyze run` share the solve path (two
-      evaluators with different capabilities today)
+- [x] `simulate eval` and `analyze run` share the solve path
+      (equation-form constraints solve by substitution in both)
 - [ ] REPL dispatches into the real command implementations — deferred;
       its kind-filter now uses the same parse_kind_filter vocabulary as
       `list` (the concrete divergence), and its loader merges all fields
@@ -92,5 +92,5 @@ constraint (pre-release). Items are checked off as they land.
 - `coverage` weights → `ModelQuality.sysml` calc defs (constraint
   evaluation in `check` landed as W017; the calc-def migration remains)
 - Cache read path (`index` builds a cache nothing reads)
-- `record.rs` / `project_model.rs` (1.5k lines unreachable) — keep or cut
-  with the record-tooling decision
+- ~~`record.rs` / `project_model.rs`~~ cut (1.5k lines, zero references;
+  `index_records` has its own TOML path and is unaffected)

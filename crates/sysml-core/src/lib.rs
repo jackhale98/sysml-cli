@@ -26,10 +26,8 @@ pub mod interactive;
 pub mod model;
 pub mod parser;
 pub mod project;
-pub mod project_model;
 pub mod qualified_name;
 pub mod query;
-pub mod record;
 pub mod resolver;
 pub mod sim;
 #[cfg(feature = "sqlite")]
