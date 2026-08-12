@@ -96,6 +96,25 @@ pub fn run(cli: &Cli, files: &[PathBuf], disable: &[String], severity: &str) -> 
         }
     }
 
+    // Value-constraint evaluation (W017) is project-wide: the libraries
+    // provide the assert constraints, the checked files provide the values.
+    if !disabled.contains("value-constraints") {
+        if let Some(ref proj) = project {
+            let targets: Vec<String> = files
+                .iter()
+                .map(|f| f.to_string_lossy().to_string())
+                .collect();
+            for d in sysml_core::checks::value_constraints::check_value_constraints(
+                &proj.models,
+                &targets,
+            ) {
+                if d.severity >= min_severity {
+                    all_diagnostics.push(d);
+                }
+            }
+        }
+    }
+
     all_diagnostics.sort_by(|a, b| {
         a.file
             .cmp(&b.file)

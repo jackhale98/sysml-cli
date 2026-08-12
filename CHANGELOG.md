@@ -26,6 +26,16 @@
   `index --full`, `diagram -o` (renderer is now `-r/--renderer`; `-o`
   is freed for output files), `rollup what-if -s` (use `--scenario`)
 
+### Value-constraint evaluation (W017)
+- `check` now evaluates `assert constraint`s against concrete model
+  values: `@Fmea { severity = 12; }` is flagged because `FmeaRating`
+  asserts `that >= 1 and that <= 10`, and a `LimitRange` with
+  `lower > nominal` is flagged by its `wellOrdered` constraint. Rules
+  live in the libraries; the checker is generic. Disable with
+  `-d value-constraints`.
+- Named assert constraints now carry their body expression in the model
+  (previously only anonymous ones did)
+
 ### Robustness
 - One shared model loader: every whole-project command honors
   `-I`/`--stdlib-path`/`.sysml/config.toml` (24 of 26 silently ignored

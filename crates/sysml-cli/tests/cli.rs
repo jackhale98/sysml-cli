@@ -937,6 +937,42 @@ fn analyze_unknown_name() {
 }
 
 // ========================================================================
+// check: value constraints (W017)
+// ========================================================================
+
+#[test]
+fn check_value_constraints_flag_violations() {
+    let out = cmd()
+        .args(["check", &fixture("ValueConstraints.sysml")])
+        .assert()
+        .success() // W017 is a warning, not an error
+        .get_output()
+        .stdout
+        .clone();
+    let text = String::from_utf8(out).unwrap();
+    assert!(text.contains("W017"), "{text}");
+    assert!(text.contains("severity = 12"), "{text}");
+    assert!(text.contains("`rating`"), "{text}");
+    assert!(text.contains("wellOrdered"), "{text}");
+    // The in-range target must NOT be flagged.
+    assert!(!text.contains("`okTarget`"), "{text}");
+}
+
+#[test]
+fn check_value_constraints_can_be_disabled() {
+    cmd()
+        .args([
+            "check",
+            "-d",
+            "value-constraints,unused,missing-docs",
+            &fixture("ValueConstraints.sysml"),
+        ])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("W017").not());
+}
+
+// ========================================================================
 // view
 // ========================================================================
 

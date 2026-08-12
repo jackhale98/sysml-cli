@@ -53,6 +53,7 @@
 | W014 | orphan-req | `requirement def '<name>' is never satisfied, verified, or specialized` |
 | W015 | self-specialization | `<kind> '<name>' specializes itself: ':> <name>' would cause infinite recursion` |
 | W016 | unbound-port | `port '<name>' (in '<parent>') is declared but never connected` |
+| W017 | value-constraints | `<value> violates constraint '<name>' of '<type>' (<expression>)` |
 
 ### Multi-file semantics
 
@@ -71,6 +72,13 @@ are given), they share a root namespace, per SysML v2 name resolution:
   anywhere in the invocation targets it — directly, through a usage typing
   it (or that usage's `<ID>` short name), or through a def that
   specializes it: satisfying `Derived :> Base` satisfies `Base`.
+- W017 evaluates `assert constraint`s against concrete values: metadata
+  annotation fields (`@Fmea { severity = 12; }`), typed usages with
+  direct values, and typed usages with body values (multi-attribute
+  constraints like `lower <= nominal and nominal <= upper`). The
+  constraints come from the value's declared type and its supertypes —
+  domain libraries add validation rules by writing SysML, not tool code.
+  Constraints with unresolved variables are skipped, never guessed.
 - W013 (naming) exempts metadata annotations (`@Fmea { ... }`), which take
   their metadata def's PascalCase name by design.
 

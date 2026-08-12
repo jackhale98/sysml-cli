@@ -107,4 +107,5 @@ pub mod codes {
     pub const ORPHANED_REQUIREMENT: &str = "W014";
     pub const SELF_SPECIALIZATION: &str = "W015";
     pub const UNBOUND_PORT: &str = "W016";
+    pub const CONSTRAINT_VIOLATION: &str = "W017";
 }

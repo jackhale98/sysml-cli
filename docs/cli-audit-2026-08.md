@@ -89,8 +89,8 @@ constraint (pre-release). Items are checked off as they land.
 - JSON output envelope with a `command` discriminator on every command
   (do per-command as they are touched)
 - rustc-style spans on all error messages (only `check` has spans today)
-- `coverage` weights → `ModelQuality.sysml` calc defs (needs constraint
-  evaluation in `check` first)
+- `coverage` weights → `ModelQuality.sysml` calc defs (constraint
+  evaluation in `check` landed as W017; the calc-def migration remains)
 - Cache read path (`index` builds a cache nothing reads)
 - `record.rs` / `project_model.rs` (1.5k lines unreachable) — keep or cut
   with the record-tooling decision

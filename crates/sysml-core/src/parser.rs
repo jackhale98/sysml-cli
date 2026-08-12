@@ -902,7 +902,16 @@ fn walk_node_scoped(
                 let direction = get_direction(&node);
                 let conjugated = is_conjugated_type(&node, source);
                 let multiplicity = get_multiplicity(&node, source);
-                let value_expr = get_value_expr(&node, source);
+                // Named constraint usages carry their body expression in
+                // value_expr, same as the anonymous form below — value
+                // checks evaluate these against concrete model values.
+                let value_expr = get_value_expr(&node, source).or_else(|| {
+                    if kind == "constraint_usage" || kind == "constraint_expression_usage" {
+                        extract_constraint_body_text(&node, source)
+                    } else {
+                        None
+                    }
+                });
                 let short_name = get_short_name(&node, source);
                 model.usages.push(Usage {
                     kind: usage_kind.to_string(),
@@ -1920,7 +1929,15 @@ fn extract_constraint_body_text(node: &Node, source: &[u8]) -> Option<String> {
             let mut bc = child.walk();
             for body_child in child.children(&mut bc) {
                 match body_child.kind() {
-                    "expression_statement" | "result_expression" => {
+                    // Bodies may hold a statement or a bare expression
+                    // (`{ that >= 1 and that <= 10 }` has no semicolon).
+                    "expression_statement"
+                    | "result_expression"
+                    | "binary_expression"
+                    | "unary_expression"
+                    | "invocation_expression"
+                    | "paren_expression"
+                    | "parenthesized_expression" => {
                         let text = node_text(&body_child, source).trim_end_matches(';').trim();
                         if !text.is_empty() {
                             return Some(text.to_string());
