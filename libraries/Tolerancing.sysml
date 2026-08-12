@@ -220,9 +220,10 @@ package Tolerancing {
          * evaluation method.
          *
          * Evaluate with a generic uncertainty analyzer, e.g.:
-         *   sysml analyze <stackup> --method worst-case
-         *   sysml analyze <stackup> --method rss
-         *   sysml analyze <stackup> --method monte-carlo --iterations 50000
+         *   sysml analyze run -I libraries <file> -n <stackup>
+         *   sysml analyze run -I libraries <file> -n <stackup> --method rss
+         *   sysml analyze run -I libraries <file> -n <stackup> \
+         *       --method monte-carlo --iterations 50000 --seed 12345
          *
          * Declare contributors by subsetting the inherited collection:
          *   attribute housingDepth :> contributions { :>> dim = ...; }

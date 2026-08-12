@@ -635,6 +635,53 @@ mod tests {
     }
 
     #[test]
+    fn usage_level_redefinition_overrides_definition() {
+        // Values live on the part def (the drawing) by default; a part
+        // usage may redefine a dimension for its context (selective
+        // assembly, variant fit). Usage values win over def values.
+        let src = r#"
+            package P {
+                analysis def UncertaintyAnalysis;
+                analysis def Stackup :> UncertaintyAnalysis;
+                part def Pin {
+                    attribute od {
+                        :>> nominal = 10.0;
+                        :>> plus = 0.1;
+                        :>> minus = 0.1;
+                    }
+                }
+                part def Asm {
+                    part pin : Pin {
+                        attribute :>> od {
+                            :>> nominal = 10.2;
+                            :>> plus = 0.02;
+                            :>> minus = 0.02;
+                        }
+                    }
+                    analysis gap : Stackup {
+                        attribute :>> target {
+                            :>> nominal = 10.2;
+                            :>> lower = 10.0;
+                            :>> upper = 10.4;
+                        }
+                        attribute c1 : Contribution {
+                            :>> dim = pin.od;
+                        }
+                    }
+                }
+            }
+        "#;
+        let ms = vec![parse_file("o.sysml", src)];
+        let case = extract_case(&ms, "gap").expect("extraction");
+        assert!(
+            (case.inputs[0].nominal - 10.2).abs() < 1e-9,
+            "usage-level value must win: {}",
+            case.inputs[0].nominal
+        );
+        assert!((case.inputs[0].plus - 0.02).abs() < 1e-9);
+    }
+
+    #[test]
     fn settings_overrides_from_model() {
         let src = r#"
             package P {
