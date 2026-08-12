@@ -181,7 +181,7 @@ fn find_def_model<'a>(
     models.iter().find(|m| {
         m.definitions
             .iter()
-            .any(|d| d.name == name && kind.map_or(true, |k| d.kind == k))
+            .any(|d| d.name == name && kind.is_none_or(|k| d.kind == k))
     })
 }
 
