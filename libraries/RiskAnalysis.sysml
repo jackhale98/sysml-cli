@@ -154,7 +154,7 @@ package RiskAnalysis {
          * Tabular report: one row per @Fmea annotation with the annotated
          * element, failure mode, cause, effect, S/O/D, and computed RPN,
          * sorted by RPN descending. Rendered by tools implementing the
-         * generic report primitive (e.g. `sysml report FmeaWorksheet`).
+         * generic view-rendering primitive (e.g. `sysml view FmeaWorksheet`).
          */
     }
 

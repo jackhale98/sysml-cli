@@ -241,8 +241,8 @@ package Tolerancing {
         /*
          * Tabular report: one row per ToleranceStackup usage with target
          * limits, worst-case range, RSS Cpk, and pass/fail status.
-         * Rendered by tools implementing the generic report primitive
-         * (e.g. `sysml report StackupSummary`).
+         * Rendered by tools implementing the generic view-rendering primitive
+         * (e.g. `sysml view StackupSummary`).
          */
     }
 

@@ -144,7 +144,7 @@ package HazardAnalysis {
          * contributing failure modes, hazardous situations (p1, p2,
          * probability of harm), harms with severity, and the status of
          * linked RiskControls. Rendered by tools implementing the generic
-         * report primitive (e.g. `sysml report HazardLog`).
+         * report primitive (e.g. `sysml view HazardLog`).
          */
     }
 }
