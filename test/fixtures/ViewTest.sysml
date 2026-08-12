@@ -1,45 +1,68 @@
-package ViewTest {
-	package P {
-		public part p1;
-		private part p2;
-	}
+package ViewTestFixture {
+    doc /* Self-contained view-rendering fixture: TableRendering spec,
+         * @Fmea worksheet rows, pivot, and a stackup summary view that
+         * pairs with UncertaintyStackup.sysml. */
 
-	part def S;
+    private import ScalarValues::*;
 
-	concern def C {
-	    subject;
-		stakeholder s : S;
-	}
+    metadata def TableRendering {
+        attribute rows : String;
+        attribute columns : String[0..1];
+        attribute sortBy : String[0..1];
+        attribute pivot : String[0..1];
+        attribute where : String[0..1];
+    }
 
-	concern c : C {
-	    subject;
-		stakeholder s1;
-	}
+    metadata def Fmea {
+        attribute failureMode : String;
+        attribute severity : Integer;
+        attribute occurrence : Integer;
+        attribute detection : Integer;
+    }
 
-	viewpoint def VP {
-		frame c;
-	}
+    view def Worksheet {
+        @TableRendering {
+            rows = "@Fmea";
+            columns = "element; failureMode; severity; occurrence; detection; rpn = severity*occurrence*detection";
+            sortBy = "-rpn";
+        }
+    }
 
-	rendering def R;
+    view def Matrix {
+        @TableRendering {
+            rows = "@Fmea";
+            pivot = "severity; occurrence";
+        }
+    }
 
-	rendering r : R;
+    view def StackupSummary {
+        @TableRendering {
+            rows = "uncertainty";
+            columns = "case; nominal; wcMin; wcMax; margin; result";
+            sortBy = "case";
+        }
+    }
 
-	view def V {
-		viewpoint vp: VP {
-			frame concern c1;
-			concern c2;
-		}
-		render rendering r1: R[0..1];
+    view def Stats {
+        @TableRendering {
+            rows = "kindcounts";
+            columns = "kind; definitions; usages";
+        }
+    }
 
-		view v: V[0..*] {
-			expose P::*;
-			render r;
-
-			rendering r2;
-
-			alias vp1 for p1;
-			alias vp2 for p2;
-		}
-	}
-
+    part def Battery;
+    part battery : Battery {
+        @Fmea {
+            failureMode = "Thermal runaway";
+            severity = 9;
+            occurrence = 3;
+            detection = 4;
+        }
+        @Fmea {
+            failureMode = "Capacity fade";
+            severity = 5;
+            occurrence = 6;
+            detection = 3;
+        }
+    }
 }

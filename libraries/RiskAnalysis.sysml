@@ -34,6 +34,7 @@ package RiskAnalysis {
 
     private import ScalarValues::*;
     private import HazardAnalysis::*;
+    private import Reporting::*;
 
     attribute def FmeaRating :> Integer {
         doc /* Ordinal FMEA rating on the AIAG/VDA 1-10 scale. */
@@ -151,18 +152,21 @@ package RiskAnalysis {
     view def FmeaWorksheet {
         doc
         /*
-         * Tabular report: one row per @Fmea annotation with the annotated
-         * element, failure mode, cause, effect, S/O/D, and computed RPN,
-         * sorted by RPN descending. Rendered by tools implementing the
-         * generic view-rendering primitive (e.g. `sysml view FmeaWorksheet`).
+         * One row per @Fmea annotation, sorted by derived RPN descending.
+         * Render with `sysml view FmeaWorksheet`.
          */
+        @TableRendering {
+            rows = "@Fmea";
+            columns = "element; failureMode; cause; category; severity; occurrence; detection; rpn = severity*occurrence*detection";
+            sortBy = "-rpn";
+        }
     }
 
     view def RiskMatrix {
-        doc
-        /*
-         * Pivot report: severity x occurrence grid with the count (or IDs)
-         * of @Fmea items in each cell.
-         */
+        doc /* Severity x occurrence grid of @Fmea line-item counts. */
+        @TableRendering {
+            rows = "@Fmea";
+            pivot = "severity; occurrence";
+        }
     }
 }

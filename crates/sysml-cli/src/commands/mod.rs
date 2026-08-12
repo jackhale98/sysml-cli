@@ -21,3 +21,4 @@ pub mod show;
 pub mod simulate;
 pub mod stats;
 pub mod trace;
+pub mod view;

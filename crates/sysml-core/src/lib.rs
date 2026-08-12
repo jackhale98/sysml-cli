@@ -35,3 +35,4 @@ pub mod sim;
 #[cfg(feature = "sqlite")]
 pub mod sqlite_cache;
 pub mod stdlib;
+pub mod view_render;

@@ -48,12 +48,12 @@ constraint (pre-release). Items are checked off as they land.
 
 ## C. Views replace report commands
 
-- [ ] `sysml view <ViewName>` — generic renderer: expose/filter, row
+- [x] `sysml view <ViewName>` — generic renderer: expose/filter, row
       providers (metadata annotations, typed usages, relations,
       uncertainty results), columns/sort/pivot via `@TableRendering`
-- [ ] Library view defs get real bodies (FmeaWorksheet, RiskMatrix,
+- [x] Library view defs get real bodies (FmeaWorksheet, RiskMatrix,
       HazardLog, StackupSummary, FitTable)
-- [ ] `StandardViews.sysml`: PortTable, AllocationMatrix,
+- [x] `StandardViews.sysml`: PortTable, AllocationMatrix,
       RequirementsTraceMatrix, ModelStats
 - [ ] `interfaces` deleted (→ view PortTable)
 - [ ] `stats` deleted (→ view ModelStats)

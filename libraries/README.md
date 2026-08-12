@@ -6,8 +6,9 @@ resolution path.
 
 ## Engineering analysis (canonical source: sysml-domain-libraries)
 
-`Uncertainty.sysml`, `Tolerancing.sysml`, `RiskAnalysis.sysml`, and
-`HazardAnalysis.sysml` are synced from
+`Uncertainty.sysml`, `Tolerancing.sysml`, `RiskAnalysis.sysml`,
+`HazardAnalysis.sysml`, `Reporting.sysml`, and `StandardViews.sysml` are
+synced from
 [sysml-domain-libraries](https://github.com/jackhale98/sysml-domain-libraries),
 which is their canonical home (design rationale, examples, and validation
 harness live there). They cover toleranced dimensions and GD&T, tolerance stackup

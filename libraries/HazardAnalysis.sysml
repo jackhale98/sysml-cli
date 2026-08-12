@@ -24,6 +24,7 @@ package HazardAnalysis {
      */
 
     private import ScalarValues::*;
+    private import Reporting::*;
 
     abstract occurrence def RiskEvent {
         doc
@@ -140,11 +141,15 @@ package HazardAnalysis {
     view def HazardLog {
         doc
         /*
-         * Tabular report: one row per Hazard with its causal chain -
-         * contributing failure modes, hazardous situations (p1, p2,
-         * probability of harm), harms with severity, and the status of
-         * linked RiskControls. Rendered by tools implementing the generic
-         * report primitive (e.g. `sysml view HazardLog`).
+         * One row per Hazard occurrence. Causal-chain columns
+         * (situations, harms, control status) come with the relation
+         * providers planned for the view engine; today the log lists
+         * each hazard with its description and location.
          */
+        @TableRendering {
+            rows = "type:Hazard";
+            columns = "element; description; file; line";
+            sortBy = "element";
+        }
     }
 }

@@ -20,6 +20,7 @@ package Tolerancing {
 
     private import ScalarValues::*;
     private import Uncertainty::*;
+    private import Reporting::*;
 
     attribute def ToleratedDimension :> UncertainValue {
         doc
@@ -240,19 +241,29 @@ package Tolerancing {
     view def StackupSummary {
         doc
         /*
-         * Tabular report: one row per ToleranceStackup usage with target
-         * limits, worst-case range, RSS Cpk, and pass/fail status.
-         * Rendered by tools implementing the generic view-rendering primitive
-         * (e.g. `sysml view StackupSummary`).
+         * One row per uncertainty analysis case, evaluated: target
+         * limits, worst-case range and margin, RSS Cp/Cpk, and verdict.
+         * Render with `sysml view StackupSummary`.
          */
+        @TableRendering {
+            rows = "uncertainty";
+            columns = "case; critical; nominal; lower; upper; wcMin; wcMax; margin; cp; cpk; result";
+            sortBy = "margin";
+        }
     }
 
     view def FitTable {
         doc
         /*
-         * Tabular report: one row per Mate usage with mated dimensions,
-         * worst-case min/max clearance, computed fit type, and expected
-         * fit agreement.
+         * Connections, one row each. Mate-specific columns (worst-case
+         * min/max clearance from the mated dimensions, computed vs
+         * expected fit) come with the mate row provider planned for the
+         * view engine.
          */
+        @TableRendering {
+            rows = "relation:connection";
+            columns = "source; target";
+            sortBy = "source";
+        }
     }
 }

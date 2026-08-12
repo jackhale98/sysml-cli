@@ -34,9 +34,9 @@ pub(crate) struct Cli {
     #[command(subcommand)]
     pub(crate) command: Command,
 
-    /// Output format.
+    /// Output format (csv and md apply to tabular output, e.g. `view`).
     #[arg(short, long, default_value = "text", global = true,
-          value_parser = ["text", "json"])]
+          value_parser = ["text", "json", "csv", "md"])]
     pub(crate) format: String,
 
     /// Suppress summary line on stderr.
@@ -612,6 +612,29 @@ pub(crate) enum Command {
         /// Root element to start documentation from.
         #[arg(long)]
         root: Option<String>,
+    },
+    /// Render a model-defined view as a table.
+    ///
+    /// Views are SysML v2 `view def`s carrying a @TableRendering
+    /// annotation (see the Reporting domain library) that specifies rows,
+    /// columns, sorting, filtering, and pivoting. The libraries ship
+    /// standard views (FmeaWorksheet, RiskMatrix, HazardLog,
+    /// StackupSummary, PortTable, AllocationMatrix,
+    /// RequirementsTraceMatrix, ModelStats); projects add their own by
+    /// writing view defs — no tool changes needed.
+    ///
+    /// EXAMPLES:
+    ///   sysml view                              List available views
+    ///   sysml view FmeaWorksheet
+    ///   sysml view RiskMatrix -I libraries model.sysml
+    ///   sysml view StackupSummary -f csv > stackups.csv
+    ///   sysml view ModelStats -f md
+    View {
+        /// View name (omit to list available views).
+        name: Option<String>,
+
+        /// SysML v2 files (omit to scan project).
+        files: Vec<PathBuf>,
     },
     /// Run analysis cases defined in SysML v2 models.
     ///

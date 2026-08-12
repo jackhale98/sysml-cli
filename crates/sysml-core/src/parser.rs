@@ -1330,6 +1330,23 @@ fn walk_node_scoped(
                                         ));
                                     }
                                 }
+                                // Fields named after SysML keywords
+                                // (`occurrence = 3;`) parse as usage nodes
+                                // inside metadata bodies — recover the
+                                // keyword as the field name.
+                                "usage" => {
+                                    let mut uc = bchild.walk();
+                                    let name = bchild
+                                        .children(&mut uc)
+                                        .find(|c| !c.is_named())
+                                        .map(|c| node_text(&c, source).to_string());
+                                    drop(uc);
+                                    if let (Some(n), Some(v)) =
+                                        (name, get_value_expr(&bchild, source))
+                                    {
+                                        values.push((n, v));
+                                    }
+                                }
                                 _ => {}
                             }
                         }

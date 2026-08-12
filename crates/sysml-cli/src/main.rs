@@ -169,6 +169,7 @@ fn main() -> ExitCode {
         } => commands::check::run(&cli, files, disable, severity),
         Command::Repl { files } => commands::repl::run(files),
         Command::Doc { files, root } => commands::doc::run(&cli, files, root.as_deref()),
+        Command::View { name, files } => commands::view::run(&cli, name.as_deref(), files),
         Command::Analyze { kind } => commands::analyze::run(&cli, kind),
         Command::Rollup { kind } => commands::rollup::run(&cli, kind),
     }

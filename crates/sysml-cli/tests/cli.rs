@@ -917,6 +917,94 @@ fn analyze_unknown_name() {
         .stderr(predicate::str::contains("not found"));
 }
 
+// ========================================================================
+// view
+// ========================================================================
+
+#[test]
+fn view_lists_available() {
+    cmd()
+        .args(["view", &fixture("ViewTest.sysml")])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("Worksheet"))
+        .stdout(predicate::str::contains("Matrix"));
+}
+
+#[test]
+fn view_worksheet_computed_and_sorted() {
+    let out = cmd()
+        .args(["view", "Worksheet", &fixture("ViewTest.sysml")])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("108"))
+        .stdout(predicate::str::contains("Thermal runaway"))
+        .get_output()
+        .stdout
+        .clone();
+    let text = String::from_utf8(out).unwrap();
+    let thermal = text.find("Thermal runaway").unwrap();
+    let fade = text.find("Capacity fade").unwrap();
+    assert!(thermal < fade, "sorted by RPN descending");
+}
+
+#[test]
+fn view_pivot_matrix() {
+    cmd()
+        .args(["view", "Matrix", &fixture("ViewTest.sysml")])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("severity\\occurrence"));
+}
+
+#[test]
+fn view_csv_output() {
+    cmd()
+        .args(["-f", "csv", "view", "Worksheet", &fixture("ViewTest.sysml")])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains(
+            "element,failureMode,severity,occurrence,detection,rpn",
+        ))
+        .stdout(predicate::str::contains(",108"));
+}
+
+#[test]
+fn view_markdown_output() {
+    cmd()
+        .args(["-f", "md", "view", "Stats", &fixture("ViewTest.sysml")])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("| kind | definitions | usages |"));
+}
+
+#[test]
+fn view_uncertainty_rows_cross_file() {
+    // The view def lives in one file, the stackups in another.
+    cmd()
+        .args([
+            "view",
+            "StackupSummary",
+            &fixture("UncertaintyStackup.sysml"),
+            &fixture("ViewTest.sysml"),
+        ])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("gapAnalysis"))
+        .stdout(predicate::str::contains("PASS"))
+        .stdout(predicate::str::contains("tightGap"))
+        .stdout(predicate::str::contains("FAIL"));
+}
+
+#[test]
+fn view_unknown_name_lists_views() {
+    cmd()
+        .args(["view", "Nope", &fixture("ViewTest.sysml")])
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains("Available views"));
+}
+
 #[test]
 fn analyze_uncertainty_all_methods() {
     cmd()
