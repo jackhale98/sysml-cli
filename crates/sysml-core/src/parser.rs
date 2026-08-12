@@ -974,6 +974,44 @@ fn walk_node_scoped(
         }
 
         // --- Satisfy statement ---
+        // --- Standalone redefinition statements (`:>> nominal = 50.0;`) ---
+        // These carry the values in the domain-library style, where a typed
+        // attribute's fields are set by redefinition inside its body.
+        "standalone_redefines" => {
+            let mut cursor = node.walk();
+            let target = node
+                .children(&mut cursor)
+                .find(|c| {
+                    matches!(
+                        c.kind(),
+                        "qualified_name" | "identifier" | "feature_chain"
+                    )
+                })
+                .map(|c| node_text(&c, source).to_string());
+            if let Some(target) = target {
+                let name = target.rsplit("::").next().unwrap_or(&target).to_string();
+                let value_expr = get_value_expr(&node, source);
+                model.usages.push(Usage {
+                    kind: "attribute".to_string(),
+                    name: name.clone(),
+                    type_ref: None,
+                    span: Span::from_node(&node),
+                    direction: None,
+                    is_conjugated: false,
+                    parent_def: parent_def_name.map(|s| s.to_string()),
+                    multiplicity: None,
+                    value_expr,
+                    short_name: None,
+                    redefinition: Some(name),
+                    subsets: None,
+                    doc: None,
+                    is_variant: false,
+                    is_variation: false,
+                    qualified_name: None,
+                });
+            }
+        }
+
         "satisfy_statement" => {
             extract_satisfaction(&node, source, model);
         }

@@ -2,6 +2,23 @@
 
 ## Unreleased
 
+### Generic uncertainty analyzer
+- `sysml analyze run` now evaluates any analysis case whose type
+  specializes `Uncertainty::UncertaintyAnalysis` (e.g.
+  `Tolerancing::ToleranceStackup`) by uncertainty propagation:
+  worst-case interval arithmetic, RSS variance propagation (Cp/Cpk,
+  per-contribution sensitivity, Bender mean shift, yield), and seeded
+  bit-for-bit-reproducible Monte Carlo (`--method`, `--iterations`,
+  `--seed`; the seed used is always reported). Contributions are
+  resolved through feature chains to the dimensions that own the
+  values — nothing is restated in the analysis. Exit code is non-zero
+  when any evaluated method fails its target, for CI gating.
+- Parser: standalone redefinition statements (`:>> nominal = 50.0;`)
+  are now extracted as model usages with values — the value style the
+  domain libraries use throughout.
+- `rollup` no longer panics on NaN subtotals when sorting
+  contributions (sensitivity and compute paths).
+
 ### Name resolution & checks
 - Imports expose package members, not just definitions: subsetting or
   redefining an inherited member of an imported def

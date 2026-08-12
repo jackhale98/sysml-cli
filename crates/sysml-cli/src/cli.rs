@@ -1017,11 +1017,19 @@ pub(crate) enum AnalyzeCommand {
     },
     /// Execute an analysis case with the model's current values.
     ///
-    /// Binds the subject to its default and evaluates the return expression.
+    /// Classic analysis cases bind the subject and evaluate the return
+    /// expression. Cases whose type specializes
+    /// Uncertainty::UncertaintyAnalysis (e.g. Tolerancing::ToleranceStackup
+    /// from the domain libraries) run uncertainty propagation instead:
+    /// worst-case interval arithmetic, RSS variance propagation
+    /// (Cp/Cpk, sensitivity, Bender mean shift), and seeded Monte Carlo.
     ///
     /// EXAMPLES:
     ///   sysml analyze run model.sysml -n FuelEconomyAnalysis
     ///   sysml analyze run model.sysml -n MassAnalysis -b mass=500
+    ///   sysml analyze run -I libraries model.sysml -n gapAnalysis
+    ///   sysml analyze run -I libraries model.sysml -n gapAnalysis \
+    ///       --method monte-carlo --iterations 50000 --seed 12345
     Run {
         /// SysML v2 files.
         #[arg(required = true)]
@@ -1032,6 +1040,17 @@ pub(crate) enum AnalyzeCommand {
         /// Variable bindings: name=value.
         #[arg(short = 'b', long = "bind", value_delimiter = ',')]
         bindings: Vec<String>,
+        /// Uncertainty method: worst-case, rss, monte-carlo, or all
+        /// (only for cases typed by Uncertainty::UncertaintyAnalysis).
+        #[arg(long)]
+        method: Option<String>,
+        /// Monte Carlo iteration count (overrides the model's setting).
+        #[arg(long)]
+        iterations: Option<u64>,
+        /// Monte Carlo seed for bit-for-bit reproducible runs
+        /// (overrides the model's setting; recorded in the output).
+        #[arg(long)]
+        seed: Option<u64>,
     },
     /// Compare alternatives in a trade study analysis case.
     ///

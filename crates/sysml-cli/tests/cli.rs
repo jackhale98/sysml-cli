@@ -1056,6 +1056,110 @@ fn analyze_unknown_name() {
         .stderr(predicate::str::contains("not found"));
 }
 
+#[test]
+fn analyze_uncertainty_all_methods() {
+    cmd()
+        .args([
+            "analyze",
+            "run",
+            &fixture("UncertaintyStackup.sysml"),
+            "-n",
+            "gapAnalysis",
+            "--seed",
+            "12345",
+        ])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("Worst-case"))
+        .stdout(predicate::str::contains("2.6700 .. 3.2800"))
+        .stdout(predicate::str::contains("Cp: 2.79"))
+        .stdout(predicate::str::contains("seed 12345"))
+        .stdout(predicate::str::contains("[critical]"));
+}
+
+#[test]
+fn analyze_uncertainty_method_filter() {
+    cmd()
+        .args([
+            "analyze",
+            "run",
+            &fixture("UncertaintyStackup.sysml"),
+            "-n",
+            "gapAnalysis",
+            "--method",
+            "worst-case",
+        ])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("Worst-case"))
+        .stdout(predicate::str::contains("Monte Carlo").not());
+}
+
+#[test]
+fn analyze_uncertainty_json_reproducible() {
+    let run = |seed: &str| -> String {
+        let out = cmd()
+            .args([
+                "-f",
+                "json",
+                "analyze",
+                "run",
+                &fixture("UncertaintyStackup.sysml"),
+                "-n",
+                "gapAnalysis",
+                "--seed",
+                seed,
+                "--iterations",
+                "2000",
+            ])
+            .assert()
+            .success()
+            .get_output()
+            .stdout
+            .clone();
+        String::from_utf8(out).unwrap()
+    };
+    let a = run("42");
+    let b = run("42");
+    assert_eq!(a, b, "same seed must give byte-identical JSON");
+    assert!(a.contains("\"worst_case\""));
+    assert!(a.contains("\"monte_carlo\""));
+}
+
+#[test]
+fn analyze_uncertainty_failing_case_exits_nonzero() {
+    cmd()
+        .args([
+            "analyze",
+            "run",
+            &fixture("UncertaintyStackup.sysml"),
+            "-n",
+            "tightGap",
+            "--method",
+            "worst-case",
+        ])
+        .assert()
+        .failure()
+        .stdout(predicate::str::contains("FAIL"));
+}
+
+#[test]
+fn analyze_uncertainty_unknown_method() {
+    cmd()
+        .args([
+            "analyze",
+            "run",
+            &fixture("UncertaintyStackup.sysml"),
+            "-n",
+            "gapAnalysis",
+            "--method",
+            "bogus",
+        ])
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains("unknown method"));
+}
+
 // ========================================================================
 // find
 // ========================================================================

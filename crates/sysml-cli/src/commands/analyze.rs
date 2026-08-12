@@ -19,8 +19,282 @@ pub fn run(cli: &Cli, kind: &AnalyzeCommand) -> ExitCode {
             files,
             name,
             bindings,
-        } => run_execute(cli, files, name.as_deref(), bindings),
+            method,
+            iterations,
+            seed,
+        } => {
+            // Uncertainty analysis cases (typed by a specialization of
+            // Uncertainty::UncertaintyAnalysis) take the propagation path;
+            // everything else falls through to the classic evaluator.
+            match try_run_uncertainty(
+                cli,
+                files,
+                name.as_deref(),
+                method.as_deref(),
+                *iterations,
+                *seed,
+            ) {
+                UncertaintyOutcome::Ran(code) => code,
+                UncertaintyOutcome::NotApplicable => {
+                    if method.is_some() || iterations.is_some() || seed.is_some() {
+                        eprintln!(
+                            "error: --method/--iterations/--seed apply to uncertainty \
+                             analysis cases (types specializing Uncertainty::UncertaintyAnalysis), \
+                             and no such case matched; is the Uncertainty library on the \
+                             include path (-I)?"
+                        );
+                        return ExitCode::FAILURE;
+                    }
+                    run_execute(cli, files, name.as_deref(), bindings)
+                }
+            }
+        }
         AnalyzeCommand::Trade { files, name } => run_trade(cli, files, name.as_deref()),
+    }
+}
+
+enum UncertaintyOutcome {
+    Ran(ExitCode),
+    NotApplicable,
+}
+
+/// Load per-file models (files + resolved include paths) — the uncertainty
+/// extractor needs real per-file byte spans, so no merging here.
+fn load_per_file_models(cli: &Cli, files: &[PathBuf]) -> Option<Vec<sysml_core::model::Model>> {
+    let (files, _) = crate::files_or_project(files);
+    if files.is_empty() {
+        eprintln!("error: no SysML files found.");
+        return None;
+    }
+    let mut all_files = files;
+    for inc in crate::resolve_include_paths(cli) {
+        if inc.is_dir() {
+            crate::collect_files_recursive(&inc, &mut all_files);
+        } else {
+            all_files.push(inc);
+        }
+    }
+    let mut models = Vec::new();
+    for file_path in &all_files {
+        let path_str = file_path.to_string_lossy().to_string();
+        match std::fs::read_to_string(file_path) {
+            Ok(source) => models.push(sysml_parser::parse_file(&path_str, &source)),
+            Err(e) => {
+                eprintln!("error: cannot read `{}`: {}", path_str, e);
+                return None;
+            }
+        }
+    }
+    Some(models)
+}
+
+fn try_run_uncertainty(
+    cli: &Cli,
+    files: &[PathBuf],
+    name: Option<&str>,
+    method: Option<&str>,
+    iterations: Option<u64>,
+    seed: Option<u64>,
+) -> UncertaintyOutcome {
+    use sysml_core::sim::uncertainty_model::{extract_case, find_uncertainty_cases};
+
+    let Some(models) = load_per_file_models(cli, files) else {
+        return UncertaintyOutcome::Ran(ExitCode::FAILURE);
+    };
+    let cases = find_uncertainty_cases(&models);
+    if cases.is_empty() {
+        return UncertaintyOutcome::NotApplicable;
+    }
+
+    // Pick the case: by name if given, otherwise unambiguous single case.
+    let case_name = match name {
+        Some(n) => {
+            if !cases.iter().any(|(cn, _, _)| cn == n) {
+                return UncertaintyOutcome::NotApplicable;
+            }
+            n.to_string()
+        }
+        None => {
+            if cases.len() == 1 {
+                cases[0].0.clone()
+            } else {
+                eprintln!(
+                    "error: multiple uncertainty analysis cases found; pick one with -n:"
+                );
+                for (n, file, ty) in &cases {
+                    eprintln!("  {n} : {ty}  ({file})");
+                }
+                return UncertaintyOutcome::Ran(ExitCode::FAILURE);
+            }
+        }
+    };
+
+    let mut case = match extract_case(&models, &case_name) {
+        Ok(c) => c,
+        Err(e) => {
+            eprintln!("error: {e}");
+            return UncertaintyOutcome::Ran(ExitCode::FAILURE);
+        }
+    };
+    if let Some(it) = iterations {
+        case.settings.iterations = it;
+    }
+    if let Some(s) = seed {
+        case.settings.seed = Some(s);
+    }
+
+    let methods: Vec<&str> = match method.unwrap_or("all") {
+        "all" => vec!["worst-case", "rss", "monte-carlo"],
+        m @ ("worst-case" | "rss" | "monte-carlo") => vec![m],
+        other => {
+            eprintln!(
+                "error: unknown method `{other}` (expected worst-case, rss, monte-carlo, or all)"
+            );
+            return UncertaintyOutcome::Ran(ExitCode::FAILURE);
+        }
+    };
+
+    UncertaintyOutcome::Ran(run_uncertainty(cli, &case, &methods))
+}
+
+fn run_uncertainty(
+    cli: &Cli,
+    case: &sysml_core::sim::uncertainty_model::UncertaintyCase,
+    methods: &[&str],
+) -> ExitCode {
+    use sysml_core::sim::uncertainty::{monte_carlo, rss, worst_case, PassFail};
+
+    // A default seed from the clock keeps unseeded runs varied; the seed
+    // actually used is always reported so any run can be replayed.
+    let default_seed = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_nanos() as u64)
+        .unwrap_or(0x5EED);
+
+    let wc = methods
+        .contains(&"worst-case")
+        .then(|| worst_case(&case.inputs, &case.target));
+    let rss_r = methods
+        .contains(&"rss")
+        .then(|| rss(&case.inputs, &case.target, &case.settings));
+    let mc = methods
+        .contains(&"monte-carlo")
+        .then(|| monte_carlo(&case.inputs, &case.target, &case.settings, default_seed));
+
+    let failed = wc.as_ref().is_some_and(|r| r.result == PassFail::Fail)
+        || rss_r.as_ref().is_some_and(|r| r.result == PassFail::Fail)
+        || mc.as_ref().is_some_and(|r| r.result == PassFail::Fail);
+
+    if cli.format == "json" {
+        let out = serde_json::json!({
+            "case": case.name,
+            "type": case.type_name,
+            "file": case.file,
+            "critical": case.critical,
+            "unit": case.unit,
+            "target": case.target,
+            "inputs": case.inputs,
+            "worst_case": wc,
+            "rss": rss_r,
+            "monte_carlo": mc,
+        });
+        println!("{}", serde_json::to_string_pretty(&out).unwrap());
+    } else {
+        print_uncertainty_text(case, wc.as_ref(), rss_r.as_ref(), mc.as_ref());
+    }
+
+    if failed {
+        ExitCode::FAILURE
+    } else {
+        ExitCode::SUCCESS
+    }
+}
+
+fn print_uncertainty_text(
+    case: &sysml_core::sim::uncertainty_model::UncertaintyCase,
+    wc: Option<&sysml_core::sim::uncertainty::WorstCaseResult>,
+    rss_r: Option<&sysml_core::sim::uncertainty::RssResult>,
+    mc: Option<&sysml_core::sim::uncertainty::MonteCarloResult>,
+) {
+    let unit = case.unit.as_deref().unwrap_or("");
+    let verdict = |r: &sysml_core::sim::uncertainty::PassFail| match r {
+        sysml_core::sim::uncertainty::PassFail::Pass => "PASS",
+        sysml_core::sim::uncertainty::PassFail::Marginal => "MARGINAL",
+        sysml_core::sim::uncertainty::PassFail::Fail => "FAIL",
+    };
+
+    println!(
+        "Uncertainty analysis: {} ({}){}",
+        case.name,
+        case.type_name,
+        if case.critical { "  [critical]" } else { "" }
+    );
+    println!(
+        "  Target: {:.4} in [{:.4}, {:.4}] {}",
+        case.target.nominal, case.target.lower, case.target.upper, unit
+    );
+    println!("  Contributions:");
+    for c in &case.inputs {
+        println!(
+            "    {} {:<22} {:>10.4} +{:.4}/-{:.4}  {:<10}{}",
+            if c.sense >= 0.0 { "+" } else { "-" },
+            c.name,
+            c.nominal,
+            c.plus,
+            c.minus,
+            format!("{:?}", c.distribution).to_lowercase(),
+            c.source.as_deref().unwrap_or("")
+        );
+    }
+
+    if let Some(r) = wc {
+        println!("\n  Worst-case:");
+        println!(
+            "    Range: {:.4} .. {:.4}   margin: {:.4}   result: {}",
+            r.min,
+            r.max,
+            r.margin,
+            verdict(&r.result)
+        );
+    }
+    if let Some(r) = rss_r {
+        println!("\n  RSS:");
+        if (r.shifted_mean - r.mean).abs() > f64::EPSILON {
+            println!(
+                "    Mean: {:.4} (shifted {:.4})   3\u{3c3}: {:.4}",
+                r.mean, r.shifted_mean, r.sigma3
+            );
+        } else {
+            println!("    Mean: {:.4}   3\u{3c3}: {:.4}", r.mean, r.sigma3);
+        }
+        println!(
+            "    Cp: {:.2}   Cpk: {:.2}   Yield: {:.2}%",
+            r.cp, r.cpk, r.yield_percent
+        );
+        let sens: Vec<String> = case
+            .inputs
+            .iter()
+            .zip(&r.sensitivity)
+            .map(|(c, s)| format!("{} {:.1}%", c.name, s))
+            .collect();
+        println!("    Sensitivity: {}", sens.join(" | "));
+        println!("    Result: {}", verdict(&r.result));
+    }
+    if let Some(r) = mc {
+        println!(
+            "\n  Monte Carlo ({} iterations, seed {}):",
+            r.iterations, r.seed
+        );
+        println!("    Mean: {:.4}   StdDev: {:.4}", r.mean, r.std_dev);
+        println!(
+            "    Range: {:.4} .. {:.4}   95% CI: [{:.4}, {:.4}]",
+            r.min, r.max, r.percentile_2_5, r.percentile_97_5
+        );
+        println!(
+            "    Pp: {:.2}   Ppk: {:.2}   Yield: {:.2}%",
+            r.pp, r.ppk, r.yield_percent
+        );
+        println!("    Result: {}", verdict(&r.result));
     }
 }
 

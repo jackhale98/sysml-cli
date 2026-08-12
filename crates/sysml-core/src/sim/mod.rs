@@ -16,5 +16,7 @@ pub mod rollup;
 pub mod state_machine;
 pub mod state_parser;
 pub mod state_sim;
+pub mod uncertainty;
+pub mod uncertainty_model;
 pub mod units;
 pub mod what_if;

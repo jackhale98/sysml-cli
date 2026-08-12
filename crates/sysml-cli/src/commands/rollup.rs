@@ -195,7 +195,7 @@ fn run_budget(
             if !result.contributions.is_empty() {
                 println!("  Top contributors:");
                 let mut sorted = result.contributions.clone();
-                sorted.sort_by(|a, b| b.subtotal.partial_cmp(&a.subtotal).unwrap());
+                sorted.sort_by(|a, b| b.subtotal.total_cmp(&a.subtotal));
                 for c in sorted.iter().take(5) {
                     println!(
                         "    {:20} {:.4} ({:.1}%)",
@@ -229,7 +229,7 @@ fn run_sensitivity(cli: &Cli, files: &[PathBuf], root: &str, attr: &str) -> Exit
     // Flatten and sort contributions by subtotal descending
     let mut flat = Vec::new();
     flatten_contributions(&result.contributions, &mut flat);
-    flat.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap());
+    flat.sort_by(|a, b| b.1.total_cmp(&a.1));
 
     match cli.format.as_str() {
         "json" => {
