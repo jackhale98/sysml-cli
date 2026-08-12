@@ -35,8 +35,8 @@ jobs:
       - name: Test
         run: cargo test --workspace
 
-      - name: Lint fixtures
-        run: cargo run -p sysml-cli -- check --lint-only --severity error --disable duplicates,syntax test/fixtures/*.sysml
+      - name: Check fixtures
+        run: cargo run -p sysml-cli -- check --severity error --disable duplicates,syntax test/fixtures/*.sysml
 
       - name: Simulation smoke test
         run: cargo run -p sysml-cli -- simulate list test/fixtures/simulation.sysml
