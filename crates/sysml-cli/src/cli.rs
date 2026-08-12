@@ -194,7 +194,7 @@ pub(crate) enum Command {
     ///   sysml diagram -t bdd model.sysml
     ///   sysml diagram -t ibd -s Vehicle model.sysml
     ///   sysml diagram -t trace model.sysml
-    ///   sysml diagram -t alloc -o plantuml model.sysml
+    ///   sysml diagram -t alloc -r plantuml model.sysml
     ///   sysml diagram -t bdd --view StructureView model.sysml
     Diagram {
         /// SysML v2 file to generate diagram from.
@@ -535,7 +535,6 @@ pub(crate) enum Command {
     /// EXAMPLES:
     ///   sysml check model.sysml
     ///   sysml check --severity error model.sysml
-    ///   sysml check --lint-only model.sysml
     Check {
         /// SysML v2 files to validate (omit to scan project).
         files: Vec<PathBuf>,
@@ -640,13 +639,12 @@ pub(crate) enum Command {
     /// resolves attribute values, and aggregates them. Works for any
     /// numeric attribute: mass, cost, power, tolerance, etc.
     ///
-    /// SUBCOMMANDS: compute, budget, sensitivity, query
+    /// SUBCOMMANDS: compute, budget, sensitivity, sweep, what-if
     ///
     /// EXAMPLES:
     ///   sysml rollup compute model.sysml --root Vehicle --attr mass
     ///   sysml rollup budget model.sysml --root Vehicle --attr mass --limit 2000
     ///   sysml rollup sensitivity model.sysml --root Vehicle --attr mass
-    ///   sysml rollup query model.sysml --attr mass
     Rollup {
         #[command(subcommand)]
         kind: RollupCommand,

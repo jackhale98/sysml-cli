@@ -1,6 +1,6 @@
 # Tutorial: Building and Managing a SysML v2 Model
 
-Build a complete systems engineering model from scratch using the `sysml` interactive wizard. You'll model a **weather station** — an embedded system with sensors, a controller, and a display — then validate, diagram, simulate, and run lifecycle management on it.
+Build a complete systems engineering model from scratch using the `sysml` interactive wizard. You'll model a **weather station** — an embedded system with sensors, a controller, and a display — then validate, diagram, simulate, and analyze it.
 
 > **Two ways to use sysml:** The interactive wizard (`sysml add`) is the primary workflow — it guides you through creating elements with model-aware suggestions. Every wizard action has an equivalent flag-based command for scripting and CI. This tutorial shows both.
 
@@ -35,12 +35,7 @@ tolerance stackups, FMEA, and RAAML-aligned hazard analysis; see
 `libraries/README.md` for provenance and the design docs in the
 sysml-domain-libraries project.
 
-Explore built-in help:
-
-```sh
-sysml guide                    # list topics
-sysml guide getting-started
-```
+Explore built-in help with `sysml --help` and `sysml <command> --help`.
 
 ## Part 2: Building the Model
 
@@ -235,7 +230,7 @@ sysml add model.sysml calc-def BatteryRuntime \
 ### 2.10 Validate and explore
 
 ```sh
-$ sysml lint model.sysml
+$ sysml check model.sysml
 model.sysml:42:5: note[W001]: part def `WindSensor` is defined but never referenced
 model.sysml:106:5: note[W001]: state def `StationStates` is defined but never referenced
 Found 0 errors, 2 notes.
@@ -278,35 +273,20 @@ part def WeatherStationUnit
     connection displayConn
 ```
 
+Model statistics are a model-defined view (`ModelStats`, from `libraries/StandardViews.sysml`):
+
 ```sh
-$ sysml stats model.sysml
-Model Statistics
-========================================
-Definitions: 16
-Usages:      22
-
-Definitions by kind:
-  part def             10
-  port def              3
-  enum def              2
-  action def            1
-  constraint def        2
-  calc def              1
-  state def             1
-  connection def        0
-  package               1
-
-Relationships:
-  Connections:    5
-  Flows:          0
-  Satisfactions:  0
-  Verifications:  0
-
-Packages:         1
-Abstract defs:    1
-Max nesting:      1
-
-Documentation:    10/15 (67%)
+$ sysml view ModelStats -I libraries model.sysml
+kind             definitions  usages
+------------------------------------
+action def       1            6
+calc def         1            0
+constraint def   2            0
+enum def         2            0
+package          1            0
+part def         10           8
+port def         3            12
+state def        1            5
 ```
 
 ## Part 3: Requirements and Traceability
@@ -380,7 +360,7 @@ sysml add verification.sysml import "WeatherStationRequirements::*"
 
 ### 4.2 Add verification cases
 
-A verification case defines *what* to verify and the *procedure* to follow. Sub-usages inside the verification def become procedure steps — `sysml verify run` walks through them interactively. Steps with names containing "measure" or "reading" (or typed as attributes) prompt for numeric values; other steps prompt for pass/fail confirmation.
+A verification case defines *what* to verify and the *procedure* to follow. Sub-usages inside the verification def document the procedure steps — the model is the test plan.
 
 ```sh
 sysml add verification.sysml verification-def TestTemperatureAccuracy \
@@ -420,49 +400,28 @@ sysml add verification.sysml verify BatteryLife --by TestBatteryLife
 
 ### 4.3 Check verification coverage
 
-```sh
-$ sysml verify list verification.sysml
-Verification Cases:
-  TestTemperatureAccuracy    verifies: TemperatureAccuracy    steps: 3
-  TestOperatingRange         verifies: OperatingRange         steps: 3
-  TestBatteryLife            verifies: BatteryLife            steps: 3
-
-$ sysml verify status verification.sysml requirements.sysml
-Requirement              Status       Verified By
----------------------------------------------------
-TemperatureAccuracy      unverified   TestTemperatureAccuracy
-OperatingRange           unverified   TestOperatingRange
-BatteryLife              unverified   TestBatteryLife
-UpdateRate               no case      -
-IPRating                 no case      -
-
-Coverage: 3/5 have verification cases (60%)
-```
-
-### 4.4 Execute a verification case
-
-`verify run` reads the procedure steps from the verification def and walks through them interactively:
+The trace matrix now shows both satisfaction and verification:
 
 ```sh
-$ sysml verify run verification.sysml --case TestTemperatureAccuracy --author "Jane Smith"
-Verification Case: TestTemperatureAccuracy
-  Verifies: TemperatureAccuracy
-  Steps: 3
+$ sysml trace model.sysml requirements.sysml verification.sysml
+Requirement          Satisfied By         Verified By
+------------------------------------------------------------
+TemperatureAccuracy  TemperatureSensor    TestTemperatureAccuracy
+OperatingRange       WeatherStationUnit   TestOperatingRange
+BatteryLife          PowerSupply          TestBatteryLife
+UpdateRate           Controller           -
+IPRating             Enclosure            -
 
-? Step 1 - setup: Completed? [Y/n] Y
-? Step 2 - measureAccuracy: Enter measured value: 0.3
-? Unit for 'measureAccuracy': C
-? Is the measurement for 'measureAccuracy' within specification? [Y/n] Y
-? Step 3 - evaluate: Completed? [Y/n] Y
-? Any observations or notes?
-? Overall verification result: > Pass
-
-Result: PASS
-Measurements:
-  measureAccuracy = 0.3 C [OK]
-
-Record written: .sysml/records/verify-execution-20260310-JaneSmith-ab12.toml
+Coverage: 5/5 satisfied (100%), 3/5 verified (60%)
 ```
+
+The same data renders as a model-defined view (exportable with `-f csv` or `-f md`):
+
+```sh
+sysml view RequirementsTraceMatrix -I libraries model.sysml requirements.sysml verification.sysml
+```
+
+Unverified requirements are also flagged by `sysml check` (W003) and counted in `sysml coverage`.
 
 ## Part 5: Diagrams
 
@@ -500,12 +459,12 @@ sysml diagram -t pkg model.sysml                               # Package
 sysml diagram -t trace model.sysml                             # V-model traceability
 ```
 
-Other output formats:
+Other renderers:
 
 ```sh
-sysml diagram -t bdd -o plantuml model.sysml
-sysml diagram -t bdd -o dot model.sysml
-sysml diagram -t bdd -o d2 model.sysml
+sysml diagram -t bdd -r plantuml model.sysml
+sysml diagram -t bdd -r dot model.sysml
+sysml diagram -t bdd -r d2 model.sysml
 ```
 
 ## Part 6: Simulation
@@ -585,15 +544,19 @@ Referenced by (1):
 
 ### 7.2 Interface analysis
 
+Port listings are a model-defined view:
+
 ```sh
-$ sysml interfaces --unconnected model.sysml
-Unconnected Ports:
-  Name            Owner           Type            Direction
-  -------------------------------------------------------
-  power           Controller      PowerPort       -
-  power           Display         PowerPort       -
-2 port(s) found.
+$ sysml view PortTable -I libraries model.sysml
+element     parent      type            direction
+-------------------------------------------------
+dataOut     Sensor      SensorDataPort
+power       Sensor      PowerPort
+tempIn      Controller  SensorDataPort
+...
 ```
+
+Unconnected ports are flagged by `sysml check` as W016 (`unbound-port`).
 
 ### 7.3 Model coverage
 
@@ -622,344 +585,112 @@ sysml allocation model.sysml                         # Allocation matrix
 sysml diff model.sysml model-v2.sysml                # Semantic diff
 ```
 
-## Part 8: Risk Management
+## Part 8: Risk Management (FMEA)
 
-Risk management follows FMEA (AIAG/VDA, SAE J1739) and hazard analysis (MIL-STD-882E, ISO 14971) methodology. Risks are nested inside the part, action, or use case they apply to — this assignment is automatically tracked in reports.
+Risk analysis is model data, not tool state. The `RiskAnalysis` domain library (`libraries/RiskAnalysis.sysml`) defines an `@Fmea` metadata annotation with the AIAG/VDA worksheet fields, and view defs that render worksheets from it — `sysml view` does the rendering, the model holds everything else.
 
-### 8.1 Define risks in the model
+### 8.1 Annotate failure modes in the model
 
-Risks use numeric 1–5 scores for Severity (S), Occurrence (O), and Detection (D):
+Attach `@Fmea` annotations to the part the failure mode belongs to (in your editor — models are text):
 
-| Score | Severity     | Occurrence   | Detection          |
-|-------|-------------|-------------|--------------------|
-| 1     | Negligible  | Improbable  | Almost Certain     |
-| 2     | Marginal    | Remote      | High               |
-| 3     | Moderate    | Occasional  | Moderate           |
-| 4     | Critical    | Probable    | Low                |
-| 5     | Catastrophic| Frequent    | Almost Impossible  |
+```sysml
+private import RiskAnalysis::*;
 
-### 8.2 Create risks interactively
+part enclosure : Enclosure {
+    @Fmea {
+        failureMode = "Moisture ingress past IP seal";
+        cause = "Seal degradation from UV exposure";
+        effect = "Corrosion of internal electronics";
+        category = RiskCategory::design;
+        severity = 4;
+        occurrence = 2;
+        detection = 3;
+    }
+}
 
-The wizard prompts for FMEA fields (failure mode, effect, cause) and numeric scores:
-
-```sh
-$ sysml risk add --file model.sysml --inside Enclosure
-? Failure mode: Moisture ingress past IP seal
-? Failure effect: Corrosion of internal electronics
-? Failure cause: Seal degradation from UV exposure
-? Severity (1-5): 4
-? Occurrence (1-5): 2
-? Detection (1-5): 3
-? Recommended action: Add redundant seal + UV-resistant gasket
-
-Preview:
-  part riskMoistureIngress : RiskDef {
-      doc /* Moisture ingress past IP seal */
-      attribute severity = 4;
-      attribute occurrence = 2;
-      attribute detection = 3;
-      attribute failureEffect = "Corrosion of internal electronics";
-      attribute failureCause = "Seal degradation from UV exposure";
-      attribute recommendedAction = "Add redundant seal + UV-resistant gasket";
-  }
-  RPN: 24 (4 × 2 × 3)  Risk: Undesirable
-
-? Select target file > model.sysml
-? Insert inside which definition? > Enclosure
-Wrote riskMoistureIngress to model.sysml
+part power : PowerSupply {
+    @Fmea {
+        failureMode = "Solar cell delamination";
+        cause = "Thermal cycling stress";
+        effect = "Power output degradation";
+        severity = 3;
+        occurrence = 3;
+        detection = 4;
+    }
+}
 ```
 
-Add a second risk to a different component:
+### 8.2 Render the FMEA worksheet and risk matrix
 
 ```sh
-$ sysml risk add --file model.sysml --inside SolarPanel
-? Failure mode: Solar cell delamination
-? Failure effect: Power output degradation
-? Failure cause: Thermal cycling stress
-? Severity (1-5): 3
-? Occurrence (1-5): 3
-? Detection (1-5): 4
-? Recommended action:
+$ sysml view FmeaWorksheet -I libraries model.sysml
+element    failureMode                    cause                            category              severity  occurrence  detection  rpn
+--------------------------------------------------------------------------------------------------------------------------------------
+power      Solar cell delamination        Thermal cycling stress           RiskCategory::design  3         3           4          36
+enclosure  Moisture ingress past IP seal  Seal degradation from UV expos.  RiskCategory::design  4         2           3          24
+2 row(s).
+
+$ sysml view RiskMatrix -I libraries model.sysml
+severity\occurrence  2  3
+-------------------------
+4                    1
+3                       1
+2 row(s).
 ```
 
-### 8.3 Analyze risks
+RPN is a derived column (`rpn = severity*occurrence*detection` in the view's `@TableRendering` spec) — computed at render time, never stored in the model. Export with `-f csv` or `-f md`.
 
-Risk reports show entity assignments and acceptance levels:
+Hazard analysis (MIL-STD-882E / ISO 14971, RAAML-aligned hazard chains) lives in `libraries/HazardAnalysis.sysml` with a `HazardLog` view; the sysml-domain-libraries examples show complete FMEA + hazard-chain models.
+
+## Part 9: Mass and Cost Rollups
+
+Any numeric attribute rolls up over the part hierarchy — the same mechanism serves mass budgets, cost estimates, and power budgets. Multiplicity is the quantity: `part wheels : Wheel[4]` counts four times.
+
+### 9.1 Add the attributes
+
+```sysml
+part def TemperatureSensor :> Sensor {
+    attribute mass = 0.150 [SI::kg];
+    attribute cost = 45.00;
+}
+```
+
+Values may carry unit brackets; mixed units (kg/g, m/mm) convert automatically into the root's unit.
+
+### 9.2 Compute rollups
 
 ```sh
-$ sysml risk list model.sysml
-Risks (2):
-  Moisture ingress past IP seal [S:4 O:2 RPN:24 UNDESIRABLE] → Enclosure
-  Solar cell delamination [S:3 O:3 RPN:36 UNDESIRABLE] → SolarPanel
+$ sysml rollup compute model.sysml --root WeatherStationUnit --attr mass
+Rollup: mass (sum) for WeatherStationUnit
+  WeatherStationUnit                        total: 4.9500 [kg]
+    tempSensor : TemperatureSensor     0.1500 =>   0.1500 (3.0%)
+    ...
+    enclosure : Enclosure              2.5000 =>   2.5000 (50.5%)
 
-$ sysml risk matrix model.sysml
-                  | Improb. | Remote  | Occasnl | Probabl | Frequnt |
-------------------+---------+---------+---------+---------+---------+
-Catastroph        |    -    |    -    |  !! -   |  !! -   |  !! -   |
-Critical          |    -    | ! risk..|  !! -   |  !! -   |  !! -   |
-Moderate          |    -    |    -    | ! risk..|    -    |    -    |
-Marginal          |    -    |    -    |    -    |    -    |    -    |
-Negligible        |    -    |    -    |    -    |    -    |    -    |
-
-Zones: !! = Unacceptable  ! = Undesirable  ? = Review    (blank) = Acceptable
+$ sysml rollup compute model.sysml --root WeatherStationUnit --attr cost
+$ sysml rollup budget model.sysml --root WeatherStationUnit --attr mass --limit 5
+$ sysml rollup sensitivity model.sysml --root WeatherStationUnit --attr cost
 ```
 
-FMEA worksheet with full standard columns:
+`rollup budget` exits non-zero when the limit is exceeded — a ready-made CI gate. To list every element carrying a given attribute, use `sysml list -k attributes -n cost`.
 
-```sh
-$ sysml risk fmea model.sysml
-Item                 Failure Mode         Effect          Cause            S   O   D   RPN Risk Level     Rec. Action          Status     Assigned To
----------------------------------------------------------------------
-Enclosure            Moisture ingress...  Corrosion...    Seal degrada...  4   2   3    24 UNDESIRABLE    Add redundant...     Identified Enclosure
-SolarPanel           Solar cell delam...  Power output..  Thermal cycl...  3   3   4    36 UNDESIRABLE    -                    Identified SolarPanel
-```
+## Part 10: Editing
 
-### 8.4 Risk coverage
-
-Check which parts and actions have risks identified — useful as a CI gate:
-
-```sh
-$ sysml risk coverage model.sysml
-Risk Coverage
-  Elements (parts/actions/use cases): 5
-  With risks:    2 (40.0%)
-  Without risks: 3
-
-Uncovered elements:
-  WeatherStation (part)
-  MainBoard (part)
-  DataProcessor (action)
-```
-
-## Part 9: Manufacturing and Quality
-
-### 9.1 SPC analysis
-
-```sh
-$ sysml mfg spc --parameter SensorCalibration \
-    --values 0.48,0.52,0.50,0.49,0.51,0.50,0.53,0.47
-  Mean: 0.500  Std: 0.019  UCL: 0.557  LCL: 0.443
-  All points within control limits
-```
-
-### 9.2 Define a manufacturing routing
-
-A manufacturing routing is an `action def` whose child `action` usages become process steps. `sysml mfg` extracts these steps and infers the process type from each step name (e.g., "machineHousing" → Machining, "inspectDimensions" → Test & Inspection, "assembleUnit" → Assembly).
-
-```sh
-sysml add model.sysml action-def AssemblyProcess \
-    --doc "Enclosure production routing" \
-    -m "action cutSheet" \
-    -m "action machineHousing" \
-    -m "action heatTreatFrame" \
-    -m "action coatSurface" \
-    -m "action assembleUnit" \
-    -m "action inspectDimensions" \
-    -m "action packageShip"
-```
-
-This creates a routing with 7 steps. `mfg list` shows the extracted routing:
-
-```sh
-$ sysml mfg list model.sysml
-Manufacturing Routings (1):
-  AssemblyProcess (7 steps)
-```
-
-> **Step naming convention:** The process type is inferred from keywords in the step name — `cut`/`shear` → Sheet Metal, `machine`/`mill`/`drill` → Machining, `weld` → Welding, `heat`/`anneal` → Heat Treat, `coat`/`paint` → Coating, `assembl`/`install` → Assembly, `test`/`inspect` → Test & Inspection, `package`/`ship` → Packaging. Steps typed as Test & Inspection or Calibration automatically require inspection sign-off.
-
-### 9.3 Run a production lot
-
-```sh
-$ sysml mfg start-lot model.sysml --routing AssemblyProcess --quantity 100
-Lot: mfg-lot-20260310-engineer-5a7b
-  Routing:  AssemblyProcess
-  Quantity: 100
-  Progress: 0/7 steps
-Record written: .sysml/records/mfg-lot-20260310-engineer-5a7b.toml
-
-$ sysml mfg step
-Lot: mfg-lot-20260310-engineer-5a7b — Step 1/7: cutSheet [SheetMetal]
-? Step 1: cutSheet [SheetMetal] — Ready to begin? [Y/n] Y
-Step status: Passed
-```
-
-### 9.4 Quality management
-
-```sh
-# Sampling plans
-$ sysml qc sample-size --lot-size 500
-  AQL: 1.0  Level: Normal  Sample: 50  Accept: 5  Reject: 6
-
-# Process capability
-$ sysml qc capability --usl 10.05 --lsl 9.95 \
-    --values 10.01,9.99,10.02,9.98,10.00,10.01,9.99,10.00
-  Cp: 1.67  Cpk: 1.33  Process is capable
-
-# NCR → RCA → CAPA workflow
-$ sysml quality create --type ncr
-? Affected part: Enclosure
-? Category: > Dimensional
-? Severity: > Major
-? Description: IP seal gap exceeds tolerance
-NCR Created: quality-ncr-20260310-engineer-7f3a
-Record: .sysml/records/quality-ncr-20260310-engineer-7f3a.toml
-
-$ sysml quality rca --source quality-ncr-20260310-engineer-7f3a --method five-why
-? Why 1: IP seal gap exceeds tolerance → Tool wear on seal groove
-? Why 2: Tool wear on seal groove → No scheduled tool replacement
-? Why 3: No scheduled tool replacement → Missing PM schedule
-? Why 4: Missing PM schedule → New tooling, no PM baseline
-? Why 5: No PM baseline → Commissioning checklist incomplete
-Root Cause: Commissioning checklist incomplete
-Record: .sysml/records/quality-rca-20260310-engineer-2e4f.toml
-
-$ sysml quality create --type capa
-? Title: Add PM schedule for seal groove tooling
-? Source: > Ncr
-? CAPA type: > Corrective
-CAPA Created: quality-capa-20260310-engineer-4b2c
-
-$ sysml quality action --capa quality-capa-20260310-engineer-4b2c
-? Action type: > Procedure Update
-? Description: Create PM schedule with tool replacement intervals
-? Owner: alice
-? Due date: 2026-03-20
-Action added to CAPA
-
-$ sysml quality trend --group-by category
-Category      Open  In Progress  Closed  Total
-Dimensional      1            0       0      1
-```
-
-## Part 10: Bill of Materials
-
-### 10.1 Add BOM attributes
-
-Add identity and mass properties to your parts using the BOM library types:
-
-```sh
-sysml add model.sysml import "SysMLBOM::*"
-
-# Add identity and mass to existing parts
-sysml add model.sysml attribute partNumber -t ScalarValues::String --inside TemperatureSensor
-sysml add model.sysml attribute mass_kg -t ScalarValues::Real --inside TemperatureSensor
-```
-
-### 10.2 Record supplier quotes
-
-Cost data lives in quote records (TOML files in `.sysml/records/`), not in the SysML model. This separates volatile commercial data from the engineering model.
-
-```sh
-$ sysml source quote
-? Part name: TemperatureSensor
-? Supplier name: SensorCorp
-? Currency code: USD
-? Lead time (days): 14
-? Minimum order quantity: 10
-? Quote valid until (YYYY-MM-DD): 2026-12-31
-
-Add price breaks (at least one required):
-? Minimum quantity for this tier: 1
-? Unit price at this tier: 45.00
-  Added: qty >= 1 → 45.0000 USD
-? Add another price break? Yes
-? Minimum quantity for this tier: 100
-? Unit price at this tier: 38.00
-  Added: qty >= 100 → 38.0000 USD
-? Add another price break? No
-
-Quote: SensorCorp → TemperatureSensor (USD)
-  qty >=      1 → 45.0000 USD
-  qty >=    100 → 38.0000 USD
-  Lead time: 14 days, MOQ: 10
-
-Wrote quote record: .sysml/records/source-quote-20260311T...toml
-```
-
-### 10.3 Costed BOM
-
-Once you have quotes recorded, run a costed BOM analysis at any production quantity:
-
-```sh
-$ sysml bom cost model.sysml --root WeatherStationUnit --quantity 100
-
-Costed BOM — WeatherStationUnit × 100 (order qty 100)
-
-Level  Name                 Definition           BOM Qty  Total Qty   Unit Price       Extended Supplier
--------------------------------------------------------------------------------------------------------------
-0      WeatherStationUnit   WeatherStationUnit         1        100            -              - -
-1        tempSensor         TemperatureSensor           1        100      38.0000        3800.00 SensorCorp
-1        controller         Controller                  1        100     120.0000       12000.00 ChipCo
-...
--------------------------------------------------------------------------------------------------------------
-                                                                          TOTAL:       56800.00
-```
-
-Use `--apply` to write the resolved unit prices back into the model as `attribute unitCost = <price>;`:
-
-```sh
-$ sysml bom cost model.sysml --root WeatherStationUnit --quantity 100 --apply
-# ... costed BOM report ...
-Applied unitCost to 8 definitions.
-```
-
-This snapshots pricing into the model for the chosen production volume, making cost data available to `bom rollup --include-cost` and exports.
-
-### 10.4 BOM rollup
-
-```sh
-$ sysml bom rollup model.sysml --root WeatherStationUnit --include-mass
-WeatherStationUnit : WeatherStationUnit
-  tempSensor : TemperatureSensor [TS-100]  mass=0.150kg
-  humiditySensor : HumiditySensor [HS-200]  mass=0.120kg
-  pressureSensor : PressureSensor [PS-300]  mass=0.180kg
-  windSensor : WindSensor [WS-400]  mass=0.250kg
-  controller : Controller [CT-500]  mass=0.350kg
-  display : Display [DS-600]  mass=0.200kg
-  power : PowerSupply [PW-700]  mass=1.200kg
-  enclosure : Enclosure [EN-800]  mass=2.500kg
-BOM: 9 total parts, 9 unique, depth 2
-Total mass: 4.950 kg
-```
-
-### 10.5 Where-used and export
-
-```sh
-$ sysml bom where-used model.sysml --part TemperatureSensor
-Part `TemperatureSensor` is used in:
-  WeatherStationUnit
-
-$ sysml bom export model.sysml --root WeatherStationUnit
-Level,Name,Definition,Quantity,PartNumber,Revision,Description,Category
-0,WeatherStationUnit,WeatherStationUnit,1,,,,assembly
-1,tempSensor,TemperatureSensor,1,TS-100,A,,component
-1,humiditySensor,HumiditySensor,1,HS-200,A,,component
-1,controller,Controller,1,CT-500,A,,component
-1,display,Display,1,DS-600,A,,component
-1,power,PowerSupply,1,PW-700,A,,component
-1,enclosure,Enclosure,1,EN-800,A,,assembly
-```
-
-SysML v2 multiplicity is the BOM quantity — `part wheels : Wheel[4]` = 4 units in the rollup.
-
-## Part 11: Editing
-
-### 11.1 Add new elements
+### 10.1 Add new elements
 
 ```sh
 sysml add model.sysml part-def RainGauge --extends Sensor --doc "Measures rainfall"
 sysml add model.sysml part rainGauge -t RainGauge --inside WeatherStationUnit
 ```
 
-### 11.2 Preview and multiplicity
+### 10.2 Preview and multiplicity
 
 ```sh
 sysml add model.sysml part-def Vehicle \
     -m "part wheels:Wheel[4],attribute doors:Door[2..5]" --dry-run
 ```
 
-### 11.3 Remove and rename
+### 10.3 Remove and rename
 
 ```sh
 sysml remove model.sysml RainGauge --dry-run    # Preview
@@ -967,7 +698,7 @@ sysml remove model.sysml RainGauge              # Apply
 sysml rename model.sysml WindSensor Anemometer
 ```
 
-### 11.4 Learn SysML syntax
+### 10.4 Learn SysML syntax
 
 ```sh
 $ sysml add --stdout --teach part-def Motor
@@ -981,39 +712,28 @@ part def Motor {
 }
 ```
 
-## Part 12: Export and Reports
+## Part 11: Export and Reports
 
-### 12.1 Export
+### 11.1 Export
 
 ```sh
-sysml export interfaces model.sysml --part Controller   # FMI 3.0
-sysml export modelica model.sysml --part Controller      # Modelica
+sysml export modelica model.sysml --part Controller      # Modelica stub
 sysml export ssp model.sysml -o system.ssd               # SSP XML
 ```
 
-### 12.2 Reports
+### 11.2 Reports
+
+Project status comes from the analysis commands and model-defined views — each exportable as CSV/Markdown/JSON:
 
 ```sh
-$ sysml report dashboard model.sysml requirements.sysml verification.sysml
-Project Dashboard
-========================================
-Requirements:     5  (100% satisfied, 60% verified)
-Risks:            2  (1 critical, avg RPN: 48)
-Open NCRs:        1  (1 major)
-BOM Parts:        10
-Documentation:    67%
-
-$ sysml report gate requirements.sysml verification.sysml --gate-name PDR
-Gate Readiness: PDR (Preliminary Design Review)
-========================================
-  Verification coverage:  60%  (threshold: 50%)  PASS
-  Open critical risks:    1    (max: 3)           PASS
-  Open major NCRs:        1    (max: 5)           PASS
-
-Result: READY
+sysml trace model.sysml requirements.sysml verification.sysml   # requirement coverage
+sysml coverage model.sysml                                       # quality score
+sysml view FmeaWorksheet -I libraries -f md model.sysml          # FMEA worksheet
+sysml view ModelStats -I libraries model.sysml                   # element counts
+sysml doc model.sysml                                            # Markdown documentation
 ```
 
-## Part 13: Formatting and CI
+## Part 12: Formatting and CI
 
 ```sh
 $ sysml fmt --diff model.sysml
@@ -1025,20 +745,21 @@ $ sysml fmt --diff model.sysml
 
 $ sysml fmt model.sysml                   # Format in place
 $ sysml fmt --check model.sysml           # CI mode (exit 1 if unformatted)
+```
 
-$ sysml pipeline run ci
-[1/4] lint *.sysml ... ok
-[2/4] fmt --check *.sysml ... ok
-[3/4] trace --check --min-coverage 80 *.sysml ... ok
-[4/4] coverage --check --min-score 60 *.sysml ... ok
+CI is a plain sequence of commands — every gate exits non-zero on failure:
 
-Pipeline "ci": all 4 steps passed.
+```sh
+sysml check --severity warning *.sysml \
+  && sysml fmt --check *.sysml \
+  && sysml trace --check --min-coverage 80 *.sysml \
+  && sysml coverage --check --min-score 60 *.sysml
 ```
 
 JSON output for editor integration:
 
 ```sh
-sysml lint -f json model.sysml          # Diagnostics as JSON array
+sysml check -f json model.sysml         # Diagnostics as JSON array
 sysml list -f json model.sysml          # Element list as JSON
 ```
 
@@ -1058,7 +779,6 @@ sysml list -f json model.sysml          # Element list as JSON
 | Remove element | — | `sysml remove <file> Name` |
 | Rename element | — | `sysml rename <file> Old New` |
 | Generate to stdout | — | `sysml add --stdout <kind> <name>` |
-| Risk creation | `sysml risk add` | `sysml risk add --file risks.sysml` |
-| Verify execution | `sysml verify run <files>` | `sysml verify run <files> --case Name` |
-| NCR creation | `sysml quality create --type ncr` | — |
-| Lot tracking | `sysml mfg start-lot` | `sysml mfg start-lot <files> --routing Name` |
+| FMEA worksheet | — | `sysml view FmeaWorksheet -I libraries <files>` |
+| Requirement coverage | — | `sysml trace --check --min-coverage 80 <files>` |
+| Mass/cost rollup | — | `sysml rollup compute <files> --root Def --attr mass` |

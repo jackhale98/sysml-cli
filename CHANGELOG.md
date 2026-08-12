@@ -2,6 +2,46 @@
 
 ## Unreleased
 
+### sysml view — reports are models
+- New `sysml view <Name>` renders any `view def` carrying a
+  `@TableRendering` annotation (the Reporting library convention:
+  row providers, computed columns, `where`, `sortBy`, `pivot`) as a
+  table; with no name it lists available views. `-f csv|md` join
+  text/json for tabular output. The libraries ship `FmeaWorksheet`,
+  `RiskMatrix`, `HazardLog`, `StackupSummary`, `FitTable`, `PortTable`,
+  `ConnectionTable`, `AllocationMatrix`, `RequirementsTraceMatrix`,
+  and `ModelStats` — projects add reports by writing view defs, never
+  tool code
+- `list --doc <text>` filters by documentation text; `diagram --view X`
+  no longer requires `-t` when the view def declares `render as`
+
+### CLI surface consolidation (breaking)
+- Removed commands — each replaced by an existing or model-defined
+  equivalent: `lint` (`check`), `interfaces` (`view PortTable`),
+  `stats` (`view ModelStats`), `find` (`list -n` / `list --doc`),
+  `rollup query` (`list -k attributes -n <attr>`), `export interfaces`,
+  `guide`, and `pipeline` (chain commands in make/just/CI — every gate
+  already exits non-zero)
+- Removed flags: `check --lint-only`, `add -i/--interactive`,
+  `index --full`, `diagram -o` (renderer is now `-r/--renderer`; `-o`
+  is freed for output files), `rollup what-if -s` (use `--scenario`)
+
+### Robustness
+- One shared model loader: every whole-project command honors
+  `-I`/`--stdlib-path`/`.sysml/config.toml` (24 of 26 silently ignored
+  them), merges all model fields, and errors on unreadable files;
+  config discovery walks up the directory tree
+- Loud failures: rollup unit-conversion mismatches are errors instead
+  of silently adding grams to kilograms; guard/condition evaluation
+  errors in simulations warn instead of acting as `false`;
+  `--format` typos are rejected; `simulate eval` exits non-zero on
+  violated constraints; interactive event prompts abort on non-TTY
+  instead of simulating zero events
+- `check -` and `fmt -` read from stdin (`fmt -` writes the formatted
+  text to stdout); `--method` now works on `rollup
+  sensitivity`/`sweep`/`what-if`, which aggregate through rollup's
+  unit-aware path
+
 ### Generic uncertainty analyzer
 - `sysml analyze run` now evaluates any analysis case whose type
   specializes `Uncertainty::UncertaintyAnalysis` (e.g.

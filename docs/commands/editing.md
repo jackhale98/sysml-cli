@@ -108,7 +108,6 @@ Usage-level kinds (no `-def` suffix) generate `kind name [: type];` usages suita
 | `--stdout` | Print to stdout without modifying files |
 | `--teach` | Include teaching comments explaining every SysML v2 construct used |
 | `--dry-run` | Preview changes as a unified diff without writing |
-| `-i, --interactive` | Launch interactive wizard even when other args are provided |
 
 ### Raw-line members
 
@@ -163,26 +162,13 @@ Rename an element and update all whole-word references in the file.
 ```sh
 sysml rename model.sysml Engine Motor --dry-run    # preview
 sysml rename model.sysml Engine Motor              # apply
+sysml rename model.sysml Engine Motor --project    # rename across all project files
 ```
 
 | Option | Description |
 |--------|-------------|
 | `--dry-run` | Preview changes as a unified diff without writing |
-
-## example
-
-Generate complete example projects with multiple files demonstrating domain workflows.
-
-```sh
-sysml example brake-system                   # generate in current directory
-sysml example sensor-module -o ./examples/   # custom output directory
-sysml example --list                         # show available examples
-```
-
-| Option | Description |
-|--------|-------------|
-| `-o, --output <PATH>` | Output directory (default: current directory) |
-| `--list` | List available example projects |
+| `--project` | Rename across all project files (not just the specified file) |
 
 ## fmt
 
@@ -193,6 +179,7 @@ sysml fmt model.sysml
 sysml fmt --check model.sysml         # CI: exit 1 if unformatted
 sysml fmt --diff model.sysml          # Show diff without writing
 sysml fmt --indent-width 2 model.sysml
+cat generated.sysml | sysml fmt -     # Format stdin to stdout
 ```
 
 | Option | Description |

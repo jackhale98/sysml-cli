@@ -14,7 +14,7 @@ Fully-qualified names resolve from the root namespace without imports, package s
 | [Validation & Diagnostics](docs/validation.md) | 17 lint checks, diagnostic codes, output formats |
 | [Architecture](docs/architecture.md) | Crate structure, design decisions, 3-crate workspace |
 | [CI & Editor Integration](docs/ci-integration.md) | GitHub Actions workflow, LSP setup, Emacs sysml2-mode, JSON output |
-| **Command references** | [Analysis](docs/commands/analysis.md) &#183; [Diagrams](docs/commands/diagrams.md) &#183; [Editing](docs/commands/editing.md) &#183; [Simulation](docs/commands/simulation.md) &#183; [Project](docs/commands/project.md) |
+| **Command references** | [Analysis](docs/commands/analysis.md) &#183; [Views](docs/commands/views.md) &#183; [Diagrams](docs/commands/diagrams.md) &#183; [Editing](docs/commands/editing.md) &#183; [Simulation](docs/commands/simulation.md) &#183; [Project](docs/commands/project.md) |
 
 ## Installation
 
@@ -142,7 +142,7 @@ Parametric sweeps and what-if scenarios:
 
 ```sh
 $ sysml rollup sweep model.sysml --root Vehicle --attr mass --param engine --from 100 --to 300 --steps 5
-$ sysml rollup what-if model.sysml --root Vehicle --attr mass -s "light:engine=100" -s "heavy:engine=300"
+$ sysml rollup what-if model.sysml --root Vehicle --attr mass --scenario "light:engine=100" --scenario "heavy:engine=300"
 ```
 
 ### Simulate state machines and evaluate constraints
@@ -382,20 +382,16 @@ $ sysml diff model-v1.sysml model-v2.sysml
   Changed: TemperatureSensor.range_max (line 42 → 45)
 ```
 
-### CI pipelines from config
+### CI gates
 
-```toml
-[[pipeline]]
-name = "ci"
-steps = [
-    "lint model.sysml requirements.sysml",
-    "fmt --check model.sysml",
-    "trace --check --min-coverage 80 requirements.sysml",
-]
-```
+Every check command exits non-zero on failure, so pipelines are plain
+shell (or make, or CI steps) — no runner to configure:
 
 ```sh
-sysml pipeline run ci
+sysml check --severity warning src/*.sysml \
+  && sysml fmt --check src/*.sysml \
+  && sysml trace --check --min-coverage 80 src/*.sysml \
+  && sysml coverage --check --min-score 60 src/*.sysml
 ```
 
 ### Scripted editing, when you need it
@@ -423,27 +419,25 @@ structured JSON envelopes under `-f json`. See
 | Command | Description | Docs |
 |---------|-------------|------|
 | **Analysis** | | [analysis](docs/commands/analysis.md) |
-| `check` | Validate models against 17 structural rules (also: `lint`) | |
-| `list` (`ls`) | List model elements with filters | |
+| `check` | Validate models against 17 structural rules | |
+| `list` (`ls`) | List model elements with filters (`-n` name, `--doc` documentation text) | |
 | `show` | Show detailed element information | |
 | `trace` | Requirements traceability matrix | |
-| `interfaces` | Analyze port interfaces and connections | |
-| `find` | Search model elements by name pattern across project | |
 | `deps` | Dependency analysis for an element (`--transitive` for chains) | |
 | `diff` | Semantic diff between two SysML files | |
 | `allocation` (`alloc`) | Logical-to-physical allocation matrix | |
 | `coverage` | Model quality and completeness report | |
-| `stats` | Aggregate model statistics | |
+| **Views** | | [views](docs/commands/views.md) |
+| `view` | Render a model-defined view as a table (`view def` + `@TableRendering`); no name lists views | |
 | **Rollups** | | |
 | `rollup compute` | Aggregate any attribute over the part hierarchy (sum, RSS, min, max) | |
 | `rollup budget` | Check a rollup total against a limit (CI gate) | |
 | `rollup sensitivity` | Rank children by contribution to a rollup | |
 | `rollup sweep` | Parametric sweep: evaluate rollup across a range of values | |
 | `rollup what-if` | Compare rollup under different override scenarios | |
-| `rollup query` | Find all instances of an attribute across the model | |
-| **Analysis** | | |
+| **Analysis cases** | | |
 | `analyze list` | List analysis cases in model files | |
-| `analyze run` | Execute an analysis case with subject binding | |
+| `analyze run` | Execute an analysis case; uncertainty cases propagate via `--method worst-case\|rss\|monte-carlo` (`--iterations`, `--seed`) | |
 | `analyze trade` | Compare alternatives in a trade study | |
 | **Diagrams** | | [diagrams](docs/commands/diagrams.md) |
 | `diagram` | Generate SysML v2 standard views: gv, iv, afv, stv, sv, grv, bv (+ par, trace, alloc, ucd) | |
@@ -453,7 +447,6 @@ structured JSON envelopes under `-f json`. See
 | **Project** | | [project](docs/commands/project.md) |
 | `init` | Initialize a `.sysml/` project | |
 | `index` | Build or rebuild project index | |
-| `pipeline` | Run named validation pipelines from config | |
 | `repl` | Interactive REPL with stateful navigation, relationship queries, and filtering | |
 | **Editing** | | [editing](docs/commands/editing.md) |
 | `fmt` | Format SysML v2 source files | |

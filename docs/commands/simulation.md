@@ -63,24 +63,17 @@ sysml simulate af model.sysml -b fuelLevel=80
 
 ## export
 
-Export FMI/SSP artifacts from SysML models.
+Export co-simulation artifacts from SysML models: Modelica stubs and SSP system structure descriptions.
 
 ```sh
 sysml export list model.sysml                              # List exportable parts
-sysml export interfaces model.sysml --part Engine           # FMI 3.0 interfaces
 sysml export modelica model.sysml --part Engine             # Modelica stub
 sysml export modelica model.sysml --part Engine -o Engine.mo
 sysml export ssp model.sysml                                # SSP XML
 sysml export ssp model.sysml -o system.ssd
 ```
 
-### export interfaces
-
-Extract FMI 3.0 interface descriptions from a part definition. Handles port definitions with `in item`/`out item`, conjugation (`~`), and SysML-to-FMI type mapping (`Real` -> `Float64`, `Integer` -> `Int32`, etc.).
-
-| Option | Description |
-|--------|-------------|
-| `-p, --part <PART>` | Part definition name (required) |
+For a tabular listing of part interfaces, use `sysml view PortTable` (see [views](views.md)).
 
 ### export modelica
 

@@ -2,17 +2,18 @@
 
 Commands for validating, inspecting, and querying SysML v2 models.
 
-## lint
+## check
 
 Validate SysML v2 files against structural rules.
 
 ```sh
-sysml lint model.sysml
-sysml lint src/*.sysml                       # Multiple files
-sysml lint -f json model.sysml               # JSON output
-sysml lint model.sysml -I lib/               # Ad-hoc include path
-sysml lint --severity warning model.sysml    # Only warnings+
-sysml lint --disable unused,unresolved model.sysml
+sysml check model.sysml
+sysml check src/*.sysml                       # Multiple files
+sysml check -f json model.sysml               # JSON output
+sysml check model.sysml -I lib/               # Ad-hoc include path
+sysml check --severity warning model.sysml    # Only warnings+
+sysml check --disable unused,unresolved model.sysml
+cat generated.sysml | sysml check -           # Read from stdin
 ```
 
 | Option | Description |
@@ -20,7 +21,7 @@ sysml lint --disable unused,unresolved model.sysml
 | `-d, --disable <CHECKS>` | Disable checks (comma-separated). See [Validation](../validation.md). |
 | `-s, --severity <LEVEL>` | Minimum severity: `note`, `warning`, `error` (default: `note`) |
 
-When unresolved type references or connection targets have a close match among known definitions, `lint` suggests the closest match:
+When unresolved type references or connection targets have a close match among known definitions, `check` suggests the closest match:
 ```
 model.sysml:5:1: warning[W004]: type `Vehicel` is not defined in this file
   help: did you mean `Vehicle`?
@@ -37,6 +38,7 @@ sysml list model.sysml
 sysml list --kind parts model.sysml          # Only part definitions
 sysml list --kind port model.sysml           # Only port usages
 sysml list --name Vehicle model.sysml        # Name search
+sysml list --doc "shall operate" model.sysml # Doc-comment search
 sysml list --parent Vehicle model.sysml      # Children of Vehicle
 sysml list --unused model.sysml              # Unreferenced defs
 sysml list -f json model.sysml               # JSON output
@@ -46,9 +48,10 @@ sysml list -f json model.sysml               # JSON output
 |--------|-------------|
 | `-k, --kind <KIND>` | Filter by kind. `parts` shows both defs and usages. `part-def` / `part-usage` restricts to one. Also: `ports`, `actions`, `states`, `requirements`, `constraints`, `connections`, `attributes`, `items`, `enums`, `all`, `definitions`, `usages` |
 | `-n, --name <PATTERN>` | Substring name filter |
+| `--doc <TEXT>` | Substring filter on documentation comments |
 | `-p, --parent <NAME>` | Filter by parent definition |
 | `--unused` | Show only unreferenced definitions |
-| `--abstract` | Show only abstract definitions |
+| `--abstract-only` | Show only abstract definitions |
 | `--visibility <VIS>` | Filter by `public`, `private`, `protected` |
 | `--view <NAME>` | Apply a SysML v2 view definition as a filter preset |
 
@@ -81,22 +84,6 @@ Displays: kind, visibility, parent, documentation, type, children, relationships
 |--------|-------------|
 | `--raw` | Print the original SysML source text of the element to stdout |
 
-## check
-
-Validate SysML models and project integrity. Superset of `lint` — runs all lint checks plus record and project validation.
-
-```sh
-sysml check model.sysml
-sysml check --lint-only model.sysml          # Same as lint
-sysml check --severity warning model.sysml
-```
-
-| Option | Description |
-|--------|-------------|
-| `-d, --disable <CHECKS>` | Disable specific checks (comma-separated) |
-| `-s, --severity <LEVEL>` | Minimum severity: `note`, `warning`, `error` (default: `note`) |
-| `--lint-only` | Run only lint checks (no record/project checks) |
-
 ## trace
 
 Generate a requirements traceability matrix.
@@ -118,18 +105,16 @@ JSON output includes an `id` field per requirement.
 | `--check` | Exit with error if requirements lack satisfaction/verification |
 | `--min-coverage <PCT>` | Minimum coverage percentage (with `--check`) |
 
-## interfaces
+## Port interfaces
 
-Analyze port interfaces and identify unconnected ports.
+Port and connection listings are model-defined views (see [views](views.md)):
 
 ```sh
-sysml interfaces model.sysml
-sysml interfaces --unconnected model.sysml
+sysml view PortTable model.sysml
+sysml view ConnectionTable model.sysml
 ```
 
-| Option | Description |
-|--------|-------------|
-| `--unconnected` | Show only unconnected ports (interface gaps) |
+Unconnected ports are flagged by `sysml check` (W016 `unbound-port`).
 
 ## deps
 
@@ -200,17 +185,13 @@ sysml coverage -f json model.sysml
 | Req verification | Percentage of requirements with a verify statement |
 | Overall score | Weighted average of all metrics |
 
-## stats
+## Model statistics
 
-Show aggregate model statistics: element counts by kind, relationship counts, documentation coverage, and nesting depth.
+Element counts by kind are a model-defined view (see [views](views.md)):
 
 ```sh
-sysml stats model.sysml
-sysml stats -f json model.sysml              # JSON output
-sysml stats src/*.sysml                       # Multiple files
+sysml view ModelStats src/*.sysml
 ```
-
-Output includes definitions/usages by kind, connection/flow/satisfaction/verification/allocation counts, package count, abstract definitions, import count, max nesting depth, and documentation coverage percentage.
 
 ## rollup
 
@@ -223,7 +204,11 @@ sysml rollup compute model.sysml --root Vehicle --attr mass --method rss
 sysml rollup budget model.sysml --root Vehicle --attr mass --limit 2000
 sysml rollup sensitivity model.sysml --root Vehicle --attr mass
 sysml rollup sweep model.sysml --root Vehicle --attr mass --param engine --from 100 --to 300 --steps 5
+sysml rollup what-if model.sysml --root Vehicle --attr mass --scenario "light:engine=100" --scenario "heavy:engine=300"
 ```
+
+To find every instance of an attribute across the model, use
+`sysml list -k attributes -n <attr>`.
 
 Attribute values may carry unit brackets (`attribute mass = 250 [SI::kg];`).
 Mixed units convert automatically into the root's unit (kg/g, m/mm,

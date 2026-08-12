@@ -3,11 +3,11 @@
 ## GitHub Actions
 
 ```yaml
-name: SysML Lint
+name: SysML Check
 on: [push, pull_request]
 
 jobs:
-  lint:
+  check:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -22,8 +22,8 @@ jobs:
       - name: Initialize project
         run: sysml init --force
 
-      - name: Lint models
-        run: sysml lint --severity warning models/**/*.sysml
+      - name: Check models
+        run: sysml check --severity warning models/**/*.sysml
 
       - name: Check formatting
         run: sysml fmt --check models/**/*.sysml
@@ -42,11 +42,20 @@ jobs:
 
 | Command | Purpose | Exit code |
 |---------|---------|-----------|
-| `sysml lint --severity error` | Block on syntax/duplicate errors | 1 if errors |
+| `sysml check --severity error` | Block on syntax/duplicate errors | 1 if errors |
 | `sysml fmt --check` | Enforce formatting | 1 if unformatted |
 | `sysml trace --check --min-coverage 80` | Require requirement coverage | 1 if below threshold |
 | `sysml coverage --check --min-score 70` | Require model quality score | 1 if below threshold |
 | `sysml allocation --check` | Require all allocations | 1 if gaps exist |
+
+There is no built-in pipeline runner — chain the gate commands in your
+CI config, a Makefile, or a shell script:
+
+```sh
+sysml check --severity warning src/*.sysml \
+  && sysml fmt --check src/*.sysml \
+  && sysml trace --check --min-coverage 80 src/*.sysml
+```
 
 ## Editor Integration
 
@@ -174,7 +183,7 @@ Add to Zed settings (`settings.json`):
 All commands support `-f json` for structured output suitable for editor integration:
 
 ```sh
-sysml lint -f json model.sysml          # Diagnostics as JSON array
+sysml check -f json model.sysml         # Diagnostics as JSON array
 sysml list -f json model.sysml          # Element list as JSON
 sysml simulate list -f json model.sysml # Simulatable items as JSON
 ```

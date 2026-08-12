@@ -7,15 +7,16 @@ Generate diagrams from SysML v2 models in Mermaid, PlantUML, DOT, or D2 format.
 ```sh
 sysml diagram -t bdd model.sysml
 sysml diagram -t ibd --scope Vehicle model.sysml
-sysml diagram -t trace -o plantuml model.sysml
+sysml diagram -t trace -r plantuml model.sysml
 sysml diagram -t bdd --view StructureView model.sysml
+sysml diagram --view StructureView model.sysml    # type from the view's `render as`
 sysml diagram -t act --scope Drive -d LR model.sysml
 ```
 
 | Option | Description |
 |--------|-------------|
-| `-t, --type <TYPE>` | Diagram type (required). See table below. |
-| `-o, --output-format <FMT>` | Output format: `mermaid` (default), `plantuml`/`puml`, `dot`/`graphviz`, `d2`/`terrastruct` |
+| `-t, --type <TYPE>` | Diagram type. See table below. Optional when `--view` names a view def with a `render as` clause — the view's declared rendering is used. |
+| `-r, --renderer <FMT>` | Diagram renderer: `mermaid` (default), `plantuml`/`puml`, `dot`/`graphviz`, `d2`/`terrastruct` |
 | `-s, --scope <NAME>` | Focus on a specific definition. Required for `ibd`. |
 | `--view <NAME>` | Apply a SysML v2 view definition as a filter preset. |
 | `-d, --direction <DIR>` | Layout direction: `TB` (default), `LR`, `BT`, `RL` |
@@ -62,7 +63,9 @@ sysml diagram -t bdd --view PartsOnly model.sysml    # Only part definitions
 sysml diagram -t bdd --view VehicleScope model.sysml  # Only Vehicle children
 ```
 
-View filters work with all diagram types and all output formats.
+View filters work with all diagram types and all renderers. If the
+view def declares `render as` (e.g. `render asTreeDiagram`), `-t` may
+be omitted — the view supplies the diagram type.
 
 ### Output Formats
 
@@ -77,7 +80,7 @@ View filters work with all diagram types and all output formats.
 
 **Traceability diagram for a review** — shows which requirements are satisfied and verified:
 ```sh
-sysml diagram -t trace model.sysml -o plantuml > trace.puml
+sysml diagram -t trace model.sysml -r plantuml > trace.puml
 ```
 
 **Allocation diagram** — shows which logical functions are mapped to physical parts:
