@@ -1,6 +1,11 @@
 # Changelog
 
-## Unreleased
+## 0.7.0 — 2026-08-14
+
+The lean-CLI release: reports are model-defined views, analysis is
+generic uncertainty propagation, validation rules live in the libraries,
+and eight overlapping commands are gone. Grammar pinned at
+tree-sitter-sysml v0.6.0 (33% smaller parser, all examples parse clean).
 
 ### sysml view — reports are models
 - New `sysml view <Name>` renders any `view def` carrying a
