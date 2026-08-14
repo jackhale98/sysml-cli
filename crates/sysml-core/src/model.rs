@@ -590,6 +590,30 @@ pub fn unquote_name(name: &str) -> &str {
         .unwrap_or(name)
 }
 
+/// Normalize a (possibly qualified) name value by unquoting each segment
+/// (`RiskCategory::'use'` -> `RiskCategory::use`). Values that are not
+/// pure name paths - string literals, expressions - are returned
+/// unchanged, so apostrophes inside strings are safe.
+pub fn normalize_name_path(value: &str) -> String {
+    let is_plain = |s: &str| {
+        !s.is_empty()
+            && s.chars().next().is_some_and(|c| c.is_alphabetic() || c == '_')
+            && s.chars().all(|c| c.is_alphanumeric() || c == '_')
+    };
+    let segs: Vec<&str> = value.split("::").collect();
+    let ok = segs.iter().all(|s| {
+        is_plain(s)
+            || s.strip_prefix('\'')
+                .and_then(|t| t.strip_suffix('\''))
+                .is_some_and(|inner| !inner.is_empty() && !inner.contains('\''))
+    });
+    if ok && !segs.is_empty() {
+        segs.iter().map(|s| unquote_name(s)).collect::<Vec<_>>().join("::")
+    } else {
+        value.to_string()
+    }
+}
+
 /// True when a satisfy/verify/refine target refers to an element with the
 /// given name or `<short_name>` id. Handles qualified names, feature chains
 /// (`reqs.REQ2`), and quoted unrestricted names.

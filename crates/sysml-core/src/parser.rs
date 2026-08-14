@@ -998,7 +998,10 @@ fn walk_node_scoped(
                 })
                 .map(|c| node_text(&c, source).to_string());
             if let Some(target) = target {
-                let name = target.rsplit("::").next().unwrap_or(&target).to_string();
+                let name = crate::model::unquote_name(
+                    target.rsplit("::").next().unwrap_or(&target),
+                )
+                .to_string();
                 let value_expr = get_value_expr(&node, source);
                 model.usages.push(Usage {
                     kind: "attribute".to_string(),
@@ -1315,14 +1318,19 @@ fn walk_node_scoped(
                                             .children(&mut bchild.walk())
                                             .find(|c| c.kind() == "value_assignment"),
                                     ) {
-                                        let vtext = node_text(&v, source)
-                                            .trim_start_matches(['=', ' '])
-                                            .trim()
-                                            .to_string();
-                                        values.push((
-                                            node_text(&n, source).to_string(),
-                                            vtext,
-                                        ));
+                                        let vtext = crate::model::normalize_name_path(
+                                            node_text(&v, source)
+                                                .trim_start_matches(['=', ' '])
+                                                .trim(),
+                                        );
+                                        // Keyword-named fields are written
+                                        // quoted ('occurrence' = 3) in
+                                        // conformant SysML - normalize.
+                                        let key = crate::model::unquote_name(
+                                            node_text(&n, source),
+                                        )
+                                        .to_string();
+                                        values.push((key, vtext));
                                     }
                                 }
                                 "metadata_body_usage" => {
@@ -1335,7 +1343,9 @@ fn walk_node_scoped(
                                             .to_string();
                                         values.push((
                                             n,
-                                            v.trim().trim_end_matches(';').trim().to_string(),
+                                            crate::model::normalize_name_path(
+                                                v.trim().trim_end_matches(';').trim(),
+                                            ),
                                         ));
                                     }
                                 }

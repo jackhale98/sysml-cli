@@ -793,3 +793,56 @@ fn parse_transition_statement() {
         "Target state should be 'on'"
     );
 }
+
+#[test]
+fn quoted_keyword_names_normalize() {
+    // Conformant SysML quotes members whose names collide with keywords
+    // ('occurrence' = 3, RiskCategory::'use'). Metadata keys, redefined
+    // names, and name-path values must all come out unquoted.
+    let model = parse(
+        r#"package P {
+            part battery {
+                @Fmea {
+                    severity = 8;
+                    'occurrence' = 3;
+                    category = RiskCategory::'use';
+                }
+            }
+            occurrence fm : FailureMode {
+                :>> 'occurrence' = 5;
+            }
+        }"#,
+    );
+    let ann = model
+        .annotations
+        .iter()
+        .find(|a| a.metadata_type == "Fmea")
+        .expect("Fmea annotation");
+    let get = |k: &str| {
+        ann.values
+            .iter()
+            .find(|(key, _)| key == k)
+            .map(|(_, v)| v.as_str())
+    };
+    assert_eq!(get("occurrence"), Some("3"));
+    assert_eq!(get("category"), Some("RiskCategory::use"));
+
+    let redef = model
+        .usages
+        .iter()
+        .find(|u| u.redefinition.as_deref() == Some("occurrence"))
+        .expect("redefined 'occurrence' usage normalized");
+    assert_eq!(redef.value_expr.as_deref(), Some("5"));
+}
+
+#[test]
+fn normalize_name_path_leaves_non_names_alone() {
+    use sysml_core::model::normalize_name_path;
+    assert_eq!(normalize_name_path("RiskCategory::'use'"), "RiskCategory::use");
+    assert_eq!(normalize_name_path("'transition'"), "transition");
+    assert_eq!(normalize_name_path("plain::path"), "plain::path");
+    // String literals and expressions pass through untouched.
+    assert_eq!(normalize_name_path("\"BMS's team\""), "\"BMS's team\"");
+    assert_eq!(normalize_name_path("a * 'b'"), "a * 'b'");
+    assert_eq!(normalize_name_path("3"), "3");
+}
