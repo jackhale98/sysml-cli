@@ -92,6 +92,10 @@ constraint (pre-release). Items are checked off as they land.
 - rustc-style spans on all error messages (only `check` has spans today)
 - `coverage` weights → `ModelQuality.sysml` calc defs (constraint
   evaluation in `check` landed as W017; the calc-def migration remains)
-- Cache read path (`index` builds a cache nothing reads)
+- ~~Cache read path~~ resolved by deletion: `index` and the whole
+  cache stack (cache.rs, index.rs, sqlite_cache.rs, ~2.4k lines) had no
+  reader anywhere — parsing is milliseconds even for whole projects. If
+  profiling ever shows parse cost on huge models, a cache can return
+  designed around a measured read path.
 - ~~`record.rs` / `project_model.rs`~~ cut (1.5k lines, zero references;
   `index_records` has its own TOML path and is unaffected)

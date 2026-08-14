@@ -8,7 +8,6 @@ repository = "https://github.com/jackhale98/sysml-cli"
 
 [features]
 default = []
-sqlite = ["sysml-core/sqlite"]
 
 [dependencies]
 sysml-core = { path = "../sysml-core" }

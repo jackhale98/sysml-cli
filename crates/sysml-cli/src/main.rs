@@ -159,7 +159,6 @@ fn main() -> ExitCode {
             min_score,
         } => commands::coverage::run(&cli, files, *check, *min_score),
         Command::Init { force } => commands::init::run(&cli, *force),
-        Command::Index { stats } => commands::index::run(&cli, *stats),
         Command::Check {
             files,
             disable,

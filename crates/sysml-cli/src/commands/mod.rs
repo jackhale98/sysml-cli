@@ -9,7 +9,6 @@ pub mod diff;
 pub mod doc;
 pub mod export;
 pub mod fmt;
-pub mod index;
 pub mod init;
 pub mod list;
 pub mod remove;

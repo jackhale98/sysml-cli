@@ -39,23 +39,6 @@ format = "text"
 
 **Precedence:** CLI flags > env vars (`SYSML_MODEL_ROOT`, etc.) > config file > defaults.
 
-## index
-
-Build or rebuild the project index (in-memory cache).
-
-```sh
-sysml index
-sysml index --stats    # Show index statistics
-```
-
-| Option | Description |
-|--------|-------------|
-| `--stats` | Show index statistics after building |
-
-The index accelerates cross-file queries. All commands work without it — the index is a performance optimization.
-
-When built with the `sqlite` feature, `sysml index` also persists the cache to `.sysml/cache.db`. The SQLite cache stores a git HEAD hash so stale caches can be detected automatically.
-
 ## Validation pipelines
 
 There is no built-in pipeline runner — compose `sysml` commands with

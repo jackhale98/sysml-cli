@@ -453,7 +453,6 @@ structured JSON envelopes under `-f json`. See
 | `export` | Export FMI 3.0, Modelica, SSP artifacts | |
 | **Project** | | [project](docs/commands/project.md) |
 | `init` | Initialize a `.sysml/` project | |
-| `index` | Build or rebuild project index | |
 | `repl` | Interactive REPL with stateful navigation, relationship queries, and filtering | |
 | **Editing** | | [editing](docs/commands/editing.md) |
 | `fmt` | Format SysML v2 source files | |

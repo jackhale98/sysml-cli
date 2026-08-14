@@ -514,19 +514,6 @@ pub(crate) enum Command {
         #[arg(long)]
         force: bool,
     },
-    /// Build or rebuild the project index (cache).
-    ///
-    /// Parses all SysML files under the model root and populates an
-    /// in-memory cache of elements and relationships. Requires `sysml init`.
-    ///
-    /// EXAMPLES:
-    ///   sysml index
-    ///   sysml index --stats
-    Index {
-        /// Show index statistics.
-        #[arg(long)]
-        stats: bool,
-    },
     /// Validate SysML v2 models.
     ///
     /// Runs all lint checks: syntax, name resolution (cross-file, with

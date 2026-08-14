@@ -14,14 +14,12 @@
 //! - [`sim`] — Simulation engine (constraints, state machines, action flows)
 //! - [`export`] — Export to FMI, Modelica, and SSP formats
 
-pub mod cache;
 pub mod checks;
 pub mod codegen;
 pub mod config;
 pub mod diagnostic;
 pub mod diagram;
 pub mod export;
-pub mod index;
 pub mod interactive;
 pub mod model;
 pub mod parser;
@@ -30,7 +28,5 @@ pub mod qualified_name;
 pub mod query;
 pub mod resolver;
 pub mod sim;
-#[cfg(feature = "sqlite")]
-pub mod sqlite_cache;
 pub mod stdlib;
 pub mod view_render;
