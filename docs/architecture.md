@@ -35,10 +35,6 @@ src/
   resolver.rs             Multi-file import resolution
   config.rs               Project configuration (.sysml/config.toml)
   project.rs              Project discovery (walk-up from CWD)
-  record.rs               TOML record system (append-only records)
-  cache.rs                In-memory cache (nodes, edges, records)
-  sqlite_cache.rs         SQLite-backed persistent cache (optional, `sqlite` feature)
-  index.rs                Indexer (populates cache from files)
   interactive.rs          Wizard framework (WizardStep, WizardRunner)
   checks/                 9 validation checks
   sim/                    Simulation and calculation engine
@@ -91,8 +87,8 @@ State is managed with `DashMap` for concurrent access — tower-lsp dispatches r
 
 ## Design Principles
 
-**Model vs Records vs Tool**: SysML files define types and structure. TOML records capture operational data (what happened, when, by whom). The tool provides execution logic, validation, and reporting.
+**Model vs Tool**: SysML files define types, structure, and domain semantics (calcs, constraints, view specs). The tool provides execution logic, validation, and rendering.
 
 **Flat command namespace**: All commands are top-level (`sysml rollup compute`, not `sysml analysis rollup compute`). Designed for non-software engineers who shouldn't need to memorize a command hierarchy.
 
-**Progressive enhancement**: The tool works with zero configuration for pure SysML v2 analysis. The `.sysml/` project and cache are opt-in.
+**Progressive enhancement**: The tool works with zero configuration for pure SysML v2 analysis. The `.sysml/` project config is opt-in.
