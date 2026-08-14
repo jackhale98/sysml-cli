@@ -371,7 +371,14 @@ sysml [Vehicle]> connections               # Connections involving Vehicle
 sysml [Vehicle]> trace                     # Requirements traceability
 sysml> usages in:Engine kind:port          # Combined filter
 sysml> supertypes Sedan                    # Walk inheritance chain
+sysml> check                               # Run the real lint checks
+sysml> view FmeaWorksheet                  # Render a view def
+sysml> analyze travelGap rss               # Run an analysis case
 ```
+
+`check`, `view`, and `analyze` dispatch into the batch command
+implementations (same include-path resolution, same output), so REPL
+results never disagree with the CLI.
 
 ### Semantic diff — compare models, not text
 

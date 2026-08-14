@@ -69,20 +69,21 @@ constraint (pre-release). Items are checked off as they land.
 - [x] Uncertainty analyzer on one extraction path (landed)
 - [x] `simulate eval` and `analyze run` share the solve path
       (equation-form constraints solve by substitution in both)
-- [ ] REPL dispatches into the real command implementations — deferred;
-      its kind-filter now uses the same parse_kind_filter vocabulary as
-      `list` (the concrete divergence), and its loader merges all fields
+- [x] REPL dispatches into the real command implementations:
+      `check`/`view`/`analyze` call the batch commands, and the REPL
+      loads through the shared `-I`/config-aware loader (its private
+      loader ignored include paths, so imported libraries were invisible)
 
 ## E. Docs truth
 
-- [ ] Help examples say `sysml`, not `sysml-cli` (6 commands)
-- [ ] EXAMPLES blocks for stats/interfaces/export/list/show/trace/index
+- [x] Help examples say `sysml`, not `sysml-cli` (6 commands)
+- [x] EXAMPLES blocks for stats/interfaces/export/list/show/trace/index
       (as they survive)
-- [ ] `docs/tutorial.md`: remove `risk`/`bom`/`verify`/`report` families
+- [x] `docs/tutorial.md`: remove `risk`/`bom`/`verify`/`report` families
       (~20 commands that don't exist)
-- [ ] Retire `cli_expansion.md` domain-subcommand spec (contradicts the
+- [x] Retire `cli_expansion.md` domain-subcommand spec (contradicts the
       lean-CLI direction)
-- [ ] `docs/commands/analysis.md`: `lint` → `check`
+- [x] `docs/commands/analysis.md`: `lint` → `check`
 
 ## Deferred (tracked, deliberately not now)
 

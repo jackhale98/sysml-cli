@@ -8,22 +8,23 @@ use std::process::ExitCode;
 
 use rustyline::DefaultEditor;
 use sysml_core::model::{simple_name, Model};
-use sysml_core::parser as sysml_parser;
 
-pub fn run(files: &[PathBuf]) -> ExitCode {
-    let (files, _) = crate::files_or_project(files, false);
-    if files.is_empty() {
-        eprintln!("error: no SysML files found.");
-        return ExitCode::FAILURE;
-    }
-
-    let mut model = load_model(&files);
+pub fn run(cli: &crate::Cli, files: &[PathBuf]) -> ExitCode {
+    // Keep the user's file args: batch-command dispatch (check/view/
+    // analyze) re-resolves them exactly like the top-level commands do,
+    // so REPL results and batch results can never disagree.
+    let user_files = files.to_vec();
+    let (resolved, _) = crate::helpers::resolve_files(cli, &user_files);
+    let mut model = match crate::helpers::load_model(cli, &user_files) {
+        Some(m) => m,
+        None => return ExitCode::FAILURE,
+    };
     println!(
         "sysml repl v{} — {} definitions, {} usages loaded from {} file(s)",
         env!("CARGO_PKG_VERSION"),
         model.definitions.len(),
         model.usages.len(),
-        files.len()
+        resolved.len()
     );
     println!("Type 'help' for commands, 'quit' to exit.\n");
 
@@ -51,16 +52,20 @@ pub fn run(files: &[PathBuf]) -> ExitCode {
                 }
                 let _ = rl.add_history_entry(line);
                 if line == "reload" {
-                    model = load_model(&files);
-                    println!(
-                        "Reloaded: {} definitions, {} usages from {} file(s)",
-                        model.definitions.len(),
-                        model.usages.len(),
-                        files.len()
-                    );
+                    match crate::helpers::load_model(cli, &user_files) {
+                        Some(m) => {
+                            model = m;
+                            println!(
+                                "Reloaded: {} definitions, {} usages",
+                                model.definitions.len(),
+                                model.usages.len()
+                            );
+                        }
+                        None => println!("Reload failed; keeping the previous model."),
+                    }
                     continue;
                 }
-                if !dispatch(&model, line, &mut context) {
+                if !dispatch(&model, line, &mut context, cli, &user_files) {
                     break;
                 }
             }
@@ -84,19 +89,13 @@ struct ReplContext {
     focus: Option<String>,
 }
 
-fn load_model(files: &[PathBuf]) -> Model {
-    let mut merged = Model::new("repl".to_string());
-    for file_path in files {
-        let path_str = file_path.to_string_lossy().to_string();
-        match std::fs::read_to_string(file_path) {
-            Ok(source) => merged.merge(sysml_parser::parse_file(&path_str, &source)),
-            Err(e) => eprintln!("warning: cannot read `{}`: {}", path_str, e),
-        }
-    }
-    merged
-}
-
-fn dispatch(model: &Model, input: &str, ctx: &mut ReplContext) -> bool {
+fn dispatch(
+    model: &Model,
+    input: &str,
+    ctx: &mut ReplContext,
+    cli: &crate::Cli,
+    user_files: &[PathBuf],
+) -> bool {
     let parts: Vec<&str> = input.splitn(2, ' ').collect();
     let cmd = parts[0];
     let args = parts.get(1).unwrap_or(&"").trim();
@@ -461,6 +460,36 @@ fn dispatch(model: &Model, input: &str, ctx: &mut ReplContext) -> bool {
             print!("{}", format_rollup_text(&result));
         }
 
+        // --- Batch-command dispatch: the REAL implementations, not
+        // --- reimplementations, so output matches the CLI exactly.
+        "check" => {
+            let _ = super::check::run(cli, user_files, &[], "note");
+        }
+
+        "view" => {
+            let name = if args.is_empty() { None } else { Some(args) };
+            let _ = super::view::run(cli, name, user_files);
+        }
+
+        "analyze" => {
+            let mut it = args.split_whitespace();
+            let name = it.next().map(|s| s.to_string());
+            let method = it.next().map(|s| s.to_string());
+            if name.is_none() {
+                println!("Usage: analyze <case> [worst-case|rss|monte-carlo|all]");
+                return true;
+            }
+            let cmd = crate::cli::AnalyzeCommand::Run {
+                files: user_files.to_vec(),
+                name,
+                bindings: Vec::new(),
+                method,
+                iterations: None,
+                seed: None,
+            };
+            let _ = super::analyze::run(cli, &cmd);
+        }
+
         "stats" => {
             println!("  Definitions:    {}", model.definitions.len());
             println!("  Usages:         {}", model.usages.len());
@@ -503,7 +532,10 @@ fn print_help() {
     println!("  deps [name]          Forward and reverse dependencies");
     println!("  trace [req]          Requirements traceability");
     println!();
-    println!("Analysis:");
+    println!("Analysis (dispatches to the batch commands):");
+    println!("  check                Run all lint checks");
+    println!("  view [name]          Render a view def (list views if no name)");
+    println!("  analyze <case> [method]  Run an analysis case");
     println!("  rollup <root> <attr> Compute attribute rollup (sum)");
     println!("  stats                Model statistics");
     println!();
