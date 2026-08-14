@@ -529,10 +529,14 @@ mod tests {
 
     // -- WizardRunner + run_wizard tests -----------------------------------
 
-    /// A mock runner that returns pre-loaded answers in order.
+    /// A mock runner that returns pre-loaded answers in order. The call
+    /// counter is per-instance — a function-local `static` here is
+    /// process-wide, so parallel tests interleave it and read the wrong
+    /// answers (flaked in CI).
     struct MockRunner {
         answers: Vec<Option<WizardAnswer>>,
         interactive: bool,
+        calls: std::sync::atomic::AtomicUsize,
     }
 
     impl MockRunner {
@@ -540,6 +544,7 @@ mod tests {
             Self {
                 answers,
                 interactive: true,
+                calls: std::sync::atomic::AtomicUsize::new(0),
             }
         }
 
@@ -547,24 +552,15 @@ mod tests {
             Self {
                 answers: vec![],
                 interactive: false,
+                calls: std::sync::atomic::AtomicUsize::new(0),
             }
         }
     }
 
     impl WizardRunner for MockRunner {
-        fn run_step(&self, step: &WizardStep) -> Option<WizardAnswer> {
-            // Find the answer by position — use the step id to index into our
-            // answers by finding which step number this is. For simplicity we
-            // use a cell to track the call count.
-            use std::sync::atomic::{AtomicUsize, Ordering};
-            static CALL_COUNT: AtomicUsize = AtomicUsize::new(0);
-            // Reset on first step (id contains "0" or we just count calls)
-            let idx = if step.id.ends_with("_0") {
-                CALL_COUNT.store(1, Ordering::SeqCst);
-                0
-            } else {
-                CALL_COUNT.fetch_add(1, Ordering::SeqCst)
-            };
+        fn run_step(&self, _step: &WizardStep) -> Option<WizardAnswer> {
+            use std::sync::atomic::Ordering;
+            let idx = self.calls.fetch_add(1, Ordering::SeqCst);
             self.answers
                 .get(idx)
                 .cloned()
