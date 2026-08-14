@@ -183,7 +183,16 @@ sysml coverage -f json model.sysml
 | Populated defs | Percentage of definitions with at least one member |
 | Req satisfaction | Percentage of requirements with a satisfy statement |
 | Req verification | Percentage of requirements with a verify statement |
-| Overall score | Weighted average of all metrics |
+| Overall score | Weighted average of the metrics |
+
+The overall weighting is model-controllable: declare a `calc def
+QualityScore` (or import `ModelQuality.sysml` from
+[sysml-domain-libraries](https://github.com/jackhale98/sysml-domain-libraries)
+and specialize it) and its return expression is evaluated instead of the
+built-in equal weighting. The tool binds the fixed parameter vocabulary
+`documented`, `typedUsages`, `reqSatisfied`, `reqVerified` (each 0-100);
+the expression may weight any subset. The score line shows
+`(model:QualityScore)` when a model calc supplied the score.
 
 ## Model statistics
 

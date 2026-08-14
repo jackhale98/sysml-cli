@@ -99,8 +99,13 @@ pub(crate) fn run(cli: &Cli, files: &[PathBuf], check: bool, min_score: f64) -> 
             report.summary.req_verification_pct
         );
         println!(
-            "  Overall score:       {:.0}%",
-            report.summary.overall_score
+            "  Overall score:       {:.0}%{}",
+            report.summary.overall_score,
+            if report.summary.score_source == "built-in" {
+                String::new()
+            } else {
+                format!("  ({})", report.summary.score_source)
+            }
         );
     }
 

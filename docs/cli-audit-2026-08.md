@@ -90,8 +90,11 @@ constraint (pre-release). Items are checked off as they land.
 - JSON output envelope with a `command` discriminator on every command
   (do per-command as they are touched)
 - rustc-style spans on all error messages (only `check` has spans today)
-- `coverage` weights → `ModelQuality.sysml` calc defs (constraint
-  evaluation in `check` landed as W017; the calc-def migration remains)
+- ~~`coverage` weights → `ModelQuality.sysml` calc defs~~ landed: a
+  model-declared `QualityScore` calc (fixed parameter vocabulary:
+  documented/typedUsages/reqSatisfied/reqVerified, each 0-100) is
+  evaluated for the overall score; built-in equal weighting is the
+  fallback. ModelQuality.sysml ships in sysml-domain-libraries.
 - ~~Cache read path~~ resolved by deletion: `index` and the whole
   cache stack (cache.rs, index.rs, sqlite_cache.rs, ~2.4k lines) had no
   reader anywhere — parsing is milliseconds even for whole projects. If

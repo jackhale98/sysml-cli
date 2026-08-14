@@ -1091,6 +1091,36 @@ pub struct CoverageSummary {
     pub req_satisfaction_pct: f64,
     pub req_verification_pct: f64,
     pub overall_score: f64,
+    /// Where the overall score came from: `model:QualityScore` when the
+    /// model declares the scoring calc, `built-in` otherwise.
+    pub score_source: String,
+}
+
+/// Evaluate a model-declared `QualityScore` calc, if present.
+///
+/// The model (or an imported library, e.g. ModelQuality.sysml from the
+/// domain libraries) may declare `calc def QualityScore` whose return
+/// expression combines the four metric percentages. The parameter
+/// vocabulary is fixed — `documented`, `typedUsages`, `reqSatisfied`,
+/// `reqVerified` (each 0-100) — and the expression may use any subset,
+/// so models control the weighting without any tool-side configuration.
+fn model_quality_score(model: &Model, documented: f64, typed: f64, sat: f64, ver: f64) -> Option<f64> {
+    use crate::model::unquote_name;
+    let def = model
+        .definitions
+        .iter()
+        .find(|d| d.kind == DefKind::Calc && unquote_name(&d.name) == "QualityScore")?;
+    let ret = model.usages.iter().find(|u| {
+        u.parent_def.as_deref() == Some(def.name.as_str()) && u.kind == "return"
+    })?;
+    let expr = ret.value_expr.as_deref()?;
+    let parsed = crate::sim::expr_parser::parse_expr_str(expr).ok()?;
+    let mut env = crate::sim::expr::Env::new();
+    env.bind("documented", crate::sim::expr::Value::Number(documented));
+    env.bind("typedUsages", crate::sim::expr::Value::Number(typed));
+    env.bind("reqSatisfied", crate::sim::expr::Value::Number(sat));
+    env.bind("reqVerified", crate::sim::expr::Value::Number(ver));
+    crate::sim::eval::evaluate(&parsed, &env).ok()?.as_number()
 }
 
 /// Compute model completeness/coverage report.
@@ -1227,11 +1257,24 @@ pub fn coverage_report(model: &Model) -> CoverageReport {
         100.0
     };
 
-    // Weighted overall score
-    let overall_score = documented_pct * 0.25
-        + typed_usages_pct * 0.25
-        + req_satisfaction_pct * 0.25
-        + req_verification_pct * 0.25;
+    // Overall score: a model-declared QualityScore calc wins; the
+    // built-in equal weighting is only the fallback.
+    let (overall_score, score_source) = match model_quality_score(
+        model,
+        documented_pct,
+        typed_usages_pct,
+        req_satisfaction_pct,
+        req_verification_pct,
+    ) {
+        Some(s) => (s, "model:QualityScore".to_string()),
+        None => (
+            documented_pct * 0.25
+                + typed_usages_pct * 0.25
+                + req_satisfaction_pct * 0.25
+                + req_verification_pct * 0.25,
+            "built-in".to_string(),
+        ),
+    };
 
     CoverageReport {
         undocumented_defs,
@@ -1248,6 +1291,7 @@ pub fn coverage_report(model: &Model) -> CoverageReport {
             req_satisfaction_pct,
             req_verification_pct,
             overall_score,
+            score_source,
         },
     }
 }

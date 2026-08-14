@@ -846,3 +846,31 @@ fn normalize_name_path_leaves_non_names_alone() {
     assert_eq!(normalize_name_path("a * 'b'"), "a * 'b'");
     assert_eq!(normalize_name_path("3"), "3");
 }
+
+#[test]
+fn coverage_score_from_model_quality_calc() {
+    // A model-declared QualityScore calc controls the overall coverage
+    // score; without one the built-in equal weighting applies.
+    let weighted = parse(
+        r#"package P {
+            calc def QualityScore {
+                in documented : Real;
+                in typedUsages : Real;
+                in reqSatisfied : Real;
+                in reqVerified : Real;
+                return : Real = reqSatisfied * 0.5 + reqVerified * 0.5;
+            }
+            part def Documented { doc /* yes */ attribute a : Real; }
+            requirement def R1;
+        }"#,
+    );
+    let report = sysml_core::query::coverage_report(&weighted);
+    assert_eq!(report.summary.score_source, "model:QualityScore");
+    // R1 is neither satisfied nor verified: 0*0.5 + 0*0.5 = 0,
+    // regardless of the documentation/typing percentages.
+    assert_eq!(report.summary.overall_score, 0.0);
+
+    let plain = parse("package P { part def Documented { doc /* yes */ } }");
+    let report = sysml_core::query::coverage_report(&plain);
+    assert_eq!(report.summary.score_source, "built-in");
+}
