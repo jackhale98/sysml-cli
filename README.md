@@ -61,7 +61,7 @@ server for everything else). The CLI is the analysis engine for the
 models you write:
 
 ```sh
-sysml check src/*.sysml                                          # validate (18 checks)
+sysml check src/*.sysml                                          # validate (17 checks)
 sysml trace --check --min-coverage 80 src/*.sysml                # requirements coverage gate
 sysml rollup compute src/*.sysml --root Vehicle --attr mass      # mass budget with units
 sysml simulate state-machine model.sysml -n DroneStates -e TurnOn,StartMission
@@ -72,7 +72,7 @@ sysml diagram -t iv --scope Vehicle model.sysml                  # interconnecti
 
 ### Validation that understands SysML v2 semantics
 
-18 structural checks with root-namespace name resolution: files passed
+17 structural checks with root-namespace name resolution: files passed
 together share a root namespace, so fully-qualified cross-file
 references resolve without imports, package short names
 (`package <LIB> 'Library Package'`) work everywhere, and references

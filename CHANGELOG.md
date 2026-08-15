@@ -1,5 +1,44 @@
 # Changelog
 
+## Unreleased
+
+### Conformant quoted names
+- The OMG pilot implementation requires quoted names when a member's
+  spelling collides with a keyword (`'occurrence' = 3`,
+  `RiskCategory::'use'`). The parser now normalizes them — metadata
+  keys and name-path values, redefinition targets (`:>> 'occurrence'`),
+  and expression identifiers all reach checks, views, and analyses
+  unquoted (`model::normalize_name_path`)
+
+### REPL dispatches into the real commands
+- `check`, `view <name>`, and `analyze <case> [method]` inside the REPL
+  call the batch implementations — same include-path resolution, same
+  output
+- The REPL loads through the shared `-I`/config-aware loader; its
+  private loader ignored include paths, so imported libraries were
+  invisible in REPL sessions
+
+### Coverage and trace agree with the checks (breaking output)
+- `coverage` and `trace` now resolve requirement satisfaction the same
+  way W002/W003 do — through requirement usages and `<id>` short names,
+  closed over specialization (`resolver::traced_requirement_defs`).
+  Trace shows `(via specialization)` for base defs covered only through
+  a specializing requirement
+- A model-declared `calc def QualityScore` (parameters `documented`,
+  `typedUsages`, `reqSatisfied`, `reqVerified`, each 0-100) supplies the
+  overall coverage score; the built-in equal weighting is the fallback.
+  `ModelQuality.sysml` in sysml-domain-libraries ships the default
+- `trace` and `allocation` render through the same table pipeline as
+  `view`: `-f csv|md` work directly, and text tables are content-width
+  (the fixed 20/25-char columns are gone)
+
+### Removed (breaking)
+- `index` and the cache stack (`cache.rs`, `index.rs`,
+  `sqlite_cache.rs`, the `sqlite` feature — ~2.4k lines): the cache had
+  one writer and no readers; whole-project parses take milliseconds
+- `doc` is marked transitional in its help text (the fixed layout will
+  move into the model as document views/templates)
+
 ## 0.7.0 — 2026-08-14
 
 The lean-CLI release: reports are model-defined views, analysis is

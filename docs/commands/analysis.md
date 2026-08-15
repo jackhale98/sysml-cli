@@ -100,6 +100,12 @@ only when no usage types them. Satisfy/verify statements match by
 simple name, qualified name, feature chain (`reqs.REQ2`), or `<ID>`.
 JSON output includes an `id` field per requirement.
 
+The table prints through the same pipeline as `view`, so `-f csv` and
+`-f md` work directly. A base requirement def satisfied only through a
+specializing requirement (satisfy `Derived :> Base` covers `Base`) shows
+`(via specialization)` — trace, `coverage`, and the W002/W003 checks all
+apply the same resolution.
+
 | Option | Description |
 |--------|-------------|
 | `--check` | Exit with error if requirements lack satisfaction/verification |

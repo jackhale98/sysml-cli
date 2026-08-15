@@ -333,13 +333,13 @@ sysml add requirements.sysml satisfy IPRating --by Enclosure
 
 ```sh
 $ sysml trace requirements.sysml
-Requirement          Satisfied By         Verified By
-------------------------------------------------------------
-TemperatureAccuracy  TemperatureSensor    -
-OperatingRange       WeatherStationUnit   -
-BatteryLife          PowerSupply          -
-UpdateRate           Controller           -
-IPRating             Enclosure            -
+Requirement          Satisfied By        Verified By
+----------------------------------------------------
+TemperatureAccuracy  TemperatureSensor   -
+OperatingRange       WeatherStationUnit  -
+BatteryLife          PowerSupply         -
+UpdateRate           Controller          -
+IPRating             Enclosure           -
 
 Coverage: 5/5 satisfied (100%), 0/5 verified (0%)
 ```
@@ -404,13 +404,13 @@ The trace matrix now shows both satisfaction and verification:
 
 ```sh
 $ sysml trace model.sysml requirements.sysml verification.sysml
-Requirement          Satisfied By         Verified By
-------------------------------------------------------------
-TemperatureAccuracy  TemperatureSensor    TestTemperatureAccuracy
-OperatingRange       WeatherStationUnit   TestOperatingRange
-BatteryLife          PowerSupply          TestBatteryLife
-UpdateRate           Controller           -
-IPRating             Enclosure            -
+Requirement          Satisfied By        Verified By
+----------------------------------------------------------------
+TemperatureAccuracy  TemperatureSensor   TestTemperatureAccuracy
+OperatingRange       WeatherStationUnit  TestOperatingRange
+BatteryLife          PowerSupply         TestBatteryLife
+UpdateRate           Controller          -
+IPRating             Enclosure           -
 
 Coverage: 5/5 satisfied (100%), 3/5 verified (60%)
 ```

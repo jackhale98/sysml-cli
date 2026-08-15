@@ -61,7 +61,7 @@ sysml check --severity warning src/*.sysml \
 
 ### Language Server (`sysml-lsp`)
 
-`sysml-lsp` is a full-featured language server for SysML v2 files with 17 capabilities. Install from source or download a prebuilt binary from [GitHub Releases](https://github.com/jackhale98/sysml-cli/releases).
+`sysml-lsp` is a full-featured language server for SysML v2 files with 19 capabilities. Install from source or download a prebuilt binary from [GitHub Releases](https://github.com/jackhale98/sysml-cli/releases).
 
 ```sh
 cargo install --path crates/sysml-lsp
