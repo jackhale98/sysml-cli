@@ -1,6 +1,6 @@
 # Project Commands
 
-Commands for project initialization, indexing, and shell completions.
+Commands for project setup and shell completions, plus the interactive REPL.
 
 ## init
 
@@ -28,6 +28,7 @@ The config file supports:
 name = "BrakeSystem"
 model_root = "model/"
 library_paths = ["libraries/"]
+# stdlib_path = "/opt/sysml/sysml.library"   # optional
 
 [defaults]
 author = "jhale"
@@ -37,7 +38,7 @@ format = "text"
 
 **Library auto-resolution:** When `library_paths` is set in config, all commands automatically include those paths for import resolution — no `-I` flag needed.
 
-**Precedence:** CLI flags > env vars (`SYSML_MODEL_ROOT`, etc.) > config file > defaults.
+**Precedence:** CLI flags > env vars (`SYSML_STDLIB_PATH`, `SYSML_PROJECT_ROOT`) > config file > defaults.
 
 ### `[gates]` — model-declared CI gate names
 
@@ -51,6 +52,34 @@ The gate names are your vocabulary: `--gate <Name>` on the command
 overrides the config; with neither, the conventional `QualityGate` /
 `TraceGate` names apply. See [analysis](analysis.md) for how gates
 evaluate.
+
+## repl
+
+Interactive exploration with the model held in memory:
+
+```sh
+sysml repl                        # project discovery
+sysml repl -I libraries model.sysml
+```
+
+Navigation and queries: `cd`/`focus` (set context), `list`, `defs`,
+`usages` (with `type:`/`in:`/`kind:` filters), `show`, `find`,
+`typeof`, `subtypes`, `supertypes`, `connections`, `flows`, `satisfy`,
+`verify`, `deps`, `trace`, `rollup`, `stats`, `reload`. The `check`,
+`view`, and `analyze` commands dispatch into the batch implementations
+(same include-path resolution, same output), so REPL results never
+disagree with CI.
+
+## doc
+
+Generate Markdown documentation from model structure and doc comments
+(transitional: the fixed layout will move into the model as document
+views/templates):
+
+```sh
+sysml doc model.sysml
+sysml doc model.sysml --root Vehicle    # start from one element
+```
 
 ## Validation pipelines
 

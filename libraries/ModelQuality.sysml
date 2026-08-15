@@ -22,7 +22,7 @@ package ModelQuality {
      *   }
      *
      * Gate CI on the result with:
-     *   sysml coverage --check --min-score 80 -I libraries src/*.sysml
+     *   sysml coverage --check -I libraries src/*.sysml
      */
 
     private import ScalarValues::*;

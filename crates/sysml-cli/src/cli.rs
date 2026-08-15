@@ -203,10 +203,9 @@ pub(crate) enum Command {
     ///
     /// EXAMPLES:
     ///   sysml diagram -t bdd model.sysml
-    ///   sysml diagram -t ibd -s Vehicle model.sysml
+    ///   sysml diagram -t ibd --scope Vehicle model.sysml
     ///   sysml diagram -t trace model.sysml
     ///   sysml diagram -t alloc -r plantuml model.sysml
-    ///   sysml diagram -t bdd --view StructureView model.sysml
     Diagram {
         /// SysML v2 file to generate diagram from.
         #[arg(required = true)]
@@ -261,7 +260,7 @@ pub(crate) enum Command {
     /// Generate co-simulation interfaces (FMI 3.0), Modelica stubs, or
     /// SSP system structure descriptions from SysML v2 part definitions.
     ///
-    /// SUBCOMMANDS: interfaces, modelica, ssp, list
+    /// SUBCOMMANDS: modelica, ssp, list
     Export {
         #[command(subcommand)]
         kind: ExportCommand,
@@ -439,9 +438,9 @@ pub(crate) enum Command {
     /// Generate shell completions.
     ///
     /// EXAMPLES:
-    ///   sysml completions bash > ~/.local/share/bash-completion/completions/sysml-cli
-    ///   sysml completions zsh > ~/.zfunc/_sysml-cli
-    ///   sysml completions fish > ~/.config/fish/completions/sysml-cli.fish
+    ///   sysml completions bash > ~/.local/share/bash-completion/completions/sysml
+    ///   sysml completions zsh > ~/.zfunc/_sysml
+    ///   sysml completions fish > ~/.config/fish/completions/sysml.fish
     Completions {
         /// Shell: bash, zsh, fish, elvish, powershell.
         #[arg(required = true)]
@@ -573,7 +572,9 @@ pub(crate) enum Command {
     /// Loads model files into memory and provides an interactive prompt
     /// for querying, inspecting, and computing over the model.
     ///
-    /// REPL COMMANDS: list, show, find, deps, trace, rollup, sim, help, quit
+    /// REPL COMMANDS: cd/focus, list, defs, usages, show, find, typeof,
+    /// subtypes, supertypes, connections, flows, satisfy, verify, deps,
+    /// trace, rollup, stats, check, view, analyze, reload, help, quit
     ///
     /// EXAMPLES:
     ///   sysml repl model.sysml

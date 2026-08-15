@@ -37,7 +37,7 @@ The build compiles the [tree-sitter-sysml](https://github.com/jackhale98/tree-si
 
 ### Language server (LSP)
 
-The `sysml-lsp` binary is a full-featured language server for SysML v2 with 19 capabilities: diagnostics, go-to-definition, find references, hover (with rollup values), contextual completions (stdlib-aware: `attribute m : ` offers `Real`/ISQ quantities ranked below workspace types, `ISQ::` lists the package members, hover resolves stdlib symbols), document outline, workspace symbols, semantic highlighting, code actions (quick-fix + add import), formatting, document highlight, folding, rename (workspace-wide), type hierarchy (advertised via LSP 3.17 typeHierarchyProvider), inlay hints, **code lens** (satisfy / verify / usage counts above each definition), and **document link** (clickable imports and super-types).
+The `sysml-lsp` binary is a full-featured language server for SysML v2 with 17 capabilities: diagnostics, go-to-definition, find references, hover (with rollup values), contextual completions (stdlib-aware: `attribute m : ` offers `Real`/ISQ quantities ranked below workspace types, `ISQ::` lists the package members, hover resolves stdlib symbols), document outline, workspace symbols, semantic highlighting, code actions (quick-fix + add import), formatting, document highlight, folding, rename (workspace-wide), type hierarchy (advertised via LSP 3.17 typeHierarchyProvider), inlay hints, **code lens** (satisfy / verify / usage counts above each definition), and **document link** (clickable imports and super-types).
 
 ```sh
 cargo install --path crates/sysml-lsp
@@ -212,7 +212,7 @@ sysml diagram -t bv model.sysml                         # Browser View (package 
 sysml diagram -t grv model.sysml                        # Grid View (requirements matrix)
 ```
 
-Legacy names still work: `bdd`=`gv`, `ibd`=`iv`, `stm`=`stv`, `act`=`afv`, `pkg`=`bv`, `req`=`grv`.
+Legacy names still work: `bdd`=`gv`, `ibd`=`iv`, `stm`=`stv`, `act`=`afv`, `pkg`=`bv`; `grv` is the traceability grid (`trace`), while `req` is the requirements grid.
 
 The examples below are actual CLI output for this model (`drone.sysml`):
 
@@ -433,7 +433,7 @@ structured JSON envelopes under `-f json`. See
 
 | Flag | Description |
 |------|-------------|
-| `-f, --format <FORMAT>` | Output format: `text`, `json` (default: `text`). All commands — including editing (`fmt`, `add`, `remove`, `rename`) — emit a structured JSON envelope under `-f json` for editor and CI integration. |
+| `-f, --format <FORMAT>` | Output format: `text`, `json`, `csv`, `md` (default: `text`; csv/md apply to tabular output). All commands — including editing (`fmt`, `add`, `remove`, `rename`) — emit a structured JSON envelope under `-f json` for editor and CI integration. |
 | `-q, --quiet` | Suppress summary line on stderr |
 | `-I, --include <PATH>` | Additional files/directories for import resolution |
 | `--stdlib-path <PATH>` | Path to the SysML v2 standard library directory (env: `SYSML_STDLIB_PATH`, config: `stdlib_path`) |
@@ -466,7 +466,7 @@ structured JSON envelopes under `-f json`. See
 | `diagram` | Generate SysML v2 standard views: gv, iv, afv, stv, sv, grv, bv (+ par, trace, alloc, ucd) | |
 | **Simulation & Export** | | [simulation](docs/commands/simulation.md) |
 | `simulate` (`sim`) | Evaluate constraints, state machines, action flows | |
-| `export` | Export FMI 3.0, Modelica, SSP artifacts | |
+| `export` | Export Modelica stubs and SSP system-structure descriptions | |
 | **Project** | | [project](docs/commands/project.md) |
 | `init` | Initialize a `.sysml/` project | |
 | `repl` | Interactive REPL with stateful navigation, relationship queries, and filtering | |
@@ -478,7 +478,7 @@ structured JSON envelopes under `-f json`. See
 | `doc` | Generate Markdown documentation from model structure and comments | |
 | `completions` | Generate shell completion scripts | |
 | **Language Server** | | [editor setup](docs/ci-integration.md#language-server-sysml-lsp) |
-| `sysml-lsp` | LSP server with 19 capabilities: diagnostics, go-to-def, references, hover (with rollups), contextual completions (stdlib-aware: `attribute m : ` offers `Real`/ISQ quantities ranked below workspace types, `ISQ::` lists the package members, hover resolves stdlib symbols), outline, workspace symbols, semantic tokens, code actions, formatting, document highlight, folding, rename (workspace-wide), type hierarchy (advertised via LSP 3.17 typeHierarchyProvider), inlay hints, code lens, document link | |
+| `sysml-lsp` | LSP server with 17 capabilities: diagnostics, go-to-def, references, hover (with rollups), contextual completions (stdlib-aware: `attribute m : ` offers `Real`/ISQ quantities ranked below workspace types, `ISQ::` lists the package members, hover resolves stdlib symbols), outline, workspace symbols, semantic tokens, code actions, formatting, document highlight, folding, rename (workspace-wide), type hierarchy (advertised via LSP 3.17 typeHierarchyProvider), inlay hints, code lens, document link | |
 
 ## License
 

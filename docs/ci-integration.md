@@ -61,7 +61,7 @@ sysml check --severity warning src/*.sysml \
 
 ### Language Server (`sysml-lsp`)
 
-`sysml-lsp` is a full-featured language server for SysML v2 files with 19 capabilities. Install from source or download a prebuilt binary from [GitHub Releases](https://github.com/jackhale98/sysml-cli/releases).
+`sysml-lsp` is a full-featured language server for SysML v2 files with 17 capabilities. Install from source or download a prebuilt binary from [GitHub Releases](https://github.com/jackhale98/sysml-cli/releases).
 
 ```sh
 cargo install --path crates/sysml-lsp
@@ -153,7 +153,7 @@ Add to Zed settings (`settings.json`):
 
 | Feature | Description |
 |---------|-------------|
-| Diagnostics | 12 lint checks with error codes, severity, suggestions — published on open/change |
+| Diagnostics | 16 lint checks with codes, severity, and suggestions — published on open/change (W017 value-constraint evaluation runs in `sysml check` only) |
 | Document symbols | Hierarchical outline (definitions as containers, usages as children) |
 | Go-to-definition | In-file and cross-file navigation via workspace definition index |
 | Find references | All references to a name across open files (type refs, supertypes, connections, flows) |
@@ -168,6 +168,8 @@ Add to Zed settings (`settings.json`):
 | Rename | Cross-file symbol rename with word-boundary matching (F2) |
 | Type hierarchy | Navigate supertype/subtype chains across files |
 | Inlay hints | Show multiplicity annotations and inferred types inline |
+| Code lens | Satisfy / verify / usage counts above each definition |
+| Document link | Clickable imports and supertypes |
 
 ### Emacs (sysml2-mode)
 
@@ -180,7 +182,7 @@ Add to Zed settings (`settings.json`):
 
 ### JSON output for other editors
 
-All commands support `-f json` for structured output suitable for editor integration:
+Tabular and diagnostic commands support `-f json` for structured output suitable for editor integration (`diagram` output is always diagram source):
 
 ```sh
 sysml check -f json model.sysml         # Diagnostics as JSON array

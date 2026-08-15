@@ -338,6 +338,10 @@ pub fn parse_kind_filter(s: &str) -> Option<KindFilter> {
             "attribute".to_string(),
         )),
         "items" | "item" => Some(KindFilter::Both(DefKind::Item, "item".to_string())),
+        "analyses" | "analysis" => Some(KindFilter::Both(
+            DefKind::Analysis,
+            "analysis".to_string(),
+        )),
 
         // Definition-only filters (suffix -def)
         "part-def" => Some(KindFilter::DefKind(DefKind::Part)),

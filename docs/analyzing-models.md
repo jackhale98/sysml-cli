@@ -26,8 +26,11 @@ $ sysml check -I libraries examples/ReliefValve.sysml
 No issues found.
 ```
 
-In CI, `check` exits non-zero on errors or warnings. Notes (unused
-defs, missing docs) don't fail the build.
+In CI, `check` exits non-zero on errors (unresolved names, syntax,
+duplicates). Warnings and notes are reported but don't fail the build
+by themselves — gate on them explicitly if you want to (the domain
+libraries' `scripts/validate.sh` greps for `warning[` to enforce
+warning-free models).
 
 ## 2. What's in it? — `list`, `show`, `deps`
 

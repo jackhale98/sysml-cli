@@ -6,6 +6,7 @@
 
 | Check | Name | Severity | Description |
 |-------|------|----------|-------------|
+| Value Constraints | `value-constraints` | Warning | Model-declared `assert constraint`s evaluated against concrete values (W017) |
 | Syntax | `syntax` | Error | Tree-sitter parse errors and missing syntax elements |
 | Duplicates | `duplicates` | Error | Definitions of the same kind with identical names |
 | Unused | `unused` | Note | Definitions never referenced in the file |
@@ -33,6 +34,12 @@
 | E001 | syntax | `Syntax error: near <context>` |
 | E002 | duplicates | `duplicate <kind> '<name>' (first defined at line <n>)` |
 
+### Errors (continued)
+
+| Code | Check | Message |
+|------|-------|---------|
+| W015 | self-specialization | `<kind> '<name>' specializes itself: ':> <name>' would cause infinite recursion` — an Error despite the W code: it fails `sysml check` |
+
 ### Warnings
 
 | Code | Check | Message |
@@ -51,7 +58,6 @@
 | W012 | missing-docs | `<kind> '<name>' has no documentation comment` |
 | W013 | naming | `<kind> name '<name>' should start with an uppercase letter (PascalCase)` |
 | W014 | orphan-req | `requirement def '<name>' is never satisfied, verified, or specialized` |
-| W015 | self-specialization | `<kind> '<name>' specializes itself: ':> <name>' would cause infinite recursion` |
 | W016 | unbound-port | `port '<name>' (in '<parent>') is declared but never connected` |
 | W017 | value-constraints | `<value> violates constraint '<name>' of '<type>' (<expression>)` |
 
@@ -104,4 +110,4 @@ model.sysml:12:5: warning[W002]: requirement def `MassReq` has no corresponding 
 ]
 ```
 
-All commands support `-f json` for structured output suitable for editor integration and CI pipelines.
+Tabular and diagnostic commands support `-f json` for structured output suitable for editor integration and CI pipelines (`diagram` and diagram-rendering views always emit diagram source text).

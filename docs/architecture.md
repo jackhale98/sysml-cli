@@ -36,7 +36,7 @@ src/
   config.rs               Project configuration (.sysml/config.toml)
   project.rs              Project discovery (walk-up from CWD)
   interactive.rs          Wizard framework (WizardStep, WizardRunner)
-  checks/                 9 validation checks
+  checks/                 17 validation checks (16 registered + W017 value-constraints)
   sim/                    Simulation and calculation engine
     state_parser.rs       State machine model extraction
     state_sim.rs          State machine simulation
@@ -49,13 +49,21 @@ src/
     what_if.rs            What-if scenarios and parametric sweeps
     units.rs              Unit conversion system (mass, length, power, etc.)
     analysis.rs           Analysis case extraction and evaluation
+    uncertainty.rs        Uncertainty propagation math (worst-case, RSS, Monte Carlo + histogram)
+    uncertainty_model.rs  Uncertainty case extraction (feature chains, targets, settings)
+    eval.rs               Expression evaluation
+    expr_parser.rs        Expression parsing (shared by views, gates, W017)
+    state_machine.rs      State machine types
+    action_flow.rs        Action flow types
   codegen/                Code generation and editing
     template.rs           SysML definition template generation
     edit.rs               Byte-accurate surgical text edits
     format.rs             CST-aware source formatting
-  diagram/                Diagram generation (10 types, 4 formats)
-  export/                 FMI 3.0, Modelica, SSP export
-  query.rs                Model querying (list, show, trace, stats, deps, diff, allocation, coverage)
+  diagram/                Diagram generation (11 types, 4 formats)
+  export/                 Modelica stub and SSP export (FMI interface extraction)
+  view_render.rs          Model-defined view engine (@TableRendering: row providers, computed columns)
+  stdlib.rs               Embedded SysML v2 standard library (member-checked references)
+  query.rs                Model querying (list, show, trace, deps, diff, allocation, coverage, gates)
 ```
 
 ## sysml-lsp
@@ -81,6 +89,10 @@ src/
   document_highlight.rs Highlight all occurrences of symbol under cursor
   folding.rs            Folding ranges for definition blocks and comments
   rename.rs             Cross-file symbol rename with word-boundary matching
+  inlay_hints.rs        Multiplicity and inferred-type hints
+  type_hierarchy.rs     Supertype/subtype navigation across files
+  code_lens.rs          Satisfy / verify / usage counts above definitions
+  document_link.rs      Clickable imports and supertypes
 ```
 
 State is managed with `DashMap` for concurrent access — tower-lsp dispatches requests concurrently. Full text sync (`TextDocumentSyncKind::FULL`) with full reparse on every change; tree-sitter is fast and SysML files are small. On `initialize`, the server scans the workspace for `.sysml`/`.kerml` files to build the cross-file definition index.

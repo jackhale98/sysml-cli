@@ -23,7 +23,7 @@ cat generated.sysml | sysml check -           # Read from stdin
 
 When unresolved type references or connection targets have a close match among known definitions, `check` suggests the closest match:
 ```
-model.sysml:5:1: warning[W004]: type `Vehicel` is not defined in this file
+model.sysml:5:1: warning[W004]: type `Vehicel` cannot be resolved (not defined, imported, or reachable from the root namespace)
   help: did you mean `Vehicle`?
 ```
 
@@ -35,8 +35,9 @@ List model elements with optional filters. Alias: `ls`.
 
 ```sh
 sysml list model.sysml
-sysml list --kind parts model.sysml          # Only part definitions
-sysml list --kind port model.sysml           # Only port usages
+sysml list --kind parts model.sysml          # Part defs AND usages
+sysml list --kind part-def model.sysml       # Only part definitions
+sysml list --kind port-usage model.sysml     # Only port usages
 sysml list --name Vehicle model.sysml        # Name search
 sysml list --doc "shall operate" model.sysml # Doc-comment search
 sysml list --parent Vehicle model.sysml      # Children of Vehicle
@@ -46,7 +47,7 @@ sysml list -f json model.sysml               # JSON output
 
 | Option | Description |
 |--------|-------------|
-| `-k, --kind <KIND>` | Filter by kind. `parts` shows both defs and usages. `part-def` / `part-usage` restricts to one. Also: `ports`, `actions`, `states`, `requirements`, `constraints`, `connections`, `attributes`, `items`, `enums`, `all`, `definitions`, `usages` |
+| `-k, --kind <KIND>` | Filter by kind. `parts` shows both defs and usages. `part-def` / `part-usage` restricts to one. Also: `ports`, `actions`, `states`, `requirements`, `constraints`, `connections`, `attributes`, `items`, `enums`, `analyses`, `all`, `definitions`, `usages` |
 | `-n, --name <PATTERN>` | Substring name filter |
 | `--doc <TEXT>` | Substring filter on documentation comments |
 | `-p, --parent <NAME>` | Filter by parent definition |
@@ -54,6 +55,10 @@ sysml list -f json model.sysml               # JSON output
 | `--abstract-only` | Show only abstract definitions |
 | `--visibility <VIS>` | Filter by `public`, `private`, `protected` |
 | `--view <NAME>` | Apply a SysML v2 view definition as a filter preset |
+| `--variations` | Show only variation points (Ch 35) |
+| `--variants` | Show only variant choices (Ch 35) |
+| `--metadata <TYPE>` | Show only elements annotated with this metadata type |
+| `--where KEY=VALUE` | Constrain metadata values (repeatable, with `--metadata`) |
 
 ### Metadata queries (Ch 36)
 
@@ -108,7 +113,8 @@ apply the same resolution.
 
 | Option | Description |
 |--------|-------------|
-| `--check` | CI gate: fail per the model's TraceGate (strict without one) |
+| `--check` | CI gate: fail per the model's gate constraint (strict without one) |
+| `--gate <NAME>` | Gate constraint def to evaluate (overrides config; default `TraceGate`) |
 The gate threshold lives in the model, not in a flag: declare a
 constraint usage typed `TraceGate` / `QualityGate` (ship with
 `ModelQuality.sysml` in
@@ -187,6 +193,7 @@ sysml deps -f json model.sysml Vehicle
 |--------|-------------|
 | `--reverse` | Show only reverse dependencies (what references this element) |
 | `--forward` | Show only forward dependencies (what this element depends on) |
+| `--transitive` | Follow dependencies transitively (whole reachable closure) |
 
 ## diff
 
@@ -270,6 +277,8 @@ sysml rollup sensitivity model.sysml --root Vehicle --attr mass
 sysml rollup sweep model.sysml --root Vehicle --attr mass --param engine --from 100 --to 300 --steps 5
 sysml rollup what-if model.sysml --root Vehicle --attr mass --scenario "light:engine=100" --scenario "heavy:engine=300"
 ```
+
+`rollup budget` exits 1 when the total exceeds `--limit` — a CI gate.
 
 To find every instance of an attribute across the model, use
 `sysml list -k attributes -n <attr>`.
