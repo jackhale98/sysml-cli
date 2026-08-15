@@ -13,7 +13,8 @@ Fully-qualified names resolve from the root namespace without imports, package s
 | [Analyzing models](docs/analyzing-models.md) | Run a real model through the analysis commands, with outputs |
 | [Validation & Diagnostics](docs/validation.md) | 17 lint checks, diagnostic codes, output formats |
 | [Architecture](docs/architecture.md) | Crate structure, design decisions, 3-crate workspace |
-| [CI & Editor Integration](docs/ci-integration.md) | GitHub Actions workflow, LSP setup, Emacs sysml2-mode, JSON output |
+| [Editor Setup](docs/editors.md) | Grammar + LSP in Emacs, Vim/Neovim, VS Code, Helix, Zed |
+| [CI Integration](docs/ci-integration.md) | GitHub Actions workflow, gate commands, LSP capability table |
 | **Command references** | [Analysis](docs/commands/analysis.md) &#183; [Views](docs/commands/views.md) &#183; [Diagrams](docs/commands/diagrams.md) &#183; [Editing](docs/commands/editing.md) &#183; [Simulation](docs/commands/simulation.md) &#183; [Project](docs/commands/project.md) |
 
 ## Installation
@@ -43,7 +44,7 @@ The `sysml-lsp` binary is a full-featured language server for SysML v2 with 17 c
 cargo install --path crates/sysml-lsp
 ```
 
-Or download a prebuilt binary from [GitHub Releases](https://github.com/jackhale98/sysml-cli/releases). See [CI & Editor Integration](docs/ci-integration.md) for VS Code, Neovim, Helix, and Zed setup.
+Or download a prebuilt binary from [GitHub Releases](https://github.com/jackhale98/sysml-cli/releases). See [Editor Setup](docs/editors.md) for Emacs, Vim/Neovim, VS Code, Helix, and Zed setup.
 
 ### Shell completions
 
