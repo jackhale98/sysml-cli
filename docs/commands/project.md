@@ -39,6 +39,19 @@ format = "text"
 
 **Precedence:** CLI flags > env vars (`SYSML_MODEL_ROOT`, etc.) > config file > defaults.
 
+### `[gates]` — model-declared CI gate names
+
+```toml
+[gates]
+coverage = "ShipGate"   # constraint def evaluated by coverage --check
+trace = "RtmGate"       # constraint def evaluated by trace --check
+```
+
+The gate names are your vocabulary: `--gate <Name>` on the command
+overrides the config; with neither, the conventional `QualityGate` /
+`TraceGate` names apply. See [analysis](analysis.md) for how gates
+evaluate.
+
 ## Validation pipelines
 
 There is no built-in pipeline runner — compose `sysml` commands with

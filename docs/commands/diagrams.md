@@ -9,7 +9,6 @@ sysml diagram -t bdd model.sysml
 sysml diagram -t ibd --scope Vehicle model.sysml
 sysml diagram -t trace -r plantuml model.sysml
 sysml diagram -t bdd --view StructureView model.sysml
-sysml diagram --view StructureView model.sysml    # type from the view's `render as`
 sysml diagram -t act --scope Drive -d LR model.sysml
 ```
 

@@ -190,10 +190,14 @@ constraint traceGate : TraceGate;   // defaults: everything satisfied AND verifi
 ```
 
 ```
-$ sysml coverage --check -I libraries examples/ReliefValve.sysml; echo $status
-89 >= 80: gate passes
-0
+$ sysml coverage --check -I libraries examples/ReliefValve.sysml && echo PASS
+...
+PASS                    # exit 0: the gate's 89 >= 80 holds
 ```
+
+Choose a different gate def with `--gate <Name>` or a `[gates]` section
+in `.sysml/config.toml`; `QualityGate`/`TraceGate` are only the
+conventional defaults.
 
 With no gate declared, `--check` is strict (perfect score; every
 requirement satisfied and verified).

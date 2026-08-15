@@ -62,7 +62,7 @@ models you write:
 
 ```sh
 sysml check src/*.sysml                                          # validate (17 checks)
-sysml trace --check --min-coverage 80 src/*.sysml                # requirements coverage gate
+sysml trace --check src/*.sysml                                  # requirements gate (threshold from the model)
 sysml rollup compute src/*.sysml --root Vehicle --attr mass      # mass budget with units
 sysml simulate state-machine model.sysml -n DroneStates -e TurnOn,StartMission
 sysml diagram -t iv --scope Vehicle model.sysml                  # interconnection view
@@ -86,6 +86,23 @@ did-you-mean suggestions and machine-readable JSON output for CI. See
 
 
 
+
+### Uncertainty analysis with a real distribution
+
+Tolerance stackups and uncertain budgets (any analysis typed by
+`Uncertainty::UncertaintyAnalysis`) evaluate by worst-case interval
+arithmetic, RSS variance propagation (Cp/Cpk, per-input sensitivity),
+and seeded Monte Carlo — whose text output includes the sample
+histogram, so you see the shape of the result, not just statistics.
+Identical seed, identical histogram: it's part of the audit trail.
+
+### CI gates that live in the model
+
+`sysml trace --check` and `sysml coverage --check` evaluate constraint
+usages declared in the model (conventionally `QualityGate` /
+`TraceGate` from the domain libraries' ModelQuality package; pick other
+defs with `--gate` or `[gates]` in config). The shipping threshold is a
+reviewed model change, not a CI-config knob. No gate declared = strict.
 
 ### Requirements traceability
 
@@ -397,8 +414,8 @@ shell (or make, or CI steps) — no runner to configure:
 ```sh
 sysml check --severity warning src/*.sysml \
   && sysml fmt --check src/*.sysml \
-  && sysml trace --check --min-coverage 80 src/*.sysml \
-  && sysml coverage --check --min-score 60 src/*.sysml
+  && sysml trace --check src/*.sysml \
+  && sysml coverage --check src/*.sysml
 ```
 
 ### Scripted editing, when you need it
@@ -435,7 +452,7 @@ structured JSON envelopes under `-f json`. See
 | `allocation` (`alloc`) | Logical-to-physical allocation matrix | |
 | `coverage` | Model quality and completeness report | |
 | **Views** | | [views](docs/commands/views.md) |
-| `view` | Render a model-defined view as a table (`view def` + `@TableRendering`); no name lists views | |
+| `view` | Render a model-defined view: tables (`@TableRendering`) and diagrams (`render as` + `--renderer`); no name lists views | |
 | **Rollups** | | |
 | `rollup compute` | Aggregate any attribute over the part hierarchy (sum, RSS, min, max) | |
 | `rollup budget` | Check a rollup total against a limit (CI gate) | |
@@ -443,7 +460,6 @@ structured JSON envelopes under `-f json`. See
 | `rollup sweep` | Parametric sweep: evaluate rollup across a range of values | |
 | `rollup what-if` | Compare rollup under different override scenarios | |
 | **Analysis cases** | | |
-| `analyze list` | List analysis cases in model files | |
 | `analyze run` | Execute an analysis case; uncertainty cases propagate via `--method worst-case\|rss\|monte-carlo` (`--iterations`, `--seed`) | |
 | `analyze trade` | Compare alternatives in a trade study | |
 | **Diagrams** | | [diagrams](docs/commands/diagrams.md) |

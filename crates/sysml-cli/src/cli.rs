@@ -638,10 +638,9 @@ pub(crate) enum Command {
     /// Lists, executes, and compares analysis cases. Supports trade studies
     /// with maximize/minimize objectives and parametric sweeps.
     ///
-    /// SUBCOMMANDS: list, run, trade
+    /// SUBCOMMANDS: run, trade
     ///
     /// EXAMPLES:
-    ///   sysml analyze list model.sysml
     ///   sysml analyze run model.sysml -n FuelEconomyAnalysis
     ///   sysml analyze trade model.sysml -n EngineTradeOff
     Analyze {
