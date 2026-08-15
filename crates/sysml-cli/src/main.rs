@@ -54,8 +54,7 @@ fn main() -> ExitCode {
         Command::Trace {
             files,
             check,
-            min_coverage,
-        } => commands::trace::run(&cli, files, *check, *min_coverage),
+        } => commands::trace::run(&cli, files, *check),
         Command::Diagram {
             file,
             diagram_type,
@@ -156,8 +155,7 @@ fn main() -> ExitCode {
         Command::Coverage {
             files,
             check,
-            min_score,
-        } => commands::coverage::run(&cli, files, *check, *min_score),
+        } => commands::coverage::run(&cli, files, *check),
         Command::Init { force } => commands::init::run(&cli, *force),
         Command::Check {
             files,

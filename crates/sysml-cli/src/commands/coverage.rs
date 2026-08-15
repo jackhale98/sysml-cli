@@ -2,7 +2,7 @@ use crate::Cli;
 use std::path::PathBuf;
 use std::process::ExitCode;
 
-pub(crate) fn run(cli: &Cli, files: &[PathBuf], check: bool, min_score: f64) -> ExitCode {
+pub(crate) fn run(cli: &Cli, files: &[PathBuf], check: bool) -> ExitCode {
     use sysml_core::query;
     let Some(merged) = crate::load_model(cli, files) else {
         return ExitCode::FAILURE;
@@ -109,12 +109,39 @@ pub(crate) fn run(cli: &Cli, files: &[PathBuf], check: bool, min_score: f64) -> 
         );
     }
 
-    if check && report.summary.overall_score < min_score {
-        eprintln!(
-            "error: coverage score {:.0}% is below minimum {:.0}%",
-            report.summary.overall_score, min_score
-        );
-        return ExitCode::from(1);
+    if check {
+        // The gate threshold lives in the model: a constraint usage typed
+        // `QualityGate` decides pass/fail. No gate declared = strict.
+        let s = &report.summary;
+        match query::evaluate_gate(
+            &merged,
+            "QualityGate",
+            &[
+                ("score", s.overall_score),
+                ("documented", s.documented_pct),
+                ("typedUsages", s.typed_usages_pct),
+                ("reqSatisfied", s.req_satisfaction_pct),
+                ("reqVerified", s.req_verification_pct),
+            ],
+        ) {
+            Some(gate) if !gate.passed => {
+                for f in &gate.failed {
+                    eprintln!("error: QualityGate failed: {}", f);
+                }
+                return ExitCode::from(1);
+            }
+            Some(_) => {}
+            None => {
+                if s.overall_score < 100.0 {
+                    eprintln!(
+                        "error: coverage score {:.0}% is below 100% \
+                         (declare a QualityGate constraint to set a threshold)",
+                        s.overall_score
+                    );
+                    return ExitCode::from(1);
+                }
+            }
+        }
     }
 
     ExitCode::SUCCESS

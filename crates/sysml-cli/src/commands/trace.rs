@@ -3,7 +3,7 @@ use std::process::ExitCode;
 
 use crate::Cli;
 
-pub(crate) fn run(cli: &Cli, files: &[PathBuf], check: bool, min_coverage: f64) -> ExitCode {
+pub(crate) fn run(cli: &Cli, files: &[PathBuf], check: bool) -> ExitCode {
     use sysml_core::query;
 
     let Some(merged) = crate::load_model(cli, files) else {
@@ -91,20 +91,35 @@ pub(crate) fn run(cli: &Cli, files: &[PathBuf], check: bool, min_coverage: f64) 
         if total == 0 {
             return ExitCode::SUCCESS;
         }
-        let traced_pct = 100.0 * coverage.fully_traced_count as f64 / total as f64;
-        if traced_pct < min_coverage {
-            eprintln!(
-                "error: trace coverage {:.0}% is below minimum {:.0}%",
-                traced_pct, min_coverage
-            );
-            return ExitCode::from(1);
-        }
-        if coverage.satisfied_count < total || coverage.verified_count < total {
-            eprintln!(
-                "error: {} requirement(s) missing satisfaction or verification",
-                total - coverage.fully_traced_count
-            );
-            return ExitCode::from(1);
+        let pct = |n: usize| 100.0 * n as f64 / total as f64;
+        // The gate threshold lives in the model: a constraint usage typed
+        // `TraceGate` decides pass/fail. No gate declared = strict.
+        match query::evaluate_gate(
+            &merged,
+            "TraceGate",
+            &[
+                ("satisfied", pct(coverage.satisfied_count)),
+                ("verified", pct(coverage.verified_count)),
+                ("traced", pct(coverage.fully_traced_count)),
+            ],
+        ) {
+            Some(gate) if !gate.passed => {
+                for f in &gate.failed {
+                    eprintln!("error: TraceGate failed: {}", f);
+                }
+                return ExitCode::from(1);
+            }
+            Some(_) => {}
+            None => {
+                if coverage.satisfied_count < total || coverage.verified_count < total {
+                    eprintln!(
+                        "error: {} requirement(s) missing satisfaction or verification \
+                         (declare a TraceGate constraint to set a threshold)",
+                        total - coverage.fully_traced_count
+                    );
+                    return ExitCode::from(1);
+                }
+            }
         }
     }
 

@@ -140,7 +140,7 @@ fn eval_constraint(expr: &str, env: &Env) -> Option<bool> {
 
 /// All assert-constraint expressions on a definition and its supertypes:
 /// (expression, constraint name, owning type name).
-fn constraints_of(models: &[Model], type_name: &str) -> Vec<(String, Option<String>, String)> {
+pub(crate) fn constraints_of(models: &[Model], type_name: &str) -> Vec<(String, Option<String>, String)> {
     let mut out = Vec::new();
     let mut current = type_name.to_string();
     let mut seen = HashSet::new();

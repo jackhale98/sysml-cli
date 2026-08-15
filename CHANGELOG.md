@@ -31,6 +31,15 @@
 - `trace` and `allocation` render through the same table pipeline as
   `view`: `-f csv|md` work directly, and text tables are content-width
   (the fixed 20/25-char columns are gone)
+- **Gate thresholds live in the model**: `--min-score` and
+  `--min-coverage` are gone. `coverage --check` / `trace --check`
+  evaluate a model-declared constraint usage typed `QualityGate` /
+  `TraceGate` (vocabulary in ModelQuality.sysml — thresholds as
+  `default` attributes the usage overrides with `:>>`; the whole
+  pattern is OMG-pilot-validated). No gate declared = strict. A
+  constraint def's bare body expression is now extracted like nested
+  asserts, so W017 and gates see `constraint def G { in x : Real;
+  x >= 0.0 }` bodies
 
 ### Removed (breaking)
 - `index` and the cache stack (`cache.rs`, `index.rs`,

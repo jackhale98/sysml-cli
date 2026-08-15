@@ -874,3 +874,56 @@ fn coverage_score_from_model_quality_calc() {
     let report = sysml_core::query::coverage_report(&plain);
     assert_eq!(report.summary.score_source, "built-in");
 }
+
+#[test]
+fn model_declared_gates() {
+    // A constraint def's bare body expression is queryable, and a gate
+    // usage typed by it activates threshold evaluation: def defaults,
+    // usage overrides, tool metrics bound last.
+    let model = parse(
+        r#"package P {
+            constraint def QualityGate {
+                in score : Real;
+                attribute minScore : Real default 100.0;
+                score >= minScore
+            }
+            constraint qualityGate : QualityGate {
+                :>> minScore = 80.0;
+            }
+        }"#,
+    );
+    let gate = sysml_core::query::evaluate_gate(&model, "QualityGate", &[("score", 88.0)])
+        .expect("gate usage should activate the gate");
+    assert!(gate.passed, "88 >= 80 must pass: {:?}", gate.failed);
+
+    let gate = sysml_core::query::evaluate_gate(&model, "QualityGate", &[("score", 70.0)])
+        .expect("gate active");
+    assert!(!gate.passed, "70 >= 80 must fail");
+
+    // Def alone (library vocabulary, no usage) is inert.
+    let inert = parse(
+        r#"package P {
+            constraint def QualityGate {
+                in score : Real;
+                attribute minScore : Real default 100.0;
+                score >= minScore
+            }
+        }"#,
+    );
+    assert!(sysml_core::query::evaluate_gate(&inert, "QualityGate", &[("score", 10.0)]).is_none());
+
+    // Def default applies when the usage does not override.
+    let strict = parse(
+        r#"package P {
+            constraint def QualityGate {
+                in score : Real;
+                attribute minScore : Real default 100.0;
+                score >= minScore
+            }
+            constraint qualityGate : QualityGate;
+        }"#,
+    );
+    let gate = sysml_core::query::evaluate_gate(&strict, "QualityGate", &[("score", 99.0)])
+        .expect("gate active");
+    assert!(!gate.passed, "default minScore 100 must fail 99");
+}

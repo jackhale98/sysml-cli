@@ -90,7 +90,7 @@ Generate a requirements traceability matrix.
 
 ```sh
 sysml trace model.sysml
-sysml trace --check --min-coverage 80 model.sysml    # CI gate
+sysml trace --check model.sysml       # CI gate (threshold from the model)
 sysml trace -f json model.sysml
 ```
 
@@ -108,8 +108,26 @@ apply the same resolution.
 
 | Option | Description |
 |--------|-------------|
-| `--check` | Exit with error if requirements lack satisfaction/verification |
-| `--min-coverage <PCT>` | Minimum coverage percentage (with `--check`) |
+| `--check` | CI gate: fail per the model's TraceGate (strict without one) |
+The gate threshold lives in the model, not in a flag: declare a
+constraint usage typed `TraceGate` / `QualityGate` (ship with
+`ModelQuality.sysml` in
+[sysml-domain-libraries](https://github.com/jackhale98/sysml-domain-libraries),
+or write your own def with the same name) and its constraint expression
+decides pass/fail:
+
+```sysml
+private import ModelQuality::*;
+constraint qualityGate : QualityGate { :>> minScore = 80.0; }
+constraint traceGate : TraceGate { :>> minVerified = 60.0; }
+```
+
+`sysml coverage --check` binds `score` plus the four metric percentages;
+`sysml trace --check` binds `satisfied`, `verified`, and `traced` (each
+0-100). With no gate declared, `--check` is strict: coverage requires a
+perfect score and trace requires every requirement satisfied and
+verified.
+
 
 ## Port interfaces
 
@@ -171,14 +189,13 @@ Generate a model quality report: documentation coverage, typed usages, populated
 
 ```sh
 sysml coverage model.sysml
-sysml coverage --check --min-score 80 model.sysml    # CI gate
+sysml coverage --check -I libraries model.sysml   # CI gate (threshold from the model)
 sysml coverage -f json model.sysml
 ```
 
 | Option | Description |
 |--------|-------------|
 | `--check` | Exit with error if score is below minimum |
-| `--min-score <PCT>` | Minimum overall score percentage (default: 0, used with `--check`) |
 
 **Reported metrics:**
 

@@ -148,18 +148,20 @@ pub(crate) enum Command {
     /// Lists all requirement definitions and shows their satisfaction
     /// and verification status. In SysML v2, requirements are traced via
     /// 'satisfy' and 'verify' relationships.
+    ///
+    /// The --check gate is model-controlled: declare a constraint usage
+    /// typed `TraceGate` (see ModelQuality.sysml in the domain
+    /// libraries) and its expression decides pass/fail from the
+    /// satisfied/verified/traced percentages. With no gate declared,
+    /// --check requires every requirement satisfied and verified.
     Trace {
         /// SysML v2 files to analyze (omit to scan project).
         files: Vec<PathBuf>,
 
-        /// Exit with error if any requirement lacks satisfaction or verification.
-        /// Useful for CI pipelines.
+        /// CI gate: fail per the model's TraceGate, or (no gate) if any
+        /// requirement lacks satisfaction or verification.
         #[arg(long)]
         check: bool,
-
-        /// Minimum coverage percentage required (used with --check).
-        #[arg(long, default_value = "0")]
-        min_coverage: f64,
     },
     /// Generate a diagram from a SysML v2 model.
     ///
@@ -537,21 +539,25 @@ pub(crate) enum Command {
     /// Model completeness and quality report.
     ///
     /// Checks documentation coverage, type completeness, requirement
-    /// satisfaction/verification, and computes an overall quality score.
-    /// Use --check in CI to enforce a minimum score.
+    /// satisfaction/verification, and computes an overall quality score
+    /// (a model-declared QualityScore calc controls the weighting).
+    ///
+    /// The --check gate is model-controlled: declare a constraint usage
+    /// typed `QualityGate` (see ModelQuality.sysml in the domain
+    /// libraries) and its expression decides pass/fail from the score
+    /// and metric percentages. With no gate declared, --check requires
+    /// a perfect score.
     ///
     /// EXAMPLES:
     ///   sysml coverage model.sysml
-    ///   sysml coverage --check --min-score 80 model.sysml
+    ///   sysml coverage --check -I libraries model.sysml
     Coverage {
         /// SysML v2 files to analyze (omit to scan project).
         files: Vec<PathBuf>,
-        /// Exit with error if score is below minimum (CI gate).
+        /// CI gate: fail per the model's QualityGate, or (no gate) if
+        /// the score is below 100.
         #[arg(long)]
         check: bool,
-        /// Minimum acceptable score (0-100, used with --check).
-        #[arg(long, default_value = "0")]
-        min_score: f64,
     },
     /// Interactive REPL for exploring SysML models.
     ///

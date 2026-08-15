@@ -344,7 +344,8 @@ IPRating             Enclosure           -
 Coverage: 5/5 satisfied (100%), 0/5 verified (0%)
 ```
 
-CI gate: `sysml trace --check --min-coverage 80 requirements.sysml`
+CI gate: `sysml trace --check requirements.sysml` — the threshold is
+model-declared (a `TraceGate` constraint usage; strict when absent).
 
 ## Part 4: Verification
 

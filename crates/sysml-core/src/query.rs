@@ -1107,6 +1107,95 @@ pub struct CoverageSummary {
     pub score_source: String,
 }
 
+/// Result of evaluating a model-declared gate constraint.
+#[derive(Debug, Clone)]
+pub struct GateOutcome {
+    pub passed: bool,
+    /// Constraint expressions that evaluated false (or could not be
+    /// evaluated — a gate that cannot be computed fails closed).
+    pub failed: Vec<String>,
+}
+
+/// Evaluate a model-declared gate constraint (`QualityGate`,
+/// `TraceGate`).
+///
+/// A gate is ACTIVE only when the model declares a constraint usage
+/// typed by a def with the given simple name — the def alone (imported
+/// library vocabulary) is inert. Threshold attributes bind from the
+/// def's defaults (`attribute minScore : Real = 100.0`), overridden by
+/// the usage's body values (`:>> minScore = 80.0`), and the tool-computed
+/// `metrics` bind last. Every constraint expression of the def (its bare
+/// body expression, nested asserts, and inherited ones) must hold.
+///
+/// Returns None when no gate usage is declared.
+pub fn evaluate_gate(
+    model: &Model,
+    gate_def: &str,
+    metrics: &[(&str, f64)],
+) -> Option<GateOutcome> {
+    use crate::model::unquote_name;
+    use crate::sim::expr::{Env, Value};
+
+    let usage = model.usages.iter().find(|u| {
+        u.kind == "constraint"
+            && u.type_ref
+                .as_deref()
+                .is_some_and(|t| unquote_name(simple_name(t)) == gate_def)
+    })?;
+    let def_name = simple_name(usage.type_ref.as_deref()?).to_string();
+
+    let mut env = Env::new();
+    // Def attribute defaults.
+    for u in &model.usages {
+        if u.parent_def.as_deref() == Some(def_name.as_str()) {
+            if let Some(expr) = u.value_expr.as_deref() {
+                if let Some((v, _)) = crate::sim::resolve::parse_value_with_unit(expr) {
+                    env.bind(unquote_name(&u.name), Value::Number(v));
+                }
+            }
+        }
+    }
+    // Usage body overrides.
+    if !usage.name.is_empty() {
+        for u in &model.usages {
+            if u.parent_def.as_deref() == Some(usage.name.as_str()) {
+                if let Some(expr) = u.value_expr.as_deref() {
+                    if let Some((v, _)) = crate::sim::resolve::parse_value_with_unit(expr) {
+                        env.bind(unquote_name(&u.name), Value::Number(v));
+                    }
+                }
+            }
+        }
+    }
+    // Tool-computed metrics are authoritative.
+    for (k, v) in metrics {
+        env.bind(*k, Value::Number(*v));
+    }
+
+    let exprs = crate::checks::value_constraints::constraints_of(
+        std::slice::from_ref(model),
+        &def_name,
+    );
+    let mut failed = Vec::new();
+    for (expr, _, _) in &exprs {
+        let ok = crate::sim::expr_parser::parse_expr_str(expr)
+            .ok()
+            .and_then(|p| crate::sim::eval::evaluate_constraint(&p, &env).ok());
+        if ok != Some(true) {
+            failed.push(expr.clone());
+        }
+    }
+    if exprs.is_empty() {
+        // A gate usage whose def has no evaluable expression is a model
+        // error; fail closed rather than silently passing.
+        failed.push(format!("(no constraint expression found on `{def_name}`)"));
+    }
+    Some(GateOutcome {
+        passed: failed.is_empty(),
+        failed,
+    })
+}
+
 /// Evaluate a model-declared `QualityScore` calc, if present.
 ///
 /// The model (or an imported library, e.g. ModelQuality.sysml from the

@@ -29,10 +29,10 @@ jobs:
         run: sysml fmt --check models/**/*.sysml
 
       - name: Check requirement coverage
-        run: sysml trace --check --min-coverage 80 models/**/*.sysml
+        run: sysml trace --check models/**/*.sysml
 
       - name: Check model quality
-        run: sysml coverage --check --min-score 70 models/**/*.sysml
+        run: sysml coverage --check models/**/*.sysml
 
       - name: Check allocations
         run: sysml allocation --check models/**/*.sysml
@@ -44,8 +44,8 @@ jobs:
 |---------|---------|-----------|
 | `sysml check --severity error` | Block on syntax/duplicate errors | 1 if errors |
 | `sysml fmt --check` | Enforce formatting | 1 if unformatted |
-| `sysml trace --check --min-coverage 80` | Require requirement coverage | 1 if below threshold |
-| `sysml coverage --check --min-score 70` | Require model quality score | 1 if below threshold |
+| `sysml trace --check` | Require requirement coverage (threshold via the model's `TraceGate`) | 1 if gate fails |
+| `sysml coverage --check` | Require model quality score (threshold via the model's `QualityGate`) | 1 if gate fails |
 | `sysml allocation --check` | Require all allocations | 1 if gaps exist |
 
 There is no built-in pipeline runner — chain the gate commands in your
@@ -54,7 +54,7 @@ CI config, a Makefile, or a shell script:
 ```sh
 sysml check --severity warning src/*.sysml \
   && sysml fmt --check src/*.sysml \
-  && sysml trace --check --min-coverage 80 src/*.sysml
+  && sysml trace --check src/*.sysml
 ```
 
 ## Editor Integration

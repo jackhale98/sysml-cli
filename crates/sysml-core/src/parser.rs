@@ -837,6 +837,34 @@ fn walk_node_scoped(
                     model.views.push(view);
                 }
 
+                // A constraint def's bare body expression
+                // (`constraint def G { in x : Real; x >= 0.0 }`) becomes
+                // an anonymous constraint member, so constraint lookups
+                // (W017 `constraints_of`, gate evaluation) see it the
+                // same way they see nested `assert constraint` members.
+                if def_kind == DefKind::Constraint {
+                    if let Some(expr) = extract_constraint_body_text(&node, source) {
+                        model.usages.push(Usage {
+                            kind: "constraint".to_string(),
+                            name: String::new(),
+                            type_ref: None,
+                            span: Span::from_node(&node),
+                            direction: None,
+                            is_conjugated: false,
+                            parent_def: Some(name.clone()),
+                            multiplicity: None,
+                            value_expr: Some(expr),
+                            short_name: None,
+                            redefinition: None,
+                            subsets: None,
+                            doc: None,
+                            is_variant: false,
+                            is_variation: false,
+                            qualified_name: None,
+                        });
+                    }
+                }
+
                 // Recurse into definition body with scope tracking
                 let ev = if def_kind == DefKind::Verification {
                     Some(name.as_str())

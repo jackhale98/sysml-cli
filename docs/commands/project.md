@@ -48,8 +48,8 @@ make, just, or your CI configuration directly:
 check:
 	sysml check --severity warning src/*.sysml
 	sysml fmt --check src/*.sysml
-	sysml trace --check --min-coverage 80 src/*.sysml
-	sysml coverage --check --min-score 60 src/*.sysml
+	sysml trace --check src/*.sysml
+	sysml coverage --check src/*.sysml
 ```
 
 See [CI & Editor Integration](../ci-integration.md) for a GitHub Actions example.
