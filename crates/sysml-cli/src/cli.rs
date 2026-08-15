@@ -572,6 +572,10 @@ pub(crate) enum Command {
     /// Produces Markdown documentation with element hierarchy,
     /// type information, and embedded doc comments.
     ///
+    /// TRANSITIONAL: the fixed document layout will move into the model
+    /// as document views/templates (like `view` did for tables); the
+    /// command stays until that lands.
+    ///
     /// EXAMPLES:
     ///   sysml doc model.sysml
     ///   sysml doc model.sysml --root Vehicle

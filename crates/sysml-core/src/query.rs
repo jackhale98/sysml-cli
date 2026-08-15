@@ -444,9 +444,20 @@ pub fn trace_requirements(model: &Model) -> Vec<TraceRow> {
         .filter(|d| !used_defs.contains(d.name.as_str()))
         .collect();
 
+    // Base defs satisfied only through a specializing requirement
+    // (satisfy Derived counts for Base) get an explicit marker, so the
+    // trace agrees with the W002/W003 checks and `coverage`.
+    let (sat_closure, ver_closure) =
+        crate::resolver::traced_requirement_defs(std::iter::once(model));
     for req in &req_defs {
-        let (satisfied_by, verified_by) =
+        let (mut satisfied_by, mut verified_by) =
             collect_matches(&req.name, req.short_name.as_deref());
+        if satisfied_by.is_empty() && sat_closure.contains(req.name.as_str()) {
+            satisfied_by.push("(via specialization)".to_string());
+        }
+        if verified_by.is_empty() && ver_closure.contains(req.name.as_str()) {
+            verified_by.push("(via specialization)".to_string());
+        }
         rows.push(TraceRow {
             requirement: req.name.clone(),
             id: req

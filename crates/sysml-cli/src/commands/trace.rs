@@ -37,32 +37,38 @@ pub(crate) fn run(cli: &Cli, files: &[PathBuf], check: bool, min_coverage: f64) 
             return ExitCode::SUCCESS;
         }
 
-        // Print RTM table
-        println!(
-            "{:<20} {:<20} {:<20}",
-            "Requirement", "Satisfied By", "Verified By"
-        );
-        println!("{}", "-".repeat(60));
-        for row in &rows {
-            let sat = if row.satisfied_by.is_empty() {
-                "-".to_string()
-            } else {
-                row.satisfied_by.join(", ")
-            };
-            let ver = if row.verified_by.is_empty() {
-                "-".to_string()
-            } else {
-                row.verified_by.join(", ")
-            };
-            let label = match &row.id {
-                Some(id) => format!("<{}> {}", id, row.requirement),
-                None => row.requirement.clone(),
-            };
-            println!("{:<20} {:<20} {:<20}", label, sat, ver);
-        }
+        // The RTM table renders through the same table pipeline as
+        // `view`, so text/csv/md come out identically formatted.
+        let table = sysml_core::view_render::RenderedTable {
+            view: "trace".to_string(),
+            columns: vec![
+                "Requirement".to_string(),
+                "Satisfied By".to_string(),
+                "Verified By".to_string(),
+            ],
+            rows: rows
+                .iter()
+                .map(|row| {
+                    let join = |v: &[String]| {
+                        if v.is_empty() {
+                            "-".to_string()
+                        } else {
+                            v.join(", ")
+                        }
+                    };
+                    let label = match &row.id {
+                        Some(id) => format!("<{}> {}", id, row.requirement),
+                        None => row.requirement.clone(),
+                    };
+                    vec![label, join(&row.satisfied_by), join(&row.verified_by)]
+                })
+                .collect(),
+            warnings: Vec::new(),
+        };
+        crate::output::print_table(&cli.format, &table);
 
-        // Print coverage summary
-        if coverage.total_requirements > 0 {
+        // Print coverage summary (text only; csv/md stay pure tables)
+        if cli.format == "text" && coverage.total_requirements > 0 {
             let sat_pct =
                 100.0 * coverage.satisfied_count as f64 / coverage.total_requirements as f64;
             let ver_pct =

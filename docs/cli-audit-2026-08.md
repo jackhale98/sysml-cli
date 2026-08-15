@@ -57,11 +57,12 @@ constraint (pre-release). Items are checked off as they land.
       RequirementsTraceMatrix, ModelStats
 - [x] `interfaces` deleted (→ view PortTable)
 - [x] `stats` deleted (→ view ModelStats)
-- [ ] `trace` / `coverage` / `allocation` render through the view engine;
-      `--check` gates retained on the commands until model-declared
-      constraints are evaluated by `check` (then the gates move into
-      the model)
-- [ ] `doc` marked transitional (→ document views/templates later)
+- [x] `trace` / `allocation` render through the shared table pipeline
+      (`output::print_table`, same text/csv/md/json as `view`); trace's
+      coverage line and standalone-def rows now apply the same
+      specialization closure as the W002/W003 checks and `coverage`
+      ("(via specialization)" marker). `--check` gates retained.
+- [x] `doc` marked transitional (help text; → document views/templates)
 
 ## D. Evaluator consolidation (beyond the analyzer)
 

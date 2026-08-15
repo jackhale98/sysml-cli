@@ -17,13 +17,21 @@ pub(crate) fn run(cli: &Cli, files: &[PathBuf], check: bool, unallocated_only: b
             if report.rows.is_empty() {
                 println!("No allocations found.");
             } else {
-                println!("{:<25} {:<25}", "Source (Logical)", "Target (Physical)");
-                println!("{}", "-".repeat(50));
-                for row in &report.rows {
-                    println!("{:<25} {:<25}", row.source, row.target);
-                }
-                println!();
-                println!("Total allocations: {}", report.total_allocations);
+                // Same table pipeline as `view` — text/csv/md for free.
+                let table = sysml_core::view_render::RenderedTable {
+                    view: "allocation".to_string(),
+                    columns: vec![
+                        "Source (Logical)".to_string(),
+                        "Target (Physical)".to_string(),
+                    ],
+                    rows: report
+                        .rows
+                        .iter()
+                        .map(|r| vec![r.source.clone(), r.target.clone()])
+                        .collect(),
+                    warnings: Vec::new(),
+                };
+                crate::output::print_table(&cli.format, &table);
             }
         }
 

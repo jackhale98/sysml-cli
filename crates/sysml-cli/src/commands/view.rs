@@ -5,7 +5,7 @@
 use std::path::PathBuf;
 use std::process::ExitCode;
 
-use sysml_core::view_render::{available_views, render_view, RenderedTable};
+use sysml_core::view_render::{available_views, render_view};
 
 use crate::Cli;
 
@@ -65,74 +65,6 @@ pub fn run(cli: &Cli, name: Option<&str>, files: &[PathBuf]) -> ExitCode {
         eprintln!("warning: {w}");
     }
 
-    match cli.format.as_str() {
-        "json" => println!("{}", serde_json::to_string_pretty(&table).unwrap()),
-        "csv" => print_csv(&table),
-        "md" => print_markdown(&table),
-        _ => print_text(&table),
-    }
+    crate::output::print_table(&cli.format, &table);
     ExitCode::SUCCESS
-}
-
-fn print_text(t: &RenderedTable) {
-    // Column widths from content.
-    let mut widths: Vec<usize> = t.columns.iter().map(|c| c.chars().count()).collect();
-    for row in &t.rows {
-        for (i, cell) in row.iter().enumerate() {
-            if i < widths.len() {
-                widths[i] = widths[i].max(cell.chars().count());
-            }
-        }
-    }
-    let line = |cells: &[String]| {
-        cells
-            .iter()
-            .enumerate()
-            .map(|(i, c)| format!("{:<w$}", c, w = widths.get(i).copied().unwrap_or(0)))
-            .collect::<Vec<_>>()
-            .join("  ")
-            .trim_end()
-            .to_string()
-    };
-    println!("{}", line(&t.columns));
-    println!("{}", "-".repeat(widths.iter().sum::<usize>() + 2 * (widths.len().saturating_sub(1))));
-    for row in &t.rows {
-        println!("{}", line(row));
-    }
-    eprintln!("{} row(s).", t.rows.len());
-}
-
-fn print_csv(t: &RenderedTable) {
-    let esc = |s: &str| {
-        if s.contains([',', '"', '\n']) {
-            format!("\"{}\"", s.replace('"', "\"\""))
-        } else {
-            s.to_string()
-        }
-    };
-    println!(
-        "{}",
-        t.columns.iter().map(|c| esc(c)).collect::<Vec<_>>().join(",")
-    );
-    for row in &t.rows {
-        println!(
-            "{}",
-            row.iter().map(|c| esc(c)).collect::<Vec<_>>().join(",")
-        );
-    }
-}
-
-fn print_markdown(t: &RenderedTable) {
-    let esc = |s: &str| s.replace('|', "\\|");
-    println!(
-        "| {} |",
-        t.columns.iter().map(|c| esc(c)).collect::<Vec<_>>().join(" | ")
-    );
-    println!("|{}|", vec!["---"; t.columns.len()].join("|"));
-    for row in &t.rows {
-        println!(
-            "| {} |",
-            row.iter().map(|c| esc(c)).collect::<Vec<_>>().join(" | ")
-        );
-    }
 }
