@@ -324,6 +324,19 @@ impl Project {
     /// closed over definition specialization: satisfying
     /// `Derived :> Base` satisfies `Base` too.
     pub fn traced_requirements(&self) -> (HashSet<String>, HashSet<String>) {
+        traced_requirement_defs(self.models.iter())
+    }
+}
+
+/// Requirement traceability over any set of models (a project's per-file
+/// models, or a single merged model): the names of requirement defs
+/// satisfied (resp. verified) anywhere. Same resolution as the checks —
+/// targets resolve through requirement usages and `<id>` short names,
+/// then close over definition specialization.
+pub fn traced_requirement_defs<'a>(
+    models: impl Iterator<Item = &'a Model> + Clone,
+) -> (HashSet<String>, HashSet<String>) {
+    {
         use crate::model::{simple_name, unquote_name};
 
         // requirement usage name / <id> short name -> type simple name
@@ -332,7 +345,7 @@ impl Project {
         let mut def_shorts: HashMap<String, String> = HashMap::new();
         // definition name -> specialization parent simple name
         let mut parents: HashMap<String, String> = HashMap::new();
-        for m in &self.models {
+        for m in models.clone() {
             for u in &m.usages {
                 if u.kind != "requirement" {
                     continue;
@@ -383,7 +396,7 @@ impl Project {
 
         let mut satisfied: HashSet<String> = HashSet::new();
         let mut verified: HashSet<String> = HashSet::new();
-        for m in &self.models {
+        for m in models {
             for s in &m.satisfactions {
                 let t = unquote_name(simple_name(&s.requirement));
                 satisfied.insert(t.to_string());
@@ -402,7 +415,9 @@ impl Project {
 
         (resolve(satisfied), resolve(verified))
     }
+}
 
+impl Project {
     /// Simple names referenced by all *other* models in the project.
     /// Used to suppress cross-file unused-definition false positives.
     pub fn external_references_for(&self, model: &Model) -> Vec<String> {

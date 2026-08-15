@@ -1179,16 +1179,17 @@ pub fn coverage_report(model: &Model) -> CoverageReport {
         .collect();
 
     // Unsatisfied requirements
-    let satisfied_names: HashSet<&str> = model
-        .satisfactions
-        .iter()
-        .map(|s| simple_name(&s.requirement))
-        .collect();
+    // Same resolution as the W002/W003 checks: targets resolve through
+    // requirement usages and <id> short names, closed over definition
+    // specialization. The naive simple-name match this replaced counted
+    // `satisfy minTravel by x` (usage target) as satisfying nothing.
+    let (satisfied_set, verified_set) =
+        crate::resolver::traced_requirement_defs(std::iter::once(model));
     let unsatisfied_reqs: Vec<CoverageItem> = model
         .definitions
         .iter()
         .filter(|d| d.kind == DefKind::Requirement)
-        .filter(|d| !satisfied_names.contains(d.name.as_str()))
+        .filter(|d| !satisfied_set.contains(d.name.as_str()))
         .map(|d| CoverageItem {
             name: d.name.clone(),
             kind: "requirement def".to_string(),
@@ -1197,16 +1198,11 @@ pub fn coverage_report(model: &Model) -> CoverageReport {
         .collect();
 
     // Unverified requirements
-    let verified_names: HashSet<&str> = model
-        .verifications
-        .iter()
-        .map(|v| simple_name(&v.requirement))
-        .collect();
     let unverified_reqs: Vec<CoverageItem> = model
         .definitions
         .iter()
         .filter(|d| d.kind == DefKind::Requirement)
-        .filter(|d| !verified_names.contains(d.name.as_str()))
+        .filter(|d| !verified_set.contains(d.name.as_str()))
         .map(|d| CoverageItem {
             name: d.name.clone(),
             kind: "requirement def".to_string(),
