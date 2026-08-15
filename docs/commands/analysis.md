@@ -129,6 +129,25 @@ perfect score and trace requires every requirement satisfied and
 verified.
 
 
+### Monte Carlo histogram
+
+Monte Carlo runs print the sample distribution (and include it as bins
+in JSON output) - the shape, not just the statistics:
+
+```
+    Distribution:
+         0.3618 | ##########                               496
+         0.4026 | #########################                1233
+         0.4433 | #####################################    1834
+         0.4840 | #######################################  1981
+         0.5247 | ######################################## 1987
+         0.5654 | ###############################          1550
+         0.6061 | #############                            646
+```
+
+Bins containing a spec limit are marked '< LSL' / '< USL'. Identical
+seed gives an identical histogram.
+
 ## Port interfaces
 
 Port and connection listings are model-defined views (see [views](views.md)):

@@ -1302,7 +1302,12 @@ fn walk_node_scoped(
         "verify_statement" => {
             let mut cursor = node.walk();
             for child in node.children(&mut cursor) {
-                if matches!(child.kind(), "qualified_name" | "identifier") {
+                // feature_chain: nested requirements are verified through
+                // their path (`verify overpressureProtection.minTravel`).
+                if matches!(
+                    child.kind(),
+                    "qualified_name" | "identifier" | "feature_chain"
+                ) {
                     let req_name = node_text(&child, source).to_string();
                     if let Some(ver_name) = enclosing_verification.or(parent_def_name) {
                         model.verifications.push(Verification {

@@ -201,6 +201,13 @@ pub fn rss(inputs: &[UncertainInput], target: &Target, settings: &Settings) -> R
 }
 
 #[derive(Debug, Clone, serde::Serialize)]
+pub struct HistogramBin {
+    pub lower: f64,
+    pub upper: f64,
+    pub count: u64,
+}
+
+#[derive(Debug, Clone, serde::Serialize)]
 pub struct MonteCarloResult {
     pub iterations: u64,
     /// The seed actually used — always recorded so runs are reproducible.
@@ -215,6 +222,36 @@ pub struct MonteCarloResult {
     pub pp: f64,
     pub ppk: f64,
     pub result: PassFail,
+    /// Sample distribution over [min, max] in equal-width bins.
+    pub histogram: Vec<HistogramBin>,
+}
+
+/// Bin sorted samples into `bins` equal-width intervals over their range.
+fn build_histogram(sorted: &[f64], bins: usize) -> Vec<HistogramBin> {
+    if sorted.is_empty() {
+        return Vec::new();
+    }
+    let (lo, hi) = (sorted[0], sorted[sorted.len() - 1]);
+    if hi <= lo {
+        return vec![HistogramBin {
+            lower: lo,
+            upper: hi,
+            count: sorted.len() as u64,
+        }];
+    }
+    let width = (hi - lo) / bins as f64;
+    let mut out: Vec<HistogramBin> = (0..bins)
+        .map(|i| HistogramBin {
+            lower: lo + width * i as f64,
+            upper: lo + width * (i + 1) as f64,
+            count: 0,
+        })
+        .collect();
+    for &x in sorted {
+        let idx = (((x - lo) / width) as usize).min(bins - 1);
+        out[idx].count += 1;
+    }
+    out
 }
 
 /// Seeded Monte Carlo sampling. Identical seed + identical inputs gives
@@ -281,6 +318,7 @@ pub fn monte_carlo(
         pp,
         ppk,
         result: classify(margin, target),
+        histogram: build_histogram(&sorted, 21),
     }
 }
 
@@ -614,5 +652,49 @@ mod tests {
         // Triangular mean = (a + c + b)/3 = (4.9 + 5.0 + 5.2)/3 = 5.0333
         let mean = sum / N as f64;
         assert!((mean - 5.0333).abs() < 0.005, "mean = {mean}");
+    }
+}
+
+#[cfg(test)]
+mod histogram_tests {
+    use super::*;
+
+    #[test]
+    fn histogram_bins_cover_all_samples() {
+        let sorted: Vec<f64> = (0..1000).map(|i| i as f64 / 100.0).collect();
+        let bins = build_histogram(&sorted, 21);
+        assert_eq!(bins.len(), 21);
+        assert_eq!(bins.iter().map(|b| b.count).sum::<u64>(), 1000);
+        assert_eq!(bins[0].lower, 0.0);
+        assert!((bins[20].upper - 9.99).abs() < 1e-9);
+    }
+
+    #[test]
+    fn histogram_degenerate_range_single_bin() {
+        let sorted = vec![5.0; 100];
+        let bins = build_histogram(&sorted, 21);
+        assert_eq!(bins.len(), 1);
+        assert_eq!(bins[0].count, 100);
+    }
+
+    #[test]
+    fn monte_carlo_result_carries_histogram() {
+        let inputs = vec![UncertainInput {
+            name: "x".into(),
+            nominal: 10.0,
+            plus: 0.5,
+            minus: 0.5,
+            distribution: Distribution::Normal,
+            sense: 1.0,
+            source: None,
+        }];
+        let target = Target { nominal: 10.0, lower: 8.0, upper: 12.0 };
+        let settings = Settings { iterations: 5000, seed: Some(7), ..Default::default() };
+        let r = monte_carlo(&inputs, &target, &settings, 0);
+        assert_eq!(r.histogram.iter().map(|b| b.count).sum::<u64>(), 5000);
+        // Deterministic: same seed, same bins.
+        let r2 = monte_carlo(&inputs, &target, &settings, 0);
+        assert_eq!(r.histogram.len(), r2.histogram.len());
+        assert!(r.histogram.iter().zip(&r2.histogram).all(|(a, b)| a.count == b.count));
     }
 }

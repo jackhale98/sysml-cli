@@ -445,12 +445,12 @@ mod tests {
             }
         }
         package Tolerancing {
-            attribute def ToleratedDimension :> UncertainValue {
+            attribute def TolerancedDimension :> UncertainValue {
                 attribute unit : String default "mm";
             }
             enum def Sense { enum positive; enum negative; }
             attribute def Contribution {
-                attribute dim : ToleratedDimension;
+                attribute dim : TolerancedDimension;
                 attribute sense : Sense default Sense::positive;
                 attribute source : String[0..1];
             }
@@ -467,21 +467,21 @@ mod tests {
             private import Tolerancing::*;
 
             part def Housing {
-                attribute depth : ToleratedDimension {
+                attribute depth : TolerancedDimension {
                     :>> nominal = 50.0;
                     :>> plus = 0.1;
                     :>> minus = 0.1;
                 }
             }
             part def Cover {
-                attribute height : ToleratedDimension {
+                attribute height : TolerancedDimension {
                     :>> nominal = 45.0;
                     :>> plus = 0.08;
                     :>> minus = 0.08;
                 }
             }
             part def Gasket {
-                attribute thickness : ToleratedDimension {
+                attribute thickness : TolerancedDimension {
                     :>> nominal = 2.0;
                     :>> plus = 0.15;
                     :>> minus = 0.10;

@@ -16,14 +16,14 @@ package RiskAnalysis {
      * Hazard analysis drives the FMEA: when a failure mode (or @Fmea line,
      * via hazardRef) links to a hazard, its severity derives top-down from
      * the harm at the end of that hazard's causal chain - see
-     * HazardAnalysis::SeverityScale for the shared 1-10 anchors. Occurrence
+     * HazardAnalysis::SeverityScale for the shared 1-10 anchors. Likelihood
      * and detection remain bottom-up properties of the failure mode.
      *
      * Ratings follow the AIAG/VDA and SAE J1739 ordinal 1-10 scales:
      *   Severity:   1 = negligible ... 10 = catastrophic, safety hazard
-     *   Occurrence: 1 = very unlikely ... 10 = almost certain
+     *   Likelihood: 1 = very unlikely ... 10 = almost certain (AIAG 'occurrence')
      *   Detection:  1 = always detected ... 10 = cannot be detected
-     *   RPN = S x O x D (1..1000), computed by the Rpn calc - never stored,
+     *   RPN = S x L x D (1..1000), computed by the Rpn calc - never stored,
      *   so it can never disagree with its factors.
      *
      * Mitigations link to risks with the standard `satisfy` relationship
@@ -44,28 +44,28 @@ package RiskAnalysis {
     calc def Rpn {
         doc
         /*
-         * Risk Priority Number: severity x occurrence x detection,
+         * Risk Priority Number: severity x likelihood x detection,
          * range 1..1000. Common action thresholds:
          *   1-50 low, 51-150 medium, 151-400 high, 401+ critical.
          */
         in severity : FmeaRating;
-        in occurrence : FmeaRating;
+        in likelihood : FmeaRating;
         in detection : FmeaRating;
-        return : Integer = severity * occurrence * detection;
+        return : Integer = severity * likelihood * detection;
     }
 
     enum def RiskCategory {
         doc /* FMEA domain per the source of the failure mode. */
         enum design;
         enum process;
-        enum use;
+        enum 'use';
         enum software;
     }
 
     enum def MitigationKind {
         doc
         /*
-         * prevention reduces occurrence; detection improves the ability
+         * prevention reduces likelihood; detection improves the ability
          * to catch the failure before it causes harm.
          */
         enum prevention;
@@ -91,7 +91,7 @@ package RiskAnalysis {
          *           failureMode = "Thermal runaway";
          *           cause = "Internal short from dendrite growth";
          *           effect = "Fire; loss of vehicle";
-         *           severity = 9; occurrence = 3; detection = 4;
+         *           severity = 9; likelihood = 3; detection = 4;
          *       }
          *   }
          *
@@ -103,10 +103,10 @@ package RiskAnalysis {
         attribute effect : String[0..1];
         attribute category : RiskCategory default RiskCategory::design;
         attribute severity : FmeaRating;
-        attribute occurrence : FmeaRating;
+        attribute likelihood : FmeaRating;
         attribute detection : FmeaRating;
         attribute initialSeverity : FmeaRating[0..1];
-        attribute initialOccurrence : FmeaRating[0..1];
+        attribute initialLikelihood : FmeaRating[0..1];
         attribute initialDetection : FmeaRating[0..1];
         attribute hazardRef : String[0..1] {
             doc
@@ -132,7 +132,7 @@ package RiskAnalysis {
         attribute cause : String[0..1];
         attribute effect : String[0..1];
         attribute severity : FmeaRating[0..1];
-        attribute occurrence : FmeaRating[0..1];
+        attribute likelihood : FmeaRating[0..1];
         attribute detection : FmeaRating[0..1];
     }
 
@@ -157,16 +157,16 @@ package RiskAnalysis {
          */
         @TableRendering {
             rows = "@Fmea";
-            columns = "element; failureMode; cause; category; severity; occurrence; detection; rpn = severity*occurrence*detection";
+            columns = "element; failureMode; cause; category; severity; likelihood; detection; rpn = severity*likelihood*detection";
             sortBy = "-rpn";
         }
     }
 
     view def RiskMatrix {
-        doc /* Severity x occurrence grid of @Fmea line-item counts. */
+        doc /* Severity x likelihood grid of @Fmea line-item counts. */
         @TableRendering {
             rows = "@Fmea";
-            pivot = "severity; occurrence";
+            pivot = "severity; likelihood";
         }
     }
 }

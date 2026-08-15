@@ -41,6 +41,18 @@
   asserts, so W017 and gates see `constraint def G { in x : Real;
   x >= 0.0 }` bodies
 
+### Monte Carlo histogram
+- 'analyze run' Monte Carlo results include the sample distribution:
+  21 equal-width bins in JSON, an ASCII histogram in text output with
+  LSL/USL markers when a spec limit falls inside the sampled range.
+  Same seed, same histogram - it is part of the audit trail
+
+### Fixed
+- 'verify' statements now accept feature-chain targets
+  ('verify overpressureProtection.minTravel') - nested requirements
+  were silently dropped from verification tracing
+- Wizard-test flake: MockRunner call counter is per-instance
+
 ### Removed (breaking)
 - `index` and the cache stack (`cache.rs`, `index.rs`,
   `sqlite_cache.rs`, the `sqlite` feature — ~2.4k lines): the cache had

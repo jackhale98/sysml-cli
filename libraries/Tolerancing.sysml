@@ -22,7 +22,7 @@ package Tolerancing {
     private import Uncertainty::*;
     private import Reporting::*;
 
-    attribute def ToleratedDimension :> UncertainValue {
+    attribute def TolerancedDimension :> UncertainValue {
         doc
         /*
          * A toleranced linear or diametral dimension:
@@ -116,12 +116,12 @@ package Tolerancing {
         /*
          * A geometric feature of a part: a hole, shaft, plane, slot...
          * Nest inside the owning part and add its toleranced dimensions
-         * as ToleratedDimension attributes:
+         * as TolerancedDimension attributes:
          *
          *   item bore : GeometricFeature {
          *       :>> form = FeatureForm::hole;
          *       :>> nature = FeatureNature::internal;
-         *       attribute diameter : ToleratedDimension {
+         *       attribute diameter : TolerancedDimension {
          *           :>> nominal = 10.0; :>> plus = 0.1; :>> minus = 0.05;
          *       }
          *   }
@@ -138,7 +138,7 @@ package Tolerancing {
     enum def FitType {
         doc /* Classification of a mate per ISO 286 fit categories. */
         enum clearance;
-        enum transition;
+        enum 'transition';
         enum interference;
     }
 
@@ -201,7 +201,7 @@ package Tolerancing {
          * `source` optionally records the drawing or specification the
          * dimension comes from.
          */
-        attribute dim : ToleratedDimension;
+        attribute dim : TolerancedDimension;
         attribute sense : Sense default Sense::positive;
         attribute source : String[0..1];
     }

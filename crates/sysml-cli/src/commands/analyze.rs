@@ -294,7 +294,39 @@ fn print_uncertainty_text(
             "    Pp: {:.2}   Ppk: {:.2}   Yield: {:.2}%",
             r.pp, r.ppk, r.yield_percent
         );
+        print_histogram(&r.histogram, case);
         println!("    Result: {}", verdict(&r.result));
+    }
+}
+
+/// ASCII histogram of the Monte Carlo samples, spec limits marked so the
+/// tails are readable at a glance.
+fn print_histogram(
+    bins: &[sysml_core::sim::uncertainty::HistogramBin],
+    case: &sysml_core::sim::uncertainty_model::UncertaintyCase,
+) {
+    if bins.len() < 2 {
+        return;
+    }
+    let max_count = bins.iter().map(|b| b.count).max().unwrap_or(1).max(1);
+    let (lsl, usl) = (case.target.lower, case.target.upper);
+    println!("    Distribution:");
+    for b in bins {
+        let bar_len = ((b.count as f64 / max_count as f64) * 40.0).round() as usize;
+        let mark = if lsl >= b.lower && lsl < b.upper {
+            " < LSL"
+        } else if usl > b.lower && usl <= b.upper {
+            " < USL"
+        } else {
+            ""
+        };
+        println!(
+            "      {:>9.4} | {:<40} {}{}",
+            b.lower,
+            "#".repeat(bar_len),
+            b.count,
+            mark
+        );
     }
 }
 

@@ -136,6 +136,15 @@ package HazardAnalysis {
          */
         attribute hierarchy : ControlHierarchy;
         attribute rationale : String[0..1];
+        attribute hazardRef : String[0..1] {
+            doc
+            /*
+             * Qualified name of the Hazard this control addresses —
+             * the control side of the audit trail (harm carries the
+             * severity, Causation carries the chain, hazardRef closes
+             * control -> hazard). Same convention as Fmea::hazardRef.
+             */
+        }
     }
 
     view def HazardLog {
