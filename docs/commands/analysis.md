@@ -128,6 +128,19 @@ constraint traceGate : TraceGate { :>> minVerified = 60.0; }
 perfect score and trace requires every requirement satisfied and
 verified.
 
+The gate def names are your vocabulary, not the tool's: choose one per
+run with `--gate <Name>`, or set project defaults in
+`.sysml/config.toml`:
+
+```toml
+[gates]
+coverage = "ShipGate"
+trace = "RtmGate"
+```
+
+Resolution order: `--gate` flag, then config, then the conventional
+`QualityGate` / `TraceGate`.
+
 
 ### Monte Carlo histogram
 

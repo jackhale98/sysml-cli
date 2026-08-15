@@ -52,11 +52,11 @@ just renders them; with no name it lists what's available:
 
 ```
 $ sysml view -I libraries examples/ReliefValve.sysml
-PortTable                      libraries/StandardViews.sysml
-AllocationMatrix               libraries/StandardViews.sysml
-RequirementsTraceMatrix        libraries/StandardViews.sysml
-ModelStats                     libraries/StandardViews.sysml
-ConnectionTable                libraries/StandardViews.sysml
+PortTable                      libraries/Reporting.sysml
+AllocationMatrix               libraries/Reporting.sysml
+RequirementsTraceMatrix        libraries/Reporting.sysml
+ModelStats                     libraries/Reporting.sysml
+ConnectionTable                libraries/Reporting.sysml
 FmeaWorksheet                  libraries/RiskAnalysis.sysml
 RiskMatrix                     libraries/RiskAnalysis.sysml
 HazardLog                      libraries/HazardAnalysis.sysml

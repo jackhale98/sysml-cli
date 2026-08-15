@@ -54,13 +54,13 @@ fn main() -> ExitCode {
         Command::Trace {
             files,
             check,
-        } => commands::trace::run(&cli, files, *check),
+            gate,
+        } => commands::trace::run(&cli, files, *check, gate.as_deref()),
         Command::Diagram {
             file,
             diagram_type,
             output_format,
             scope,
-            view,
             direction,
             depth,
         } => commands::diagram::run(
@@ -69,7 +69,6 @@ fn main() -> ExitCode {
             diagram_type,
             output_format,
             scope.as_deref(),
-            view.as_deref(),
             direction.as_deref(),
             *depth,
         ),
@@ -155,7 +154,8 @@ fn main() -> ExitCode {
         Command::Coverage {
             files,
             check,
-        } => commands::coverage::run(&cli, files, *check),
+            gate,
+        } => commands::coverage::run(&cli, files, *check, gate.as_deref()),
         Command::Init { force } => commands::init::run(&cli, *force),
         Command::Check {
             files,
@@ -164,7 +164,9 @@ fn main() -> ExitCode {
         } => commands::check::run(&cli, files, disable, severity),
         Command::Repl { files } => commands::repl::run(&cli, files),
         Command::Doc { files, root } => commands::doc::run(&cli, files, root.as_deref()),
-        Command::View { name, files } => commands::view::run(&cli, name.as_deref(), files),
+        Command::View { name, files, renderer } => {
+            commands::view::run(&cli, name.as_deref(), files, renderer)
+        }
         Command::Analyze { kind } => commands::analyze::run(&cli, kind),
         Command::Rollup { kind } => commands::rollup::run(&cli, kind),
     }

@@ -9,7 +9,7 @@ use sysml_core::view_render::{available_views, render_view};
 
 use crate::Cli;
 
-pub fn run(cli: &Cli, name: Option<&str>, files: &[PathBuf]) -> ExitCode {
+pub fn run(cli: &Cli, name: Option<&str>, files: &[PathBuf], renderer: &str) -> ExitCode {
     // `sysml view model.sysml` — a first positional that is an existing
     // file is a file, not a view name (list mode).
     let mut files = files.to_vec();
@@ -43,12 +43,19 @@ pub fn run(cli: &Cli, name: Option<&str>, files: &[PathBuf]) -> ExitCode {
             println!("{}", serde_json::to_string_pretty(&items).unwrap());
         } else {
             for (n, f, spec) in &views {
-                println!(
-                    "{:<28} {} {}",
-                    n,
-                    if *spec { " " } else { "(no @TableRendering)" },
-                    f
-                );
+                let label = if *spec {
+                    " ".to_string()
+                } else if let Some(r) = models
+                    .iter()
+                    .flat_map(|m| &m.views)
+                    .find(|v| &v.name == n)
+                    .and_then(|v| v.render_as.as_deref())
+                {
+                    format!("(diagram: {r})")
+                } else {
+                    "(no rendering declared)".to_string()
+                };
+                println!("{:<28} {} {}", n, label, f);
             }
         }
         return ExitCode::SUCCESS;
@@ -57,6 +64,18 @@ pub fn run(cli: &Cli, name: Option<&str>, files: &[PathBuf]) -> ExitCode {
     let table = match render_view(&models, name) {
         Ok(t) => t,
         Err(e) => {
+            // A view def with a `render as` clause is a diagram view:
+            // route through the shared diagram machinery, with the
+            // view's expose/filter clauses selecting content.
+            if let Some(kind) = models
+                .iter()
+                .flat_map(|m| &m.views)
+                .find(|v| v.name == name)
+                .and_then(|v| v.render_as.as_deref())
+                .and_then(sysml_core::diagram::DiagramKind::from_render_clause)
+            {
+                return render_diagram_view(name, files, &models, kind, renderer);
+            }
             eprintln!("error: {e}");
             return ExitCode::FAILURE;
         }
@@ -67,4 +86,45 @@ pub fn run(cli: &Cli, name: Option<&str>, files: &[PathBuf]) -> ExitCode {
 
     crate::output::print_table(&cli.format, &table);
     ExitCode::SUCCESS
+}
+
+/// Render a `render as` view def as a diagram: merge the loaded models,
+/// take the diagram kind from the render clause, and apply the view's
+/// expose/filter selection. State/action diagram flavors re-extract from
+/// the first primary file's source.
+fn render_diagram_view(
+    name: &str,
+    files: &[std::path::PathBuf],
+    models: &[sysml_core::model::Model],
+    kind: sysml_core::diagram::DiagramKind,
+    renderer: &str,
+) -> ExitCode {
+    let Some(format) = sysml_core::diagram::DiagramFormat::from_str(renderer) else {
+        eprintln!(
+            "error: unknown renderer `{renderer}`. Available: mermaid, plantuml (puml), dot, d2"
+        );
+        return ExitCode::FAILURE;
+    };
+    let mut merged = sysml_core::model::Model::new("<view>".to_string());
+    for m in models {
+        merged.merge(m.clone());
+    }
+    let (path_str, source) = match files.first() {
+        Some(f) => match crate::read_source(f) {
+            Ok(v) => v,
+            Err(code) => return code,
+        },
+        None => (String::new(), String::new()),
+    };
+    super::diagram::build_and_print(
+        &merged,
+        &path_str,
+        &source,
+        kind,
+        format,
+        None,
+        Some(name),
+        sysml_core::diagram::LayoutDirection::default(),
+        None,
+    )
 }

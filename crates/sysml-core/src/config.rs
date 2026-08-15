@@ -58,7 +58,24 @@ pub struct ProjectConfig {
     #[serde(default)]
     pub defaults: DefaultsSection,
     #[serde(default)]
+    pub gates: GatesSection,
+    #[serde(default)]
     pub pipelines: Vec<PipelineConfig>,
+}
+
+/// The `[gates]` section: which model-declared constraint defs the
+/// `--check` gates evaluate. The names are conventions, not tool
+/// vocabulary — point them at any constraint def in your models.
+/// CLI `--gate` overrides these; these override the built-in
+/// conventional names (QualityGate / TraceGate).
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Default)]
+pub struct GatesSection {
+    /// Gate constraint def evaluated by `sysml coverage --check`.
+    #[serde(default)]
+    pub coverage: Option<String>,
+    /// Gate constraint def evaluated by `sysml trace --check`.
+    #[serde(default)]
+    pub trace: Option<String>,
 }
 
 /// A named pipeline: a sequence of sysml commands to run in order.
@@ -197,6 +214,17 @@ impl ProjectConfig {
             quote_toml_string(&self.defaults.format)
         ));
 
+        if self.gates.coverage.is_some() || self.gates.trace.is_some() {
+            out.push('\n');
+            out.push_str("[gates]\n");
+            if let Some(ref g) = self.gates.coverage {
+                out.push_str(&format!("coverage = {}\n", quote_toml_string(g)));
+            }
+            if let Some(ref g) = self.gates.trace {
+                out.push_str(&format!("trace = {}\n", quote_toml_string(g)));
+            }
+        }
+
         for pipeline in &self.pipelines {
             out.push('\n');
             out.push_str("[[pipeline]]\n");
@@ -287,6 +315,7 @@ fn parse_toml_config(input: &str) -> Result<ProjectConfig, ConfigError> {
             current_section = match section_name {
                 "project" => Some("project"),
                 "defaults" => Some("defaults"),
+                "gates" => Some("gates"),
                 other => {
                     return Err(ConfigError::Parse(format!(
                         "line {}: unknown section [{other}]",
@@ -346,6 +375,16 @@ fn parse_toml_config(input: &str) -> Result<ProjectConfig, ConfigError> {
             ("defaults", "format") => {
                 config.defaults.format = parse_string_value(value)
                     .map_err(|e| ConfigError::Parse(format!("line {}: {e}", line_no + 1)))?;
+            }
+            ("gates", "coverage") => {
+                let s = parse_string_value(value)
+                    .map_err(|e| ConfigError::Parse(format!("line {}: {e}", line_no + 1)))?;
+                config.gates.coverage = Some(s);
+            }
+            ("gates", "trace") => {
+                let s = parse_string_value(value)
+                    .map_err(|e| ConfigError::Parse(format!("line {}: {e}", line_no + 1)))?;
+                config.gates.trace = Some(s);
             }
             ("pipeline", "name") => {
                 if let Some(ref mut p) = current_pipeline {
@@ -643,6 +682,7 @@ name = "Brake\"System"
                 library_paths: vec![PathBuf::from("libs/"), PathBuf::from("ext/")],
                 stdlib_path: None,
             },
+            gates: GatesSection::default(),
             defaults: DefaultsSection {
                 author: "Bob".to_string(),
                 output_dir: PathBuf::from("out/"),
@@ -812,6 +852,7 @@ steps = []
                 ..ProjectSection::default()
             },
             defaults: DefaultsSection::default(),
+            gates: GatesSection::default(),
             pipelines: vec![
                 PipelineConfig {
                     name: "ci".to_string(),
@@ -861,6 +902,7 @@ stdlib_path = "/usr/share/sysml/stdlib"
                 ..ProjectSection::default()
             },
             defaults: DefaultsSection::default(),
+            gates: GatesSection::default(),
             pipelines: Vec::new(),
         };
         let toml_str = cfg.to_toml_string();
@@ -895,5 +937,27 @@ author = "Bob"
         assert_eq!(cfg.defaults.author, "Bob");
         assert_eq!(cfg.pipelines.len(), 1);
         assert_eq!(cfg.pipelines[0].name, "mid");
+    }
+}
+
+#[cfg(test)]
+mod gates_tests {
+    use super::*;
+
+    #[test]
+    fn gates_section_roundtrip() {
+        let toml = "[project]\nname = \"G\"\n\n[gates]\ncoverage = \"ShipGate\"\ntrace = \"RtmGate\"\n";
+        let cfg = ProjectConfig::from_toml_str(toml).unwrap();
+        assert_eq!(cfg.gates.coverage.as_deref(), Some("ShipGate"));
+        assert_eq!(cfg.gates.trace.as_deref(), Some("RtmGate"));
+        let out = cfg.to_toml_string();
+        let cfg2 = ProjectConfig::from_toml_str(&out).unwrap();
+        assert_eq!(cfg, cfg2);
+    }
+
+    #[test]
+    fn gates_absent_defaults_none() {
+        let cfg = ProjectConfig::from_toml_str("[project]\nname = \"G\"\n").unwrap();
+        assert!(cfg.gates.coverage.is_none() && cfg.gates.trace.is_none());
     }
 }

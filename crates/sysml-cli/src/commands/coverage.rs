@@ -2,7 +2,15 @@ use crate::Cli;
 use std::path::PathBuf;
 use std::process::ExitCode;
 
-pub(crate) fn run(cli: &Cli, files: &[PathBuf], check: bool) -> ExitCode {
+/// Resolve which gate constraint def `--check` evaluates:
+/// CLI flag > `[gates]` config > conventional name.
+pub(crate) fn resolve_gate_name(flag: Option<&str>, config_gate: Option<String>, conventional: &str) -> String {
+    flag.map(|s| s.to_string())
+        .or(config_gate)
+        .unwrap_or_else(|| conventional.to_string())
+}
+
+pub(crate) fn run(cli: &Cli, files: &[PathBuf], check: bool, gate: Option<&str>) -> ExitCode {
     use sysml_core::query;
     let Some(merged) = crate::load_model(cli, files) else {
         return ExitCode::FAILURE;
@@ -113,9 +121,14 @@ pub(crate) fn run(cli: &Cli, files: &[PathBuf], check: bool) -> ExitCode {
         // The gate threshold lives in the model: a constraint usage typed
         // `QualityGate` decides pass/fail. No gate declared = strict.
         let s = &report.summary;
+        let gate_name = resolve_gate_name(
+            gate,
+            crate::helpers::discovered_gates().coverage,
+            "QualityGate",
+        );
         match query::evaluate_gate(
             &merged,
-            "QualityGate",
+            &gate_name,
             &[
                 ("score", s.overall_score),
                 ("documented", s.documented_pct),
@@ -126,7 +139,7 @@ pub(crate) fn run(cli: &Cli, files: &[PathBuf], check: bool) -> ExitCode {
         ) {
             Some(gate) if !gate.passed => {
                 for f in &gate.failed {
-                    eprintln!("error: QualityGate failed: {}", f);
+                    eprintln!("error: {} failed: {}", gate_name, f);
                 }
                 return ExitCode::from(1);
             }
@@ -135,8 +148,8 @@ pub(crate) fn run(cli: &Cli, files: &[PathBuf], check: bool) -> ExitCode {
                 if s.overall_score < 100.0 {
                     eprintln!(
                         "error: coverage score {:.0}% is below 100% \
-                         (declare a QualityGate constraint to set a threshold)",
-                        s.overall_score
+                         (declare a {} constraint to set a threshold)",
+                        s.overall_score, gate_name
                     );
                     return ExitCode::from(1);
                 }

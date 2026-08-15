@@ -468,7 +468,7 @@ fn dispatch(
 
         "view" => {
             let name = if args.is_empty() { None } else { Some(args) };
-            let _ = super::view::run(cli, name, user_files);
+            let _ = super::view::run(cli, name, user_files, "mermaid");
         }
 
         "analyze" => {

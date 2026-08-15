@@ -6,7 +6,7 @@ use std::process::ExitCode;
 use sysml_core::parser as sysml_parser;
 use sysml_core::sim::analysis::{
     evaluate_analysis, evaluate_trade_study, extract_analysis_cases_from_model,
-    format_analysis_list, AnalysisCaseModel,
+    AnalysisCaseModel,
 };
 
 use crate::cli::AnalyzeCommand;
@@ -14,7 +14,6 @@ use crate::Cli;
 
 pub fn run(cli: &Cli, kind: &AnalyzeCommand) -> ExitCode {
     match kind {
-        AnalyzeCommand::List { files } => run_list(cli, files),
         AnalyzeCommand::Run {
             files,
             name,
@@ -334,51 +333,6 @@ fn parse_models(cli: &Cli, files: &[PathBuf]) -> Option<sysml_core::model::Model
     crate::load_model(cli, files)
 }
 
-fn run_list(cli: &Cli, files: &[PathBuf]) -> ExitCode {
-    let Some(model) = parse_models(cli, files) else {
-        return ExitCode::FAILURE;
-    };
-    let cases = extract_analysis_cases_from_model(&model);
-
-    match cli.format.as_str() {
-        "json" => {
-            let items: Vec<_> = cases
-                .iter()
-                .map(|c| {
-                    serde_json::json!({
-                        "name": c.name,
-                        "subject": c.subject.as_ref().map(|s| serde_json::json!({
-                            "name": s.name,
-                            "type": s.type_ref,
-                            "binding": s.value_binding,
-                        })),
-                        "objective": c.objective.as_ref().map(|o| serde_json::json!({
-                            "name": o.name,
-                            "kind": format!("{:?}", o.kind),
-                        })),
-                        "parameters": c.parameters.iter().map(|p| serde_json::json!({
-                            "name": p.name,
-                            "type": p.type_ref,
-                            "direction": format!("{:?}", p.direction),
-                        })).collect::<Vec<_>>(),
-                        "return": c.return_decl.as_ref().map(|r| serde_json::json!({
-                            "name": r.name,
-                            "type": r.type_ref,
-                            "value_expr": r.value_expr,
-                        })),
-                        "alternatives": c.alternatives.iter().map(|a| &a.name).collect::<Vec<_>>(),
-                    })
-                })
-                .collect();
-            println!("{}", serde_json::to_string_pretty(&items).unwrap());
-        }
-        _ => {
-            print!("{}", format_analysis_list(&cases));
-        }
-    }
-
-    ExitCode::SUCCESS
-}
 
 fn run_execute(cli: &Cli, files: &[PathBuf], name: Option<&str>, bindings: &[String]) -> ExitCode {
     let Some(model) = parse_models(cli, files) else {

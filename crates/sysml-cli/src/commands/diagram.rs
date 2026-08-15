@@ -12,7 +12,6 @@ pub(crate) fn run(
     diagram_type: &Option<String>,
     output_format: &str,
     scope: Option<&str>,
-    view: Option<&str>,
     direction: Option<&str>,
     depth: Option<usize>,
 ) -> ExitCode {
@@ -66,30 +65,41 @@ pub(crate) fn run(
 
     let model = sysml_parser::parse_file(&path_str, &source);
 
-    // Without --type, take the diagram kind from the view's `render as` clause.
     let kind = match explicit_kind {
         Some(k) => k,
         None => {
-            let from_view = view.and_then(|view_name| {
-                model
-                    .views
-                    .iter()
-                    .find(|v| v.name == view_name)
-                    .and_then(|v| v.render_as.as_deref())
-                    .and_then(DiagramKind::from_render_clause)
-            });
-            match from_view {
-                Some(k) => k,
-                None => {
-                    eprintln!("error: --type is required (or use --view with a view def that has a 'render as' clause)");
-                    return ExitCode::FAILURE;
-                }
-            }
+            eprintln!(
+                "error: --type is required (model-declared views with a \
+                 'render as' clause render through `sysml view <name>`)"
+            );
+            return ExitCode::FAILURE;
         }
     };
 
+    build_and_print(
+        &model, &path_str, &source, kind, format, scope, None, layout_dir, depth,
+    )
+}
+
+/// Build the graph for `kind`, optionally restrict it to a view def's
+/// expose/filter clauses, and print the rendering. Shared by the ad-hoc
+/// `diagram` command and `view` (model-declared renderings).
+#[allow(clippy::too_many_arguments)]
+pub(crate) fn build_and_print(
+    model: &sysml_core::model::Model,
+    path_str: &str,
+    source: &str,
+    kind: sysml_core::diagram::DiagramKind,
+    format: sysml_core::diagram::DiagramFormat,
+    scope: Option<&str>,
+    view_filter: Option<&str>,
+    layout_dir: sysml_core::diagram::LayoutDirection,
+    depth: Option<usize>,
+) -> ExitCode {
+    use sysml_core::diagram::*;
+
     let mut graph = match kind {
-        DiagramKind::GeneralView(GeneralViewFlavor::Default) => build_bdd(&model, scope),
+        DiagramKind::GeneralView(GeneralViewFlavor::Default) => build_bdd(model, scope),
         DiagramKind::InterconnectionView => {
             let def_name = match scope {
                 Some(s) => s,
@@ -98,12 +108,12 @@ pub(crate) fn run(
                     return ExitCode::from(1);
                 }
             };
-            build_ibd(&model, def_name)
+            build_ibd(model, def_name)
         }
         DiagramKind::StateTransitionView => {
             // Try rich STM from state_parser first
             use sysml_core::sim::state_parser::extract_state_machines;
-            let machines = extract_state_machines(&path_str, &source);
+            let machines = extract_state_machines(path_str, source);
             let machine = if let Some(s) = scope {
                 machines.iter().find(|m| m.name == s)
             } else {
@@ -112,12 +122,12 @@ pub(crate) fn run(
             if let Some(sm) = machine {
                 build_stm_from_state_machine(sm)
             } else {
-                build_stm(&model, scope)
+                build_stm(model, scope)
             }
         }
         DiagramKind::ActionFlowView => {
             use sysml_core::sim::action_parser::extract_actions;
-            let actions = extract_actions(&path_str, &source);
+            let actions = extract_actions(path_str, source);
             let action = if let Some(s) = scope {
                 actions.iter().find(|a| a.name == s)
             } else {
@@ -131,25 +141,26 @@ pub(crate) fn run(
                 }
             }
         }
-        DiagramKind::GridView(GridViewFlavor::Requirements) => build_req(&model),
-        DiagramKind::BrowserView => build_pkg(&model),
-        DiagramKind::GeneralView(GeneralViewFlavor::Parametric) => build_par(&model, scope),
-        DiagramKind::GridView(GridViewFlavor::Trace) => build_trace(&model),
-        DiagramKind::GridView(GridViewFlavor::Alloc) => build_alloc(&model),
-        DiagramKind::GeneralView(GeneralViewFlavor::UseCase) => build_ucd(&model),
+        DiagramKind::GridView(GridViewFlavor::Requirements) => build_req(model),
+        DiagramKind::BrowserView => build_pkg(model),
+        DiagramKind::GeneralView(GeneralViewFlavor::Parametric) => build_par(model, scope),
+        DiagramKind::GridView(GridViewFlavor::Trace) => build_trace(model),
+        DiagramKind::GridView(GridViewFlavor::Alloc) => build_alloc(model),
+        DiagramKind::GeneralView(GeneralViewFlavor::UseCase) => build_ucd(model),
         DiagramKind::SequenceView => {
             // Sequence view: build from flows/messages
-            build_sv(&model, scope)
+            build_sv(model, scope)
         }
-        DiagramKind::GridView(GridViewFlavor::Default) => build_trace(&model),
+        DiagramKind::GridView(GridViewFlavor::Default) => build_trace(model),
     };
 
     graph.direction = layout_dir;
     graph.max_depth = depth;
 
-    // Apply view filter if specified
-    if let Some(view_name) = view {
-        match apply_view_filter(&mut graph, &model, view_name) {
+    // Restrict to the view def's expose/filter clauses when rendering
+    // a model-declared view.
+    if let Some(view_name) = view_filter {
+        match apply_view_filter(&mut graph, model, view_name) {
             Ok(0) => {
                 eprintln!("warning: view `{}` matches no elements", view_name);
             }

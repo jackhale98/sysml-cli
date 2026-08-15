@@ -14,7 +14,7 @@ package RiskAnalysis {
      *    ISO 14971 / MIL-STD-882E style safety cases.
      *
      * Hazard analysis drives the FMEA: when a failure mode (or @Fmea line,
-     * via hazardRef) links to a hazard, its severity derives top-down from
+     * via its hazard ref) links to a hazard, its severity derives top-down
      * the harm at the end of that hazard's causal chain - see
      * HazardAnalysis::SeverityScale for the shared 1-10 anchors. Likelihood
      * and detection remain bottom-up properties of the failure mode.
@@ -108,13 +108,16 @@ package RiskAnalysis {
         attribute initialSeverity : FmeaRating[0..1];
         attribute initialLikelihood : FmeaRating[0..1];
         attribute initialDetection : FmeaRating[0..1];
-        attribute hazardRef : String[0..1] {
+        ref hazard : Hazard[0..1] {
             doc
             /*
-             * Qualified name of the HazardAnalysis::Hazard this failure
-             * mode can precipitate. When set, conforming tools resolve the
-             * hazard's causal chain to its Harm and flag this line if
-             * `severity` disagrees with the harm's SeverityScale anchor.
+             * The HazardAnalysis::Hazard this failure mode can
+             * precipitate - a real model reference, so tools can list
+             * every worksheet line for a hazard by collecting these
+             * refs (no redundant risk list to maintain on the hazard).
+             * When set, conforming tools resolve the hazard's causal
+             * chain to its Harm and flag this line if `severity`
+             * disagrees with the harm's SeverityScale anchor.
              */
         }
     }

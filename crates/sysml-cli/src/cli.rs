@@ -150,22 +150,31 @@ pub(crate) enum Command {
     /// 'satisfy' and 'verify' relationships.
     ///
     /// The --check gate is model-controlled: declare a constraint usage
-    /// typed `TraceGate` (see ModelQuality.sysml in the domain
-    /// libraries) and its expression decides pass/fail from the
-    /// satisfied/verified/traced percentages. With no gate declared,
-    /// --check requires every requirement satisfied and verified.
+    /// typed by the gate def and its expression decides pass/fail from
+    /// the satisfied/verified/traced percentages. The gate def name is
+    /// chosen by --gate, else `[gates] trace` in .sysml/config.toml,
+    /// else the conventional `TraceGate` (ModelQuality.sysml). With no
+    /// gate declared, --check requires everything satisfied and
+    /// verified.
     Trace {
         /// SysML v2 files to analyze (omit to scan project).
         files: Vec<PathBuf>,
 
-        /// CI gate: fail per the model's TraceGate, or (no gate) if any
-        /// requirement lacks satisfaction or verification.
+        /// CI gate: fail per the model's gate constraint, or (no gate)
+        /// if any requirement lacks satisfaction or verification.
         #[arg(long)]
         check: bool,
+
+        /// Gate constraint def to evaluate (overrides config; default
+        /// TraceGate).
+        #[arg(long)]
+        gate: Option<String>,
     },
-    /// Generate a diagram from a SysML v2 model.
+    /// Generate an ad-hoc diagram from a SysML v2 model.
     ///
     /// Produces diagrams in Mermaid, PlantUML, DOT, or D2 format.
+    /// Model-declared views (a `view def` with a `render as` clause)
+    /// render through `sysml view <name>` instead.
     ///
     /// DIAGRAM TYPES (SysML v2 StandardViewDefinitions):
     ///   gv     — General View (definitions and relationships)
@@ -226,12 +235,6 @@ pub(crate) enum Command {
         /// stm/act: show this specific state machine or action.
         #[arg(long)]
         scope: Option<String>,
-
-        /// Apply a named SysML v2 view definition.
-        /// The view's expose and filter clauses determine which elements
-        /// appear, and its `render as` clause supplies the diagram type.
-        #[arg(long)]
-        view: Option<String>,
 
         /// Layout direction: TB (top-bottom), LR (left-right), BT, RL.
         #[arg(long)]
@@ -543,21 +546,27 @@ pub(crate) enum Command {
     /// (a model-declared QualityScore calc controls the weighting).
     ///
     /// The --check gate is model-controlled: declare a constraint usage
-    /// typed `QualityGate` (see ModelQuality.sysml in the domain
-    /// libraries) and its expression decides pass/fail from the score
-    /// and metric percentages. With no gate declared, --check requires
-    /// a perfect score.
+    /// typed by the gate def and its expression decides pass/fail from
+    /// the score and metric percentages. The gate def name is chosen by
+    /// --gate, else `[gates] coverage` in .sysml/config.toml, else the
+    /// conventional `QualityGate` (ModelQuality.sysml). With no gate
+    /// declared, --check requires a perfect score.
     ///
     /// EXAMPLES:
     ///   sysml coverage model.sysml
     ///   sysml coverage --check -I libraries model.sysml
+    ///   sysml coverage --check --gate ShipGate model.sysml
     Coverage {
         /// SysML v2 files to analyze (omit to scan project).
         files: Vec<PathBuf>,
-        /// CI gate: fail per the model's QualityGate, or (no gate) if
-        /// the score is below 100.
+        /// CI gate: fail per the model's gate constraint, or (no gate)
+        /// if the score is below 100.
         #[arg(long)]
         check: bool,
+        /// Gate constraint def to evaluate (overrides config; default
+        /// QualityGate).
+        #[arg(long)]
+        gate: Option<String>,
     },
     /// Interactive REPL for exploring SysML models.
     ///
@@ -592,13 +601,16 @@ pub(crate) enum Command {
         #[arg(long)]
         root: Option<String>,
     },
-    /// Render a model-defined view as a table.
+    /// Render a model-defined view: tables and diagrams.
     ///
-    /// Views are SysML v2 `view def`s carrying a @TableRendering
-    /// annotation (see the Reporting domain library) that specifies rows,
-    /// columns, sorting, filtering, and pivoting. The libraries ship
-    /// standard views (FmeaWorksheet, RiskMatrix, HazardLog,
-    /// StackupSummary, PortTable, AllocationMatrix,
+    /// Views are SysML v2 `view def`s. A @TableRendering annotation
+    /// (see the Reporting domain library) renders as a table — rows,
+    /// columns, sorting, filtering, pivoting. A `render as` clause
+    /// (asTreeDiagram, asInterconnectionDiagram, asStateDiagram, ...)
+    /// renders as a diagram in the format chosen by --renderer, with
+    /// the view's expose/filter clauses selecting the content. The
+    /// libraries ship standard views (FmeaWorksheet, RiskMatrix,
+    /// HazardLog, StackupSummary, PortTable, AllocationMatrix,
     /// RequirementsTraceMatrix, ModelStats); projects add their own by
     /// writing view defs — no tool changes needed.
     ///
@@ -607,13 +619,19 @@ pub(crate) enum Command {
     ///   sysml view FmeaWorksheet
     ///   sysml view RiskMatrix -I libraries model.sysml
     ///   sysml view StackupSummary -f csv > stackups.csv
-    ///   sysml view ModelStats -f md
+    ///   sysml view SystemOverview -r d2         Diagram view, D2 output
     View {
         /// View name (omit to list available views).
         name: Option<String>,
 
         /// SysML v2 files (omit to scan project).
         files: Vec<PathBuf>,
+
+        /// Diagram renderer for views with a `render as` clause:
+        /// mermaid, plantuml, dot, d2.
+        #[arg(short = 'r', long = "renderer", default_value = "mermaid",
+              value_parser = ["mermaid", "mmd", "plantuml", "puml", "dot", "graphviz", "d2", "terrastruct"])]
+        renderer: String,
     },
     /// Run analysis cases defined in SysML v2 models.
     ///
@@ -909,14 +927,6 @@ pub(crate) enum RollupCommand {
 
 #[derive(Subcommand)]
 pub(crate) enum AnalyzeCommand {
-    /// List analysis cases found in model files.
-    ///
-    /// EXAMPLES:
-    ///   sysml analyze list model.sysml
-    List {
-        /// SysML v2 files to inspect.
-        files: Vec<PathBuf>,
-    },
     /// Execute an analysis case with the model's current values.
     ///
     /// Classic analysis cases bind the subject and evaluate the return

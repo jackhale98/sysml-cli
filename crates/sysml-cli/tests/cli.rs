@@ -483,7 +483,7 @@ fn view_model_stats() {
             "view",
             "ModelStats",
             &fixture("simple-vehicle.sysml"),
-            "../../libraries/StandardViews.sysml",
+            "../../libraries/Reporting.sysml",
             "../../libraries/Reporting.sysml",
         ])
         .assert()
@@ -498,7 +498,7 @@ fn view_port_table() {
             "view",
             "PortTable",
             &fixture("ConnectionTest.sysml"),
-            "../../libraries/StandardViews.sysml",
+            "../../libraries/Reporting.sysml",
             "../../libraries/Reporting.sysml",
         ])
         .assert()
@@ -847,30 +847,7 @@ fn rollup_unknown_method() {
 // analyze
 // ========================================================================
 
-#[test]
-fn analyze_list() {
-    cmd()
-        .args(["analyze", "list", &fixture("analysis-trade.sysml")])
-        .assert()
-        .success()
-        .stdout(predicate::str::contains("FuelAnalysis"))
-        .stdout(predicate::str::contains("EngineTradeOff"));
-}
 
-#[test]
-fn analyze_list_json() {
-    cmd()
-        .args([
-            "-f",
-            "json",
-            "analyze",
-            "list",
-            &fixture("analysis-trade.sysml"),
-        ])
-        .assert()
-        .success()
-        .stdout(predicate::str::contains("\"name\": \"FuelAnalysis\""));
-}
 
 #[test]
 fn analyze_run() {

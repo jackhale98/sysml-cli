@@ -1,5 +1,24 @@
 # Changelog
 
+## Unreleased
+
+### Views are the one path for model-declared renderings
+- 'sysml view <name>' renders diagram views too: a view def with a
+  'render as' clause (official syntax, e.g. 'render asTreeDiagram')
+  routes through the diagram machinery with the view's expose/filter
+  selection; pick the output format with -r/--renderer (mermaid,
+  plantuml, dot, d2). The view listing labels these '(diagram: ...)'
+- 'diagram --view' removed: 'diagram' is the ad-hoc command (--type
+  required); model-declared views render through 'view'
+- 'analyze list' removed: 'sysml list -k analyses' enumerates cases,
+  and 'analyze run' lists candidates when -n is ambiguous or missing
+
+### Gate names are user vocabulary, not tool vocabulary
+- 'coverage --check --gate <Name>' / 'trace --check --gate <Name>'
+  choose which constraint def is the gate; '[gates] coverage/trace' in
+  .sysml/config.toml sets project defaults; QualityGate/TraceGate stay
+  as the conventional fallback names. Flag > config > convention
+
 ## 0.8.0 — 2026-08-15
 
 ### Conformant quoted names

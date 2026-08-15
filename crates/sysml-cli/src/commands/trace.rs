@@ -3,7 +3,7 @@ use std::process::ExitCode;
 
 use crate::Cli;
 
-pub(crate) fn run(cli: &Cli, files: &[PathBuf], check: bool) -> ExitCode {
+pub(crate) fn run(cli: &Cli, files: &[PathBuf], check: bool, gate: Option<&str>) -> ExitCode {
     use sysml_core::query;
 
     let Some(merged) = crate::load_model(cli, files) else {
@@ -94,9 +94,14 @@ pub(crate) fn run(cli: &Cli, files: &[PathBuf], check: bool) -> ExitCode {
         let pct = |n: usize| 100.0 * n as f64 / total as f64;
         // The gate threshold lives in the model: a constraint usage typed
         // `TraceGate` decides pass/fail. No gate declared = strict.
+        let gate_name = super::coverage::resolve_gate_name(
+            gate,
+            crate::helpers::discovered_gates().trace,
+            "TraceGate",
+        );
         match query::evaluate_gate(
             &merged,
-            "TraceGate",
+            &gate_name,
             &[
                 ("satisfied", pct(coverage.satisfied_count)),
                 ("verified", pct(coverage.verified_count)),
@@ -105,7 +110,7 @@ pub(crate) fn run(cli: &Cli, files: &[PathBuf], check: bool) -> ExitCode {
         ) {
             Some(gate) if !gate.passed => {
                 for f in &gate.failed {
-                    eprintln!("error: TraceGate failed: {}", f);
+                    eprintln!("error: {} failed: {}", gate_name, f);
                 }
                 return ExitCode::from(1);
             }
@@ -114,8 +119,8 @@ pub(crate) fn run(cli: &Cli, files: &[PathBuf], check: bool) -> ExitCode {
                 if coverage.satisfied_count < total || coverage.verified_count < total {
                     eprintln!(
                         "error: {} requirement(s) missing satisfaction or verification \
-                         (declare a TraceGate constraint to set a threshold)",
-                        total - coverage.fully_traced_count
+                         (declare a {} constraint to set a threshold)",
+                        total - coverage.fully_traced_count, gate_name
                     );
                     return ExitCode::from(1);
                 }

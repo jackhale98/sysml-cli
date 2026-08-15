@@ -15,8 +15,8 @@ package Reporting {
      *   view def FmeaWorksheet {
      *       @TableRendering {
      *           rows = "@Fmea";
-     *           columns = "element; failureMode; severity; occurrence;
-     *                      detection; rpn = severity*occurrence*detection";
+     *           columns = "element; failureMode; severity; likelihood;
+     *                      detection; rpn = severity*likelihood*detection";
      *           sortBy = "-rpn";
      *       }
      *   }
@@ -61,5 +61,55 @@ package Reporting {
         attribute sortBy : String[0..1];
         attribute pivot : String[0..1];
         attribute where : String[0..1];
+    }
+
+    // --- Domain-neutral views usable in any model ---------------------
+
+    view def PortTable {
+        doc /* Every port with its owner, type, and direction. */
+        @TableRendering {
+            rows = "kind:port";
+            columns = "element; parent; type; direction";
+            sortBy = "parent";
+        }
+    }
+
+    view def AllocationMatrix {
+        doc /* Allocation relationships, source to target. */
+        @TableRendering {
+            rows = "relation:allocation";
+            columns = "source; target";
+            sortBy = "source";
+        }
+    }
+
+    view def RequirementsTraceMatrix {
+        doc
+        /*
+         * One row per requirement definition with satisfy/verify status —
+         * the requirements traceability matrix.
+         */
+        @TableRendering {
+            rows = "trace";
+            columns = "requirement; id; satisfied; verified";
+            sortBy = "requirement";
+        }
+    }
+
+    view def ModelStats {
+        doc /* Element counts by kind: the model at a glance. */
+        @TableRendering {
+            rows = "kindcounts";
+            columns = "kind; definitions; usages";
+        }
+    }
+
+    view def ConnectionTable {
+        doc /* Every connection, source to target. */
+        @TableRendering {
+            rows = "relation:connection";
+            columns = "source; target";
+            sortBy = "source";
+        }
     }
 }

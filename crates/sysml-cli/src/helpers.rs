@@ -205,6 +205,14 @@ fn config_relative(root: &std::path::Path, p: &std::path::Path) -> PathBuf {
     }
 }
 
+/// The `[gates]` section of the discovered project config (empty
+/// defaults when no project).
+pub(crate) fn discovered_gates() -> sysml_core::config::GatesSection {
+    discovered_config()
+        .map(|(_, cfg)| cfg.gates)
+        .unwrap_or_default()
+}
+
 /// Resolve the effective include paths by combining:
 /// 1. CLI `--include` paths
 /// 2. `--stdlib-path` (CLI flag or SYSML_STDLIB_PATH env)
