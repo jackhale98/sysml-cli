@@ -53,6 +53,12 @@
   were silently dropped from verification tracing
 - Wizard-test flake: MockRunner call counter is per-instance
 
+### Docs
+- The build-a-model-from-scratch tutorial is gone - write models in
+  your editor. docs/analyzing-models.md replaces it: a real model run
+  through the analysis commands with actual outputs (views, uncertainty
+  methods with the histogram, trace/coverage with model-side gates)
+
 ### Removed (breaking)
 - `index` and the cache stack (`cache.rs`, `index.rs`,
   `sqlite_cache.rs`, the `sqlite` feature — ~2.4k lines): the cache had

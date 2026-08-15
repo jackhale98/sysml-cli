@@ -10,7 +10,7 @@ Fully-qualified names resolve from the root namespace without imports, package s
 
 | | |
 |---|---|
-| [Tutorial](docs/tutorial.md) | Build a weather station model from scratch using the CLI |
+| [Analyzing models](docs/analyzing-models.md) | Run a real model through the analysis commands, with outputs |
 | [Validation & Diagnostics](docs/validation.md) | 17 lint checks, diagnostic codes, output formats |
 | [Architecture](docs/architecture.md) | Crate structure, design decisions, 3-crate workspace |
 | [CI & Editor Integration](docs/ci-integration.md) | GitHub Actions workflow, LSP setup, Emacs sysml2-mode, JSON output |
