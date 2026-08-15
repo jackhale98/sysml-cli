@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.8.0 — 2026-08-15
 
 ### Conformant quoted names
 - The OMG pilot implementation requires quoted names when a member's
