@@ -1,6 +1,9 @@
 # Changelog
 
-## Unreleased
+## 0.9.0 — 2026-08-17
+
+Editor setup, model-chosen gate names, and one path for model-declared
+renderings. Grammar unchanged (tree-sitter-sysml v0.6.0).
 
 ### Views are the one path for model-declared renderings
 - 'sysml view <name>' renders diagram views too: a view def with a
@@ -18,6 +21,24 @@
   choose which constraint def is the gate; '[gates] coverage/trace' in
   .sysml/config.toml sets project defaults; QualityGate/TraceGate stay
   as the conventional fallback names. Flag > config > convention
+- `list -k analyses` lists analysis cases (defs and usages), replacing
+  the removed `analyze list`
+
+### Docs
+- New [Editor Setup](docs/editors.md): the grammar and the language
+  server together, per editor — Emacs, Vim/Neovim, VS Code (semantic
+  tokens; no native tree-sitter), Helix, Zed
+- A full docs-vs-code audit corrected the clap help itself
+  (unparseable `diagram -s`/`--view` examples, a nonexistent `export
+  interfaces` subcommand, a wrong REPL command list, completion install
+  paths using the wrong binary name), the diagram reference (a third of
+  it documented the removed `--view`; canonical SysML v2 view names are
+  now primary and the Sequence View is documented), the check table in
+  validation.md (port-types listed twice, value-constraints missing,
+  W015 filed as a warning when it is an error), the `check` exit-code
+  claim in the analysis guide (errors only — warnings never failed the
+  build), LSP capability counts (17, not 19), and architecture.md's
+  module listing. `repl` and `doc` gained reference sections.
 
 ## 0.8.0 — 2026-08-15
 

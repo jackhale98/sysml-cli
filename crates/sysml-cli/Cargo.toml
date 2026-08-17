@@ -1,6 +1,6 @@
 [package]
 name = "sysml-cli"
-version = "0.8.0"
+version = "0.9.0"
 edition = "2021"
 description = "SysML v2 command-line tool for validation, simulation, diagram generation, and model analysis"
 license = "GPL-3.0-or-later"
