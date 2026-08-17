@@ -445,6 +445,21 @@ impl Project {
     }
 }
 
+fn collect_sysml_files(dir: &Path, files: &mut Vec<PathBuf>) {
+    if let Ok(entries) = std::fs::read_dir(dir) {
+        for entry in entries.flatten() {
+            let path = entry.path();
+            if path.is_dir() {
+                collect_sysml_files(&path, files);
+            } else if let Some(ext) = path.extension() {
+                if ext == "sysml" || ext == "kerml" {
+                    files.push(path);
+                }
+            }
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -743,17 +758,3 @@ mod tests {
     }
 }
 
-fn collect_sysml_files(dir: &Path, files: &mut Vec<PathBuf>) {
-    if let Ok(entries) = std::fs::read_dir(dir) {
-        for entry in entries.flatten() {
-            let path = entry.path();
-            if path.is_dir() {
-                collect_sysml_files(&path, files);
-            } else if let Some(ext) = path.extension() {
-                if ext == "sysml" || ext == "kerml" {
-                    files.push(path);
-                }
-            }
-        }
-    }
-}
