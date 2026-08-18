@@ -26,6 +26,17 @@ pub fn run(cli: &Cli, name: Option<&str>, files: &[PathBuf], renderer: &str) -> 
         return ExitCode::FAILURE;
     };
 
+    // Rows come from the files the user named; include paths are
+    // resolution context (and where library view defs live), not model
+    // content. Without this, `ModelStats` counted every definition in
+    // the libraries and `trace`-style views listed their requirements.
+    let (resolved, primary) = crate::helpers::resolve_files(cli, files);
+    let targets: Vec<String> = resolved
+        .iter()
+        .take(primary)
+        .map(|p| p.to_string_lossy().to_string())
+        .collect();
+
     let Some(name) = name else {
         // List available views.
         let views = available_views(&models);
@@ -61,7 +72,7 @@ pub fn run(cli: &Cli, name: Option<&str>, files: &[PathBuf], renderer: &str) -> 
         return ExitCode::SUCCESS;
     };
 
-    let table = match render_view(&models, name) {
+    let table = match render_view(&models, &targets, name) {
         Ok(t) => t,
         Err(e) => {
             // A view def with a `render as` clause is a diagram view:

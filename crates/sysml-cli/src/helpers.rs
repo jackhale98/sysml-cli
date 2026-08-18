@@ -57,6 +57,38 @@ pub(crate) fn load_model(cli: &crate::Cli, files: &[PathBuf]) -> Option<sysml_co
     Some(merged)
 }
 
+/// A model of ONLY the files the user named, plus a second model of
+/// everything on the include path (stdlib, libraries, siblings).
+///
+/// Commands that REPORT model content — trace, coverage — must draw
+/// their rows from the first and resolve against the second. Merging
+/// the two made `trace` list the standard library's own requirements
+/// (`self`, `subrequirements`, `requirementChecks`, ...) as if the user
+/// had written them, and made completeness scores meaningless.
+pub(crate) fn load_target_and_context(
+    cli: &crate::Cli,
+    files: &[PathBuf],
+) -> Option<(sysml_core::model::Model, Vec<sysml_core::model::Model>)> {
+    let all = load_per_file_models(cli, files)?;
+    let (resolved, primary) = resolve_files(cli, files);
+    let target_paths: Vec<String> = resolved
+        .iter()
+        .take(primary)
+        .map(|p| p.to_string_lossy().to_string())
+        .collect();
+
+    let mut target = sysml_core::model::Model::new("<target>".to_string());
+    let mut context = Vec::new();
+    for m in all {
+        if target_paths.iter().any(|t| t == &m.file) {
+            target.merge(m);
+        } else {
+            context.push(m);
+        }
+    }
+    Some((target, context))
+}
+
 /// Load per-file models (real per-file byte spans preserved) for commands
 /// that need span-accurate association, e.g. the uncertainty analyzer.
 pub(crate) fn load_per_file_models(

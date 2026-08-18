@@ -12,7 +12,8 @@ pub(crate) fn resolve_gate_name(flag: Option<&str>, config_gate: Option<String>,
 
 pub(crate) fn run(cli: &Cli, files: &[PathBuf], check: bool, gate: Option<&str>) -> ExitCode {
     use sysml_core::query;
-    let Some(merged) = crate::load_model(cli, files) else {
+    // Score the user's files, not the include path.
+    let Some((merged, _context)) = crate::helpers::load_target_and_context(cli, files) else {
         return ExitCode::FAILURE;
     };
 

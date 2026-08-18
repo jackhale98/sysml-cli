@@ -57,7 +57,20 @@ pub fn available_views(models: &[Model]) -> Vec<(String, String, bool)> {
 }
 
 /// Render the named view against the models.
-pub fn render_view(models: &[Model], view_name: &str) -> Result<RenderedTable, String> {
+/// Render a model-defined view.
+///
+/// `models` is the full resolution context (target files PLUS anything
+/// on the include path); `targets` names the files whose content
+/// should produce rows. Include paths exist so references resolve and
+/// so library-defined views can be found — their contents are not the
+/// user's model, and counting them made `ModelStats` report the
+/// library's definitions and `trace` list requirements the user never
+/// wrote. An empty `targets` means "everything is content".
+pub fn render_view(
+    models: &[Model],
+    targets: &[String],
+    view_name: &str,
+) -> Result<RenderedTable, String> {
     let view_exists = models.iter().any(|m| m.views.iter().any(|v| v.name == view_name));
     if !view_exists {
         let names: Vec<String> = available_views(models)
@@ -87,7 +100,7 @@ pub fn render_view(models: &[Model], view_name: &str) -> Result<RenderedTable, S
     };
     let rows_spec = get("rows").ok_or("missing `rows` in @TableRendering")?;
     let mut warnings = Vec::new();
-    let rows = provide_rows(models, &rows_spec, &mut warnings)?;
+    let rows = provide_rows(models, targets, &rows_spec, &mut warnings)?;
 
     // Filter with `where`.
     let rows = if let Some(cond) = get("where") {
@@ -180,27 +193,46 @@ fn field(row: &Row, name: &str) -> Option<String> {
         .map(|(_, v)| v.clone())
 }
 
+/// Models whose content produces rows: the targets, or everything when
+/// no targets were given.
+fn content_models(models: &[Model], targets: &[String]) -> Vec<Model> {
+    if targets.is_empty() {
+        return models.to_vec();
+    }
+    models
+        .iter()
+        .filter(|m| targets.iter().any(|t| t == &m.file))
+        .cloned()
+        .collect()
+}
+
 fn provide_rows(
     models: &[Model],
+    targets: &[String],
     spec: &str,
     warnings: &mut Vec<String>,
 ) -> Result<Vec<Row>, String> {
+    // Rows come from the target files; `models` stays available for
+    // resolution that must see the whole context (specialization
+    // chains, imported types).
+    let content = content_models(models, targets);
+    let content = content.as_slice();
     if let Some(meta) = spec.strip_prefix('@') {
-        return Ok(metadata_rows(models, meta));
+        return Ok(metadata_rows(content, meta));
     }
     if let Some(ty) = spec.strip_prefix("type:") {
-        return Ok(typed_usage_rows(models, ty.trim()));
+        return Ok(typed_usage_rows(content, models, ty.trim()));
     }
     if let Some(kind) = spec.strip_prefix("kind:") {
-        return Ok(kind_rows(models, kind.trim()));
+        return Ok(kind_rows(content, kind.trim()));
     }
     if let Some(rel) = spec.strip_prefix("relation:") {
-        return relation_rows(models, rel.trim());
+        return relation_rows(content, rel.trim());
     }
     match spec {
-        "trace" => Ok(trace_rows(models)),
-        "kindcounts" => Ok(kindcount_rows(models)),
-        "uncertainty" => Ok(uncertainty_rows(models, warnings)),
+        "trace" => Ok(trace_rows(content)),
+        "kindcounts" => Ok(kindcount_rows(content)),
+        "uncertainty" => Ok(uncertainty_rows(content, models, warnings)),
         other => Err(format!(
             "unknown row provider `{other}` (expected @Metadata, type:, kind:, \
              relation:, trace, kindcounts, or uncertainty)"
@@ -230,7 +262,7 @@ fn metadata_rows(models: &[Model], meta_type: &str) -> Vec<Row> {
 }
 
 /// Usages typed by `ty` or any definition specializing it.
-fn typed_usage_rows(models: &[Model], ty: &str) -> Vec<Row> {
+fn typed_usage_rows(content: &[Model], models: &[Model], ty: &str) -> Vec<Row> {
     let specializes = |type_name: &str| -> bool {
         let mut current = simple_name(type_name).to_string();
         let mut depth = 0;
@@ -439,12 +471,17 @@ fn kindcount_rows(models: &[Model]) -> Vec<Row> {
 }
 
 /// One row per uncertainty analysis case, evaluated (worst-case + RSS).
-fn uncertainty_rows(models: &[Model], warnings: &mut Vec<String>) -> Vec<Row> {
+fn uncertainty_rows(
+    content: &[Model],
+    models: &[Model],
+    warnings: &mut Vec<String>,
+) -> Vec<Row> {
     use crate::sim::uncertainty::{rss, worst_case, PassFail};
     use crate::sim::uncertainty_model::{extract_case, find_uncertainty_cases};
 
     let mut rows = Vec::new();
-    for (name, _file, ty) in find_uncertainty_cases(models) {
+    // Cases are the user's; extraction resolves types across everything.
+    for (name, _file, ty) in find_uncertainty_cases(content) {
         match extract_case(models, &name) {
             Ok(case) => {
                 let wc = worst_case(&case.inputs, &case.target);
@@ -641,7 +678,7 @@ mod tests {
 
     #[test]
     fn worksheet_rows_computed_and_sorted() {
-        let t = render_view(&models(), "Worksheet").expect("render");
+        let t = render_view(&models(), &[], "Worksheet").expect("render");
         assert_eq!(
             t.columns,
             vec!["element", "failureMode", "severity", "occurrence", "detection", "rpn"]
@@ -655,14 +692,14 @@ mod tests {
 
     #[test]
     fn where_filters_rows() {
-        let t = render_view(&models(), "HighRisk").expect("render");
+        let t = render_view(&models(), &[], "HighRisk").expect("render");
         assert_eq!(t.rows.len(), 1);
         assert_eq!(t.rows[0][1], "108");
     }
 
     #[test]
     fn pivot_counts() {
-        let t = render_view(&models(), "Matrix").expect("render");
+        let t = render_view(&models(), &[], "Matrix").expect("render");
         // Rows: severity 9 and 5 (descending). Columns: occurrence 3 and 6.
         assert_eq!(t.columns[0], "severity\\occurrence");
         assert_eq!(t.columns[1..], ["3", "6"]);
@@ -673,7 +710,7 @@ mod tests {
 
     #[test]
     fn unknown_view_lists_available() {
-        let err = render_view(&models(), "Nope").unwrap_err();
+        let err = render_view(&models(), &[], "Nope").unwrap_err();
         assert!(err.contains("Worksheet"), "{err}");
     }
 
@@ -681,7 +718,7 @@ mod tests {
     fn view_without_spec_is_explained() {
         let src = "package P { view def Empty; }";
         let ms = vec![parse_file("e.sysml", src)];
-        let err = render_view(&ms, "Empty").unwrap_err();
+        let err = render_view(&ms, &[], "Empty").unwrap_err();
         assert!(err.contains("@TableRendering"), "{err}");
     }
 
@@ -702,7 +739,7 @@ mod tests {
             }
         "#;
         let ms = vec![parse_file("s.sysml", src)];
-        let t = render_view(&ms, "Stats").expect("render");
+        let t = render_view(&ms, &[], "Stats").expect("render");
         let part_row = t.rows.iter().find(|r| r[0] == "part def").expect("row");
         assert_eq!(part_row[1], "2");
     }
@@ -727,7 +764,7 @@ mod tests {
             }
         "#;
         let ms = vec![parse_file("h.sysml", src)];
-        let t = render_view(&ms, "Log").expect("render");
+        let t = render_view(&ms, &[], "Log").expect("render");
         assert_eq!(t.rows.len(), 1);
         assert_eq!(t.rows[0], vec!["fire", "Lithium cell fire"]);
     }

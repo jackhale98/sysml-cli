@@ -6,9 +6,21 @@ use crate::Cli;
 pub(crate) fn run(cli: &Cli, files: &[PathBuf], check: bool, gate: Option<&str>) -> ExitCode {
     use sysml_core::query;
 
-    let Some(merged) = crate::load_model(cli, files) else {
+    // Requirements come from the files the user named. Include paths
+    // (stdlib, libraries) are resolution context: without this split,
+    // `trace` listed the standard library's own requirements.
+    let Some((mut merged, context)) = crate::helpers::load_target_and_context(cli, files) else {
         return ExitCode::FAILURE;
     };
+    // Satisfy/verify declared elsewhere in the project still count.
+    {
+        let mut all = vec![merged.clone()];
+        all.extend(context.iter().cloned());
+        let (satisfied, verified) =
+            sysml_core::resolver::traced_requirement_defs(all.iter());
+        merged.external_satisfied = satisfied.into_iter().collect();
+        merged.external_verified = verified.into_iter().collect();
+    }
 
     let rows = query::trace_requirements(&merged);
     let coverage = query::trace_coverage(&rows);
