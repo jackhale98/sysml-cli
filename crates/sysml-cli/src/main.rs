@@ -34,6 +34,7 @@ fn main() -> ExitCode {
             where_clauses,
             visibility,
             view,
+            type_name,
         } => commands::list::run(
             &cli,
             files,
@@ -49,6 +50,7 @@ fn main() -> ExitCode {
             where_clauses,
             visibility.as_deref(),
             view.as_deref(),
+            type_name.as_deref(),
         ),
         Command::Show { file, element, raw } => commands::show::run(&cli, file, element, *raw),
         Command::Trace {

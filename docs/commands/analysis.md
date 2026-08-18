@@ -41,6 +41,7 @@ sysml list --kind port-usage model.sysml     # Only port usages
 sysml list --name Vehicle model.sysml        # Name search
 sysml list --doc "shall operate" model.sysml # Doc-comment search
 sysml list --parent Vehicle model.sysml      # Children of Vehicle
+sysml list --type Hazard model.sysml        # Everything that IS a Hazard
 sysml list --unused model.sysml              # Unreferenced defs
 sysml list -f json model.sysml               # JSON output
 ```
@@ -50,6 +51,7 @@ sysml list -f json model.sysml               # JSON output
 | `-k, --kind <KIND>` | Filter by kind. `parts` shows both defs and usages. `part-def` / `part-usage` restricts to one. Also: `ports`, `actions`, `states`, `requirements`, `constraints`, `connections`, `attributes`, `items`, `enums`, `analyses`, `all`, `definitions`, `usages` |
 | `-n, --name <PATTERN>` | Substring name filter |
 | `--doc <TEXT>` | Substring filter on documentation comments |
+| `--type <TYPE>` | Filter by declared type, following the specialization closure |
 | `-p, --parent <NAME>` | Filter by parent definition |
 | `--unused` | Show only unreferenced definitions |
 | `--abstract-only` | Show only abstract definitions |
@@ -59,6 +61,22 @@ sysml list -f json model.sysml               # JSON output
 | `--variants` | Show only variant choices (Ch 35) |
 | `--metadata <TYPE>` | Show only elements annotated with this metadata type |
 | `--where KEY=VALUE` | Constrain metadata values (repeatable, with `--metadata`) |
+
+### Type queries
+
+`--kind` knows SysML metaclasses (`part`, `port`, `requirement`).
+`--type` knows *your* types:
+
+```sh
+sysml list --type Hazard -I libraries model.sysml
+```
+
+This lists every usage typed by `Hazard` and every definition
+specializing it, transitively — so a project's own `ThermalHazard :>
+Hazard` is included without naming it. The closure resolves across the
+include path, so the supertype can live in a library. This is the
+generic form of "show me all the hazards" (or all the mates, or all the
+risk controls); the tool has no idea what any of those mean.
 
 ### Metadata queries (Ch 36)
 
@@ -188,6 +206,28 @@ sysml deps model.sysml Engine --reverse       # Only show "referenced by"
 sysml deps model.sysml Engine --forward       # Only show "depends on"
 sysml deps -f json model.sysml Vehicle
 ```
+
+Positionals sort themselves: an argument naming an existing path is a
+file and the other is the target, so `sysml deps Vehicle model.sysml`
+works too.
+
+### Following a chain of connections
+
+Connections are directed edges. For `connect a to b`, `b` is downstream
+of `a`, and each edge is labelled with the connection's type and name.
+Combined with `--transitive`, that walks a chain to its end:
+
+```sh
+$ sysml deps -I libraries model.sysml valveStuckClosed --forward --transitive
+Depends on (3):
+  overpressure (connection) via connects to Causation (h1)
+  pressurizedOperation (connection) via connects to Causation (h2)
+  vesselRupture (connection) via connects to Causation (h3)
+```
+
+That is a failure mode traced to the harm it causes, using nothing but
+graph traversal — the `Causation` type comes from the model. Reverse the
+direction with `--reverse` to ask what leads *to* an element.
 
 | Option | Description |
 |--------|-------------|

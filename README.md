@@ -372,8 +372,10 @@ Slice the model from the shell — including by metadata (Ch 36):
 sysml list --kind requirements src/*.sysml
 sysml list --variants model.sysml                          # variation points (Ch 35)
 sysml list --metadata Status --where status=draft src/*.sysml
+sysml list --type Hazard -I libraries src/*.sysml   # everything that IS a Hazard
 sysml show model.sysml REQ2                                # look up by <ID>
 sysml deps model.sysml Engine --transitive
+sysml view Bom model.sysml -f csv > bom.csv         # bill of materials
 ```
 
 Or interactively: `sysml repl` loads your project with stateful navigation:

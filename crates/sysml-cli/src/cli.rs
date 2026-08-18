@@ -120,6 +120,12 @@ pub(crate) enum Command {
         #[arg(long)]
         visibility: Option<String>,
 
+        /// Filter by declared type, including any type that specializes it
+        /// (e.g. `--type Hazard` lists every usage typed by Hazard or a
+        /// subtype of it, and every definition specializing Hazard).
+        #[arg(long = "type", value_name = "TYPE")]
+        type_name: Option<String>,
+
         /// Apply a named SysML v2 view definition as a filter preset.
         /// The view's expose and filter clauses determine which elements are shown.
         #[arg(long)]

@@ -318,6 +318,11 @@ pub struct MetadataAnnotation {
 #[derive(Debug, Clone, Serialize)]
 pub struct Connection {
     pub name: Option<String>,
+    /// Declared type, e.g. `Mate` in `connection f : Mate connect a to b`.
+    /// A connection's type is what distinguishes a tolerance mate from a
+    /// hazard causation, so reports can filter on it.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub type_ref: Option<String>,
     pub source: String,
     pub target: String,
     pub span: Span,

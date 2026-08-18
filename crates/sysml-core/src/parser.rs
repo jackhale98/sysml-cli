@@ -1227,6 +1227,8 @@ fn walk_node_scoped(
                 for to in &to_refs {
                     model.connections.push(Connection {
                         name: name.clone(),
+                        type_ref: get_type_ref_node(&node)
+                            .map(|t| node_text(&t, source).to_string()),
                         source: from.clone(),
                         target: to.clone(),
                         span: Span::from_node(&node),
@@ -1252,6 +1254,8 @@ fn walk_node_scoped(
             if refs.len() >= 2 {
                 model.connections.push(Connection {
                     name: None,
+                    type_ref: get_type_ref_node(&node)
+                        .map(|t| node_text(&t, source).to_string()),
                     source: refs[0].clone(),
                     target: refs[1].clone(),
                     span: Span::from_node(&node),
@@ -1723,6 +1727,8 @@ fn extract_connect_clause(node: &Node, source: &[u8], model: &mut Model) {
             if refs.len() >= 2 {
                 model.connections.push(Connection {
                     name: field_text(node, "name", source),
+                    type_ref: get_type_ref_node(node)
+                        .map(|t| node_text(&t, source).to_string()),
                     source: refs[0].clone(),
                     target: refs[1].clone(),
                     span: Span::from_node(&child),

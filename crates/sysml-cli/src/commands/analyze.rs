@@ -100,7 +100,7 @@ fn try_run_uncertainty(
     let Some(models) = load_per_file_models(cli, files) else {
         return UncertaintyOutcome::Ran(ExitCode::FAILURE);
     };
-    let cases = find_uncertainty_cases(&models);
+    let cases = find_uncertainty_cases(&models, &models);
     if cases.is_empty() {
         return UncertaintyOutcome::NotApplicable;
     }

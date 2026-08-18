@@ -10,16 +10,31 @@ use sysml_core::view_render::{available_views, render_view};
 use crate::Cli;
 
 pub fn run(cli: &Cli, name: Option<&str>, files: &[PathBuf], renderer: &str) -> ExitCode {
-    // `sysml view model.sysml` — a first positional that is an existing
-    // file is a file, not a view name (list mode).
-    let mut files = files.to_vec();
-    let name = match name {
-        Some(n) if std::path::Path::new(n).exists() => {
-            files.insert(0, PathBuf::from(n));
-            None
-        }
-        other => other,
-    };
+    // Positionals are sorted by what they are, not by where they sit:
+    // anything that names an existing path is a file, the one that does
+    // not is the view name. So `sysml view Fmea m.sysml` and
+    // `sysml view m.sysml Fmea` both work, and `sysml view m.sysml`
+    // alone lists the views. Every other command takes files first;
+    // this keeps that habit from being an error here.
+    let mut positional: Vec<String> = Vec::new();
+    if let Some(n) = name {
+        positional.push(n.to_string());
+    }
+    positional.extend(files.iter().map(|f| f.to_string_lossy().to_string()));
+    let (paths, names): (Vec<String>, Vec<String>) = positional
+        .into_iter()
+        .partition(|p| std::path::Path::new(p).exists());
+    if names.len() > 1 {
+        eprintln!(
+            "error: expected one view name, got {}: {}",
+            names.len(),
+            names.join(", ")
+        );
+        eprintln!("note: names that are not existing files are read as view names");
+        return ExitCode::FAILURE;
+    }
+    let name = names.first().map(|s| s.as_str());
+    let files: Vec<PathBuf> = paths.into_iter().map(PathBuf::from).collect();
     let files = &files[..];
 
     let Some(models) = crate::load_per_file_models(cli, files) else {

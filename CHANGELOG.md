@@ -1,5 +1,52 @@
 # Changelog
 
+## 0.9.2 — 2026-08-18
+
+Generic primitives for questions the libraries used to have to answer.
+
+### Added
+- **`list --type <Type>`** filters by declared type, following the
+  specialization closure: `--type Hazard` finds every usage typed by
+  `Hazard` or any subtype, and every definition specializing it. The
+  closure resolves across the include path, so a project type declared
+  against a library supertype still matches. There was no way to ask
+  "show me everything that is an X" — `--kind` only knows SysML
+  metaclasses like `part` and `port`.
+- **`relation:connection:<Type>` row provider.** Connections now carry
+  their declared type, so a view can separate a tolerance mate from a
+  hazard causation. `FitTable` was listing the whole hazard chain as
+  fits.
+- **`composition` / `composition:<Root>` row provider** — a bill of
+  materials. Walks `part` and `item` usages (connections are structure,
+  not content), reporting `path`, `depth`, `quantity` from the usage
+  multiplicity, and `extended` — quantity multiplied down the tree, so a
+  part used 2x inside an assembly used 3x reports 6. Attributes declared
+  on a row's type can be named as columns. `sysml view Bom -f csv`
+  exports it. The library ships a `Bom` view; the columns that matter
+  are the model's business, not the tool's.
+- `deps` follows connections as **directed** edges labelled with the
+  connection's type and name, and names the element on the other end
+  rather than the connection itself — so `deps X --forward --transitive`
+  walks a causal chain to its end. It previously reported the connection
+  and stopped there, which made a hazard-to-harm trace impossible.
+
+### Fixed
+- **Tolerance stackup views returned no rows.** 0.9.1 scoped view rows
+  to the target files but scoped *type resolution* with them, so
+  `ToleranceStackup :> UncertaintyAnalysis` became unreachable and every
+  stackup vanished unless the library was also named on the command
+  line. Rows come from the target; types resolve against everything.
+  Same fix for `type:` rows.
+- A bare `//` line — the blank separator inside a comment block — was a
+  syntax error (grammar submodule).
+
+### Changed
+- `view` and `deps` sort their positionals by what they are rather than
+  where they sit: an argument naming an existing path is a file, the one
+  that does not is the view name or target. `sysml view m.sysml Fmea`
+  and `sysml view Fmea m.sysml` both work now. Every other command takes
+  files first, and that habit used to produce "cannot read `Fmea`".
+
 ## 0.9.1 — 2026-08-18
 
 ### Fixed

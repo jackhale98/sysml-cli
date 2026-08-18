@@ -227,7 +227,29 @@ fn provide_rows(
         return Ok(kind_rows(content, kind.trim()));
     }
     if let Some(rel) = spec.strip_prefix("relation:") {
-        return relation_rows(content, rel.trim());
+        return relation_rows(content, models, rel.trim());
+    }
+    if let Some(root) = spec.strip_prefix("composition:") {
+        return Ok(composition_rows(content, models, root.trim()));
+    }
+    if spec == "composition" {
+        // No root named: walk from every definition that nothing uses as
+        // a type, i.e. the tops of the composition forest.
+        let scope: &[Model] = if models.is_empty() { content } else { models };
+        let used: std::collections::HashSet<&str> = scope
+            .iter()
+            .flat_map(|m| m.usages.iter())
+            .filter_map(|u| u.type_ref.as_deref().map(simple_name))
+            .collect();
+        let mut rows = Vec::new();
+        for m in content {
+            for d in &m.definitions {
+                if !used.contains(d.name.as_str()) {
+                    rows.extend(composition_rows(content, models, &d.name));
+                }
+            }
+        }
+        return Ok(rows);
     }
     match spec {
         "trace" => Ok(trace_rows(content)),
@@ -235,7 +257,7 @@ fn provide_rows(
         "uncertainty" => Ok(uncertainty_rows(content, models, warnings)),
         other => Err(format!(
             "unknown row provider `{other}` (expected @Metadata, type:, kind:, \
-             relation:, trace, kindcounts, or uncertainty)"
+             relation:, composition:, trace, kindcounts, or uncertainty)"
         )),
     }
 }
@@ -341,11 +363,50 @@ fn kind_rows(models: &[Model], kind: &str) -> Vec<Row> {
     rows
 }
 
-fn relation_rows(models: &[Model], rel: &str) -> Result<Vec<Row>, String> {
+/// True when `type_name` is, or transitively specializes, `target`.
+/// Resolution walks `models` (the whole include path), so a project type
+/// declared against a library supertype still matches.
+fn specializes_type(models: &[Model], type_name: &str, target: &str) -> bool {
+    let mut current = simple_name(type_name).to_string();
+    let mut seen = std::collections::HashSet::new();
+    loop {
+        if current == target {
+            return true;
+        }
+        if !seen.insert(current.clone()) {
+            return false;
+        }
+        let Some(def) = models
+            .iter()
+            .find_map(|m| m.definitions.iter().find(|d| d.name == current))
+        else {
+            return false;
+        };
+        match def.super_type.as_deref() {
+            Some(s) => current = simple_name(s).to_string(),
+            None => return false,
+        }
+    }
+}
+
+fn relation_rows(content: &[Model], models: &[Model], rel: &str) -> Result<Vec<Row>, String> {
     let mut rows = Vec::new();
+    // `connection:Mate` restricts to connections of that type (or a
+    // specialization). Without it a "fit table" would list every
+    // connection in the model, hazard causations included.
+    let (rel, type_filter) = match rel.split_once(':') {
+        Some((base, ty)) => (base.trim(), Some(ty.trim())),
+        None => (rel, None),
+    };
+    if type_filter.is_some() && rel != "connection" {
+        return Err(format!(
+            "relation `{rel}` takes no type filter (only `connection:<Type>` does)"
+        ));
+    }
+    let models = if models.is_empty() { content } else { models };
     match rel {
         "allocation" => {
-            for m in models {
+            for m in content {
                 for a in &m.allocations {
                     rows.push(vec![
                         ("source".into(), a.source.clone()),
@@ -356,7 +417,7 @@ fn relation_rows(models: &[Model], rel: &str) -> Result<Vec<Row>, String> {
             }
         }
         "satisfy" => {
-            for m in models {
+            for m in content {
                 for s in &m.satisfactions {
                     rows.push(vec![
                         ("requirement".into(), s.requirement.clone()),
@@ -367,7 +428,7 @@ fn relation_rows(models: &[Model], rel: &str) -> Result<Vec<Row>, String> {
             }
         }
         "verify" => {
-            for m in models {
+            for m in content {
                 for v in &m.verifications {
                     rows.push(vec![
                         ("requirement".into(), v.requirement.clone()),
@@ -378,9 +439,19 @@ fn relation_rows(models: &[Model], rel: &str) -> Result<Vec<Row>, String> {
             }
         }
         "connection" => {
-            for m in models {
+            for m in content {
                 for c in &m.connections {
+                    match (type_filter, c.type_ref.as_deref()) {
+                        (Some(want), Some(have)) if specializes_type(models, have, want) => {}
+                        (Some(_), _) => continue,
+                        (None, _) => {}
+                    }
                     rows.push(vec![
+                        ("connection".into(), c.name.clone().unwrap_or_default()),
+                        (
+                            "type".into(),
+                            c.type_ref.as_deref().map(simple_name).unwrap_or("").into(),
+                        ),
                         ("source".into(), c.source.clone()),
                         ("target".into(), c.target.clone()),
                         ("file".into(), m.file.clone()),
@@ -483,7 +554,7 @@ fn uncertainty_rows(
 
     let mut rows = Vec::new();
     // Cases are the user's; extraction resolves types across everything.
-    for (name, _file, ty) in find_uncertainty_cases(content) {
+    for (name, _file, ty) in find_uncertainty_cases(content, models) {
         match extract_case(models, &name) {
             Ok(case) => {
                 let wc = worst_case(&case.inputs, &case.target);
@@ -625,6 +696,80 @@ fn unquote(s: &str) -> &str {
     s.trim().trim_matches('"')
 }
 
+/// The composition tree under `root`, one row per part or item usage:
+/// a bill of materials. Quantity comes from the usage's multiplicity and
+/// `extended` multiplies it down the tree, so a part used 2x inside an
+/// assembly used 3x reports 6.
+///
+/// Only `part` and `item` usages are walked. Connections and flows are
+/// structure, not content — including them is what made a "BOM" list
+/// connectors alongside parts.
+///
+/// Structure only: which attributes matter (mass, cost, supplier) is the
+/// model's business, so a view names them as columns and they are read
+/// off the usage's type.
+fn composition_rows(content: &[Model], models: &[Model], root: &str) -> Vec<Row> {
+    use crate::sim::resolve::quantity_from_multiplicity;
+
+    let scope: &[Model] = if models.is_empty() { content } else { models };
+    let mut rows = Vec::new();
+    let mut stack = vec![(root.to_string(), String::new(), 0usize, 1u32)];
+    let mut seen = std::collections::HashSet::new();
+
+    while let Some((def_name, path, depth, mult)) = stack.pop() {
+        // Cycle guard: a type that contains itself would recurse forever.
+        if !seen.insert((def_name.clone(), depth)) || depth > 64 {
+            continue;
+        }
+        for m in scope {
+            for u in m.usages_in_def(&def_name) {
+                if !matches!(u.kind.as_str(), "part" | "item") || u.name.is_empty() {
+                    continue;
+                }
+                let ty = u.type_ref.as_deref().map(simple_name).unwrap_or("");
+                let qty = quantity_from_multiplicity(u);
+                let extended = mult.saturating_mul(qty);
+                let child_path = if path.is_empty() {
+                    u.name.clone()
+                } else {
+                    format!("{path}.{}", u.name)
+                };
+                let mut row: Row = vec![
+                    ("element".into(), u.name.clone()),
+                    ("type".into(), ty.to_string()),
+                    ("parent".into(), def_name.clone()),
+                    ("path".into(), child_path.clone()),
+                    ("depth".into(), depth.to_string()),
+                    ("quantity".into(), qty.to_string()),
+                    ("extended".into(), extended.to_string()),
+                    ("file".into(), m.file.clone()),
+                ];
+                // Attributes of the usage's type, so a view can ask for
+                // `mass` or `cost` as a column without this code knowing
+                // which attributes exist.
+                if !ty.is_empty() {
+                    for am in scope {
+                        for a in am.usages_in_def(ty) {
+                            if a.kind == "attribute" && !a.name.is_empty() {
+                                if let Some(v) = a.value_expr.as_deref() {
+                                    if !row.iter().any(|(k, _)| k == &a.name) {
+                                        row.push((a.name.clone(), unquote(v.trim()).to_string()));
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+                rows.push(row);
+                if !ty.is_empty() {
+                    stack.push((ty.to_string(), child_path, depth + 1, extended));
+                }
+            }
+        }
+    }
+    rows
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -714,6 +859,116 @@ mod tests {
     fn unknown_view_lists_available() {
         let err = render_view(&models(), &[], "Nope").unwrap_err();
         assert!(err.contains("Worksheet"), "{err}");
+    }
+
+    /// Rows come from the target file, but types resolve against the
+    /// whole include path. Scoping rows to the target without giving the
+    /// resolver the libraries made every stackup invisible: the case is
+    /// declared in the model, `ToleranceStackup :> UncertaintyAnalysis`
+    /// only in the library.
+    #[test]
+    fn uncertainty_rows_resolve_types_outside_the_target() {
+        let lib = r#"
+            package Uncertainty {
+                metadata def TableRendering;
+                analysis def UncertaintyAnalysis;
+                analysis def ToleranceStackup :> UncertaintyAnalysis;
+            }
+        "#;
+        let target = r#"
+            package M {
+                part def Asm {
+                    attribute d1 { :>> nominal = 10.0; :>> plus = 0.1; :>> minus = 0.1; }
+                    analysis gap : ToleranceStackup {
+                        attribute :>> target {
+                            :>> nominal = 10.0; :>> lower = 9.0; :>> upper = 11.0;
+                        }
+                        attribute c1 :> contributions { :>> dim = d1; }
+                    }
+                }
+                view def Stack {
+                    @TableRendering {
+                        rows = "uncertainty";
+                        columns = "case; nominal; result";
+                    }
+                }
+            }
+        "#;
+        let ms = vec![
+            parse_file("lib.sysml", lib),
+            parse_file("target.sysml", target),
+        ];
+        let out = render_view(&ms, &["target.sysml".to_string()], "Stack").unwrap();
+        assert_eq!(out.rows.len(), 1, "case should be found: {out:?}");
+        assert_eq!(out.rows[0][0], "gap");
+    }
+
+    /// A "fit table" must not list hazard causations. Before connections
+    /// carried a type, `relation:connection` returned every connection in
+    /// the model and the filter had nothing to key on.
+    #[test]
+    fn connection_rows_filter_by_type() {
+        let src = r#"
+            package P {
+                metadata def TableRendering;
+                part def Mate;
+                part def Causation;
+                part def Bolted :> Mate;
+                part a; part b; part c; part d; part e; part f;
+                connection m1 : Mate connect a to b;
+                connection m2 : Bolted connect c to d;
+                connection k1 : Causation connect e to f;
+                view def Fits {
+                    @TableRendering {
+                        rows = "relation:connection:Mate";
+                        columns = "connection; source; target";
+                        sortBy = "connection";
+                    }
+                }
+            }
+        "#;
+        let ms = vec![parse_file("f.sysml", src)];
+        let out = render_view(&ms, &[], "Fits").unwrap();
+        let names: Vec<&str> = out
+            .rows
+            .iter()
+            .map(|r| r[0].as_str())
+            .collect();
+        // Bolted specializes Mate, so it is a fit; Causation is not.
+        assert_eq!(names, vec!["m1", "m2"], "{out:?}");
+    }
+
+    /// The BOM is parts and items only, with quantity multiplied down the
+    /// tree. Connections are structure, not content.
+    #[test]
+    fn composition_rows_are_a_bom() {
+        let src = r#"
+            package P {
+                metadata def TableRendering;
+                part def Wheel;
+                part def Axle { part wheel : Wheel[2]; }
+                part def Car { part axle : Axle[2]; connection j : Wheel connect axle to axle; }
+                view def Bom {
+                    @TableRendering {
+                        rows = "composition:Car";
+                        columns = "path; quantity; extended";
+                        sortBy = "path";
+                    }
+                }
+            }
+        "#;
+        let ms = vec![parse_file("b.sysml", src)];
+        let out = render_view(&ms, &[], "Bom").unwrap();
+        let got: Vec<(&str, &str)> = out
+            .rows
+            .iter()
+            .map(|r| (r[0].as_str(), r[2].as_str()))
+            .collect();
+        assert_eq!(
+            got,
+            vec![("axle", "2"), ("axle.wheel", "4")],
+            "2 axles x 2 wheels = 4 extended, and no connection row: {out:?}"
+        );
     }
 
     #[test]

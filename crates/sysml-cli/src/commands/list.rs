@@ -21,6 +21,7 @@ pub(crate) fn run(
     where_clauses: &[String],
     visibility: Option<&str>,
     view: Option<&str>,
+    type_name: Option<&str>,
 ) -> ExitCode {
     let (files, _) = crate::files_or_project(files, cli.quiet);
     if files.is_empty() {
@@ -76,6 +77,21 @@ pub(crate) fn run(
             })
             .collect(),
         visibility: vis_filter,
+        // Resolved against every loaded model, include paths included, so
+        // a subtype declared against a library supertype still matches.
+        type_names: type_name.map(|t| {
+            let context = crate::load_per_file_models(cli, files).unwrap_or_default();
+            let closure = query::specialization_closure(&context, t);
+            if closure.len() == 1 && !context.iter().any(|m| {
+                m.definitions.iter().any(|d| d.name == t)
+            }) {
+                eprintln!(
+                    "warning: no definition named `{t}` found; \
+                     matching on that name alone (is its library on the include path?)"
+                );
+            }
+            closure
+        }),
     };
 
     // --view flag: will be applied per-file after parsing (view defs are in the model)

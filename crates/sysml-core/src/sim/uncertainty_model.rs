@@ -50,14 +50,20 @@ pub fn is_uncertainty_type(models: &[Model], type_name: &str) -> bool {
     }
 }
 
-/// All usages across the loaded models that are uncertainty analysis
-/// cases: `(name, file, type_name)`, in declaration order.
-pub fn find_uncertainty_cases(models: &[Model]) -> Vec<(String, String, String)> {
+/// Uncertainty analysis cases as `(name, file, type_name)`, in
+/// declaration order: those declared in `content`, with their types resolved against
+/// `scope`. The two differ whenever the user names specific files: the
+/// case is theirs, but `ToleranceStackup :> UncertaintyCase` is only
+/// reachable through the libraries on the include path.
+pub fn find_uncertainty_cases(
+    content: &[Model],
+    scope: &[Model],
+) -> Vec<(String, String, String)> {
     let mut cases = Vec::new();
-    for m in models {
+    for m in content {
         for u in &m.usages {
             if let Some(ref t) = u.type_ref {
-                if !u.name.is_empty() && is_uncertainty_type(models, t) {
+                if !u.name.is_empty() && is_uncertainty_type(scope, t) {
                     cases.push((u.name.clone(), m.file.clone(), simple_name(t).to_string()));
                 }
             }
@@ -539,7 +545,7 @@ mod tests {
     #[test]
     fn finds_cases() {
         let ms = models();
-        let cases = find_uncertainty_cases(&ms);
+        let cases = find_uncertainty_cases(&ms, &ms);
         assert_eq!(cases.len(), 1, "{cases:?}");
         assert_eq!(cases[0].0, "gapAnalysis");
         assert_eq!(cases[0].2, "ToleranceStackup");

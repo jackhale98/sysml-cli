@@ -246,7 +246,7 @@ pub fn find_attribute_value_with_unit(
 }
 
 /// Extract quantity from a usage's multiplicity (default 1).
-fn quantity_from_multiplicity(usage: &crate::model::Usage) -> u32 {
+pub fn quantity_from_multiplicity(usage: &crate::model::Usage) -> u32 {
     if let Some(ref mult) = usage.multiplicity {
         // If lower == upper and is a number, use that as exact count
         if let Some(ref lower) = mult.lower {

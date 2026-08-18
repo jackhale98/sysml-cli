@@ -47,6 +47,30 @@ $ sysml show examples/ReliefValve.sysml travelGap     # full detail on one eleme
 $ sysml deps examples/ReliefValve.sysml Piston        # who references it, what it needs
 ```
 
+`-k/--kind` filters by SysML metaclass. To filter by *your* types, use
+`--type`, which follows the specialization closure:
+
+```
+$ sysml list --type Hazard -I libraries examples/ReliefValve.sysml
+  occurrence     overpressure : Hazard (in ReliefValveExample)
+```
+
+And because connections are directed, typed edges, `deps` walks a chain
+to its end — here a failure mode traced to the harm it causes:
+
+```
+$ sysml deps -I libraries examples/ReliefValve.sysml valveStuckClosed \
+      --forward --transitive
+Depends on (3):
+  overpressure (connection) via connects to Causation (h1)
+  pressurizedOperation (connection) via connects to Causation (h2)
+  vesselRupture (connection) via connects to Causation (h3)
+```
+
+Nothing here knows what a hazard is: `Hazard` and `Causation` are
+declared in a library the model imports, and the CLI only follows types
+and edges.
+
 ## 3. The model's own reports — `view`
 
 Views are defined *in the model* (a `view def` with a `@TableRendering`
@@ -55,10 +79,13 @@ just renders them; with no name it lists what's available:
 
 ```
 $ sysml view -I libraries examples/ReliefValve.sysml
+TightClearances                examples/ReliefValve.sysml
+HazardLinkedFailures           examples/ReliefValve.sysml
 PortTable                      libraries/Reporting.sysml
 AllocationMatrix               libraries/Reporting.sysml
 RequirementsTraceMatrix        libraries/Reporting.sysml
 ModelStats                     libraries/Reporting.sysml
+Bom                            libraries/Reporting.sysml
 ConnectionTable                libraries/Reporting.sysml
 FmeaWorksheet                  libraries/RiskAnalysis.sysml
 RiskMatrix                     libraries/RiskAnalysis.sysml
@@ -82,6 +109,29 @@ case       critical  nominal  lower   upper   wcMin   wcMax   margin  cp  cpk  r
 ---------------------------------------------------------------------------------------
 travelGap  true      0.5000   0.2000  0.8000  0.2500  0.7500  0.0500  2   2    MARGINAL
 ```
+
+The first two views come from `ReliefValve.sysml` itself — a project
+tailors its own tables by writing `view def`s, which is the whole
+extension mechanism. There is no `fmea` or `tolerance` command because
+the model, not the tool, decides what a report means.
+
+A bill of materials is the same idea over the composition tree:
+
+```
+$ sysml view Bom -I libraries examples/ReliefValve.sysml
+path              type              quantity  extended  depth
+-------------------------------------------------------------
+relief            ReliefValveAsm    1         1         0
+relief.body       ValveBody         1         1         1
+relief.body.bore  GeometricFeature  1         1         2
+relief.piston     Piston            1         1         1
+relief.piston.od  GeometricFeature  1         1         2
+relief.spring     Spring            1         1         1
+```
+
+`quantity` is the usage's multiplicity and `extended` multiplies it down
+the tree. Name any attribute the model declares — `mass`, `cost`,
+`partNumber` — as a column and it is read off each row's type.
 
 `-f csv` or `-f md` exports any view for a spreadsheet or a report;
 `-f json` for scripting.

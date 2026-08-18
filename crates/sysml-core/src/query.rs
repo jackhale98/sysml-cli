@@ -115,6 +115,41 @@ pub struct ListFilter {
     pub metadata_where: Vec<(String, String)>,
     /// Filter by visibility.
     pub visibility: Option<Visibility>,
+    /// Accepted type names (simple names): a usage matches when its
+    /// declared type is one of these, a definition when it is itself one.
+    /// The caller expands the requested type into its specialization
+    /// closure, so resolution can use the full include path rather than
+    /// just the file being listed.
+    pub type_names: Option<Vec<String>>,
+}
+
+/// Every definition name in `models` that is, or transitively specializes,
+/// `target` — including `target` itself. This is the generic mechanism
+/// behind `--type`: a model asking for `Hazard` means every user-defined
+/// subtype of `Hazard` too, without the tool knowing what a hazard is.
+pub fn specialization_closure(models: &[Model], target: &str) -> Vec<String> {
+    let mut closure: Vec<String> = vec![target.to_string()];
+    // Repeat to a fixed point: a subtype may be declared before its parent.
+    loop {
+        let mut added = false;
+        for m in models {
+            for d in &m.definitions {
+                if closure.iter().any(|c| c == &d.name) {
+                    continue;
+                }
+                let Some(sup) = d.super_type.as_deref().map(simple_name) else {
+                    continue;
+                };
+                if closure.iter().any(|c| c == sup) {
+                    closure.push(d.name.clone());
+                    added = true;
+                }
+            }
+        }
+        if !added {
+            return closure;
+        }
+    }
 }
 
 /// True when the element passes the filter's metadata constraints:
@@ -212,6 +247,11 @@ pub fn list_elements<'a>(model: &'a Model, filter: &ListFilter) -> Vec<Element<'
                     continue;
                 }
             }
+            if let Some(types) = &filter.type_names {
+                if !types.iter().any(|t| t == &def.name) {
+                    continue;
+                }
+            }
             results.push(Element::Def(def));
         }
     }
@@ -249,6 +289,14 @@ pub fn list_elements<'a>(model: &'a Model, filter: &ListFilter) -> Vec<Element<'
             }
             if !metadata_matches(model, &usage.name, filter) {
                 continue;
+            }
+            if let Some(types) = &filter.type_names {
+                let Some(ty) = usage.type_ref.as_deref().map(simple_name) else {
+                    continue;
+                };
+                if !types.iter().any(|t| t == ty) {
+                    continue;
+                }
             }
             results.push(Element::Usage(usage));
         }
@@ -716,17 +764,33 @@ pub fn dependency_analysis(model: &Model, target_name: &str) -> DepAnalysis {
             }
         }
     }
+    // Connections are directed edges. Name the element on the other end
+    // (not the connection itself) so transitive traversal can follow a
+    // chain, and split by direction so `--forward` walks downstream:
+    // for `connect a to b`, b is downstream of a. The connection's type
+    // and name go in the relationship label, so a caller can tell a
+    // tolerance mate from a hazard causation without this code knowing
+    // what either means.
     for c in &model.connections {
-        if simple_name(&c.source) == target_name || simple_name(&c.target) == target_name {
-            let other = if simple_name(&c.source) == target_name {
-                &c.target
-            } else {
-                &c.source
-            };
-            referenced_by.push(DepRef {
-                name: c.name.clone().unwrap_or_else(|| other.clone()),
+        let label = |dir: &str| {
+            let ty = c.type_ref.as_deref().map(simple_name).unwrap_or("connection");
+            match c.name.as_deref() {
+                Some(n) => format!("{dir} {ty} ({n})"),
+                None => format!("{dir} {ty}"),
+            }
+        };
+        if simple_name(&c.source) == target_name {
+            depends_on.push(DepRef {
+                name: c.target.clone(),
                 kind: "connection".to_string(),
-                relationship: "connection".to_string(),
+                relationship: label("connects to"),
+            });
+        }
+        if simple_name(&c.target) == target_name {
+            referenced_by.push(DepRef {
+                name: c.source.clone(),
+                kind: "connection".to_string(),
+                relationship: label("connected from"),
             });
         }
     }

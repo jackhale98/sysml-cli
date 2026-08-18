@@ -12,6 +12,25 @@ pub(crate) fn run(
     transitive: bool,
 ) -> ExitCode {
     use sysml_core::query;
+    // `deps` declares <FILES>... <TARGET>, but users reach for
+    // files-first out of habit with every other command. Sort the
+    // positionals by what they are: existing paths are files, and the
+    // target is whichever one is not, wherever it appeared.
+    let mut files = files.to_vec();
+    let mut target = target.to_string();
+    if let Some(i) = files
+        .iter()
+        .position(|f| !f.exists() && f.to_string_lossy() != target)
+    {
+        let stray = files.remove(i).to_string_lossy().to_string();
+        if std::path::Path::new(&target).exists() {
+            files.push(PathBuf::from(&target));
+            target = stray;
+        }
+    }
+    let target = target.as_str();
+    let files = &files[..];
+
     let Some(merged) = crate::load_model(cli, files) else {
         return ExitCode::FAILURE;
     };

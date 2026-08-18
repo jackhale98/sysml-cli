@@ -52,12 +52,13 @@ The bundled `libraries/` ship ready-made views:
 | `RiskMatrix` | RiskAnalysis | severity × likelihood pivot of `@Fmea` line items |
 | `HazardLog` | HazardAnalysis | hazards with severity and mitigation status |
 | `StackupSummary` | Tolerancing | evaluated tolerance stackups (worst-case, RSS, Cp/Cpk) |
-| `FitTable` | Tolerancing | mates with computed fits |
+| `FitTable` | Tolerancing | mates (`relation:connection:Mate`), source and target |
 | `PortTable` | Reporting | port usages (owner, type, direction) |
 | `ConnectionTable` | Reporting | connections (source, target) |
 | `AllocationMatrix` | Reporting | allocation pairs |
 | `RequirementsTraceMatrix` | Reporting | requirement coverage (satisfied/verified) |
 | `ModelStats` | Reporting | element counts by kind |
+| `Bom` | Reporting | composition tree with per-level and extended quantities |
 
 ## The @TableRendering convention
 
@@ -74,8 +75,45 @@ view def FmeaWorksheet {
 
 `rows` selects a row provider (`@Metadata` annotations, `type:Def`
 usages, `kind:port`, `relation:satisfy|verify|allocation|connection`,
+`relation:connection:<Type>`, `composition` / `composition:<Root>`,
 `trace`, `kindcounts`, `uncertainty`); `columns` copies row fields or
 computes derived values with the standard expression language; `where`
 filters rows; `sortBy` orders (`-` prefix for descending); `pivot`
 renders a count grid. The full contract — every provider and its
 fields — is documented in `libraries/Reporting.sysml`.
+
+### Filtering connections by type
+
+`relation:connection` returns every connection in the model. Naming a
+type restricts it to connections of that type or a specialization, which
+is what separates a tolerance mate from a hazard causation:
+
+```sysml
+view def FitTable {
+    @TableRendering {
+        rows = "relation:connection:Mate";
+        columns = "connection; source; target";
+    }
+}
+```
+
+### Bills of materials
+
+`composition` walks `part` and `item` usages — connections are
+structure, not content — and reports `element`, `type`, `parent`,
+`path`, `depth`, `quantity` (from the usage multiplicity) and
+`extended` (quantity multiplied down the tree, so a part used 2x inside
+an assembly used 3x reports 6). Any attribute declared on a row's type
+can be named as a column:
+
+```sysml
+view def Bom {
+    @TableRendering {
+        rows = "composition:Vehicle";   // omit the root to walk every top
+        columns = "path; type; quantity; extended; mass; partNumber";
+        sortBy = "path";
+    }
+}
+```
+
+Export with `sysml view Bom model.sysml -f csv > bom.csv`.
