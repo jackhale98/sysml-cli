@@ -287,8 +287,10 @@ fn typed_usage_rows(content: &[Model], models: &[Model], ty: &str) -> Vec<Row> {
         }
     };
 
+    // Rows come from the target files; `models` above resolves the
+    // specialization chain across the whole context.
     let mut rows = Vec::new();
-    for m in models {
+    for m in content {
         for u in &m.usages {
             let Some(ref t) = u.type_ref else { continue };
             if u.name.is_empty() || !specializes(t) {

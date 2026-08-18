@@ -1,5 +1,29 @@
 # Changelog
 
+## 0.9.1 — 2026-08-18
+
+### Fixed
+- **Reporting commands describe YOUR files, not the include path.**
+  `trace --stdlib-path ...` listed the standard library's own
+  requirements (`self`, `subrequirements`, `requirementChecks`,
+  `satisfiedRequirementChecks`, ...) as if you had written them, and
+  `view ModelStats` counted every definition in every library on the
+  include path. Include paths exist so references resolve and so
+  library-defined views can be found; their contents are not your
+  model. `check` already drew this line — `trace`, `coverage`, and
+  `view` now do too. Cross-file satisfy/verify still counts: the
+  traceability closure is fed through `external_satisfied` /
+  `external_verified`, so project-wide tracing is unaffected.
+- Test fixtures are now conformant SysML, verified against the OMG
+  pilot implementation (zero syntax errors, down from 89). Notably
+  `satisfy requirement X by Y;` does not reference a requirement
+  definition — the pilot reads it as declaring an untyped usage named
+  X — which made `trace` report a phantom requirement and an
+  unsatisfied one. The conformant forms are `satisfy X by Y;` and
+  `satisfy requirement x : X by Y;`.
+- `type:` view rows were still drawn from every model on the include
+  path rather than the target files.
+
 ## 0.9.0 — 2026-08-17
 
 Editor setup, model-chosen gate names, and one path for model-declared
