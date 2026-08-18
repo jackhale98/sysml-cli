@@ -1,4 +1,5 @@
 package ActionTest {
+    private import ScalarValues::*;
 	action def A{ in x; }
 
 	action a: A {

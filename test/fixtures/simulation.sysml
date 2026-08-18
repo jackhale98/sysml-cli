@@ -4,12 +4,12 @@
 
 constraint def SpeedLimit {
     in speed : Real;
-    speed <= 120;
+    speed <= 120
 }
 
 constraint def TemperatureRange {
     in temp : Real;
-    temp >= -40 and temp <= 85;
+    temp >= -40 and temp <= 85
 }
 
 // -- Calculations --

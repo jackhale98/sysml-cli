@@ -1,4 +1,5 @@
 package RollupTest {
+    private import ScalarValues::*;
     part def Engine {
         attribute mass : Real = 180;
         attribute cost : Real = 5000;

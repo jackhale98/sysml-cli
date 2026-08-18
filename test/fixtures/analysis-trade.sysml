@@ -1,4 +1,5 @@
 package AnalysisTradeTest {
+    private import ScalarValues::*;
 
     part def Engine {
         attribute mass : Real;

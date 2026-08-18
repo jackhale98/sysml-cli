@@ -1,9 +1,10 @@
 package ValueConstraintsFixture {
+    private import ScalarValues::*;
     doc /* W017 fixture: assert constraints on types, violated by values. */
 
     metadata def Fmea {
         attribute severity : FmeaRating;
-        attribute occurrence : FmeaRating;
+        attribute 'occurrence' : FmeaRating;
     }
 
     attribute def FmeaRating {
@@ -19,7 +20,7 @@ package ValueConstraintsFixture {
 
     part def Battery;
     part battery : Battery {
-        @Fmea { severity = 12; occurrence = 3; }
+        @Fmea { severity = 12; 'occurrence' = 3; }
     }
 
     part def Widget {

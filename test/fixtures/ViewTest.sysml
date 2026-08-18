@@ -16,7 +16,7 @@ package ViewTestFixture {
     metadata def Fmea {
         attribute failureMode : String;
         attribute severity : Integer;
-        attribute occurrence : Integer;
+        attribute 'occurrence' : Integer;
         attribute detection : Integer;
     }
 
@@ -55,13 +55,13 @@ package ViewTestFixture {
         @Fmea {
             failureMode = "Thermal runaway";
             severity = 9;
-            occurrence = 3;
+            'occurrence' = 3;
             detection = 4;
         }
         @Fmea {
             failureMode = "Capacity fade";
             severity = 5;
-            occurrence = 6;
+            'occurrence' = 6;
             detection = 3;
         }
     }
