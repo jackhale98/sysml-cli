@@ -2,16 +2,20 @@
 // Based on official SysML v2 example corpus
 
 package Flashlight {
-    import ISQ::*;
-    import SI::*;
-    import ScalarValues::*;
+    private import ISQ::*;
+    private import SI::*;
+    private import ScalarValues::*;
 
     // Item definition for light
     item def Light;
 
+    // Transition trigger signals
+    attribute def SwitchOn;
+    attribute def SwitchOff;
+
     // Port definitions
     port def ElectricalPowerPort {
-        in item electricPower : Real;
+        in attribute electricPower : Real;
     }
 
     port def LightPort {
@@ -78,12 +82,12 @@ package Flashlight {
 
         transition off_to_on
             first off
-            accept switchOn
+            accept switchOn : SwitchOn
             then on;
 
         transition on_to_off
             first on
-            accept switchOff
+            accept switchOff : SwitchOff
             then off;
     }
 
@@ -102,7 +106,7 @@ package Flashlight {
     }
 
     // Verification
-    verification case def TestBatteryLife {
+    verification def TestBatteryLife {
         subject flashlight : Flashlight;
         objective {
             verify requirement BatteryLifeReq;
