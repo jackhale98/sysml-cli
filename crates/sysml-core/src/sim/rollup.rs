@@ -549,15 +549,13 @@ mod tests {
         let model = parse_file("test.sysml", VARIANT_MODEL);
         let mut sel = std::collections::HashMap::new();
         sel.insert("battery".to_string(), "powerBattery".to_string());
-        let result = evaluate_rollup_with_variants(
-            &model, "Drone", "mass", AggregationMethod::Sum, &sel,
-        );
+        let result =
+            evaluate_rollup_with_variants(&model, "Drone", "mass", AggregationMethod::Sum, &sel);
         assert!((result.total - 3.2).abs() < 1e-9, "got {}", result.total);
 
         sel.insert("battery".to_string(), "standardBattery".to_string());
-        let result = evaluate_rollup_with_variants(
-            &model, "Drone", "mass", AggregationMethod::Sum, &sel,
-        );
+        let result =
+            evaluate_rollup_with_variants(&model, "Drone", "mass", AggregationMethod::Sum, &sel);
         assert!((result.total - 2.6).abs() < 1e-9, "got {}", result.total);
     }
 
@@ -567,9 +565,8 @@ mod tests {
         let model = parse_file("test.sysml", VARIANT_MODEL);
         let mut sel = std::collections::HashMap::new();
         sel.insert("BatteryChoice".to_string(), "powerBattery".to_string());
-        let result = evaluate_rollup_with_variants(
-            &model, "Drone", "mass", AggregationMethod::Sum, &sel,
-        );
+        let result =
+            evaluate_rollup_with_variants(&model, "Drone", "mass", AggregationMethod::Sum, &sel);
         assert!((result.total - 3.2).abs() < 1e-9, "got {}", result.total);
     }
 

@@ -13,11 +13,11 @@ pub mod naming;
 pub mod orphaned_requirements;
 pub mod ports;
 pub mod references;
-pub mod value_constraints;
 pub mod requirements;
 pub mod self_specialization;
 pub mod syntax;
 pub mod unbound_ports;
+pub mod value_constraints;
 
 use crate::diagnostic::Diagnostic;
 use crate::model::Model;

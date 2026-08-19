@@ -4,7 +4,11 @@ use std::process::ExitCode;
 
 /// Resolve which gate constraint def `--check` evaluates:
 /// CLI flag > `[gates]` config > conventional name.
-pub(crate) fn resolve_gate_name(flag: Option<&str>, config_gate: Option<String>, conventional: &str) -> String {
+pub(crate) fn resolve_gate_name(
+    flag: Option<&str>,
+    config_gate: Option<String>,
+    conventional: &str,
+) -> String {
     flag.map(|s| s.to_string())
         .or(config_gate)
         .unwrap_or_else(|| conventional.to_string())

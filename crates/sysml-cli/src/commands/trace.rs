@@ -16,8 +16,7 @@ pub(crate) fn run(cli: &Cli, files: &[PathBuf], check: bool, gate: Option<&str>)
     {
         let mut all = vec![merged.clone()];
         all.extend(context.iter().cloned());
-        let (satisfied, verified) =
-            sysml_core::resolver::traced_requirement_defs(all.iter());
+        let (satisfied, verified) = sysml_core::resolver::traced_requirement_defs(all.iter());
         merged.external_satisfied = satisfied.into_iter().collect();
         merged.external_verified = verified.into_iter().collect();
     }
@@ -132,7 +131,8 @@ pub(crate) fn run(cli: &Cli, files: &[PathBuf], check: bool, gate: Option<&str>)
                     eprintln!(
                         "error: {} requirement(s) missing satisfaction or verification \
                          (declare a {} constraint to set a threshold)",
-                        total - coverage.fully_traced_count, gate_name
+                        total - coverage.fully_traced_count,
+                        gate_name
                     );
                     return ExitCode::from(1);
                 }

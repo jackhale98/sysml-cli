@@ -105,20 +105,21 @@ fn find_occurrences(model: &Model, source: &str, old_name: &str) -> Vec<Occurren
     };
 
     for imp in &model.imports {
-        scan_span(
-            &imp.span,
-            imp.path.split("::").any(|seg| seg == target),
-        );
+        scan_span(&imp.span, imp.path.split("::").any(|seg| seg == target));
     }
     for s in &model.satisfactions {
         let mentions = simple_name(&s.requirement) == target
-            || s.requirement.split("::").any(|seg| simple_name(seg) == target)
+            || s.requirement
+                .split("::")
+                .any(|seg| simple_name(seg) == target)
             || s.by.as_deref().map(simple_name) == Some(target);
         scan_span(&s.span, mentions);
     }
     for v in &model.verifications {
         let mentions = simple_name(&v.requirement) == target
-            || v.requirement.split("::").any(|seg| simple_name(seg) == target)
+            || v.requirement
+                .split("::")
+                .any(|seg| simple_name(seg) == target)
             || simple_name(&v.by) == target;
         scan_span(&v.span, mentions);
     }

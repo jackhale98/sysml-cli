@@ -198,7 +198,8 @@ pub fn rss(inputs: &[UncertainInput], target: &Target, settings: &Settings) -> R
     };
 
     let sigma3 = 3.0 * sigma;
-    let margin = (target.upper - (shifted_mean + sigma3)).min((shifted_mean - sigma3) - target.lower);
+    let margin =
+        (target.upper - (shifted_mean + sigma3)).min((shifted_mean - sigma3) - target.lower);
 
     RssResult {
         mean,
@@ -735,13 +736,25 @@ mod histogram_tests {
             sense: 1.0,
             source: None,
         }];
-        let target = Target { nominal: 10.0, lower: 8.0, upper: 12.0 };
-        let settings = Settings { iterations: 5000, seed: Some(7), ..Default::default() };
+        let target = Target {
+            nominal: 10.0,
+            lower: 8.0,
+            upper: 12.0,
+        };
+        let settings = Settings {
+            iterations: 5000,
+            seed: Some(7),
+            ..Default::default()
+        };
         let r = monte_carlo(&inputs, &target, &settings, 0);
         assert_eq!(r.histogram.iter().map(|b| b.count).sum::<u64>(), 5000);
         // Deterministic: same seed, same bins.
         let r2 = monte_carlo(&inputs, &target, &settings, 0);
         assert_eq!(r.histogram.len(), r2.histogram.len());
-        assert!(r.histogram.iter().zip(&r2.histogram).all(|(a, b)| a.count == b.count));
+        assert!(r
+            .histogram
+            .iter()
+            .zip(&r2.histogram)
+            .all(|(a, b)| a.count == b.count));
     }
 }

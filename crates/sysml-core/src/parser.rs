@@ -87,7 +87,8 @@ fn get_supertype(node: &Node, source: &[u8]) -> Option<String> {
 
 /// Get the type reference from a colon type relationship.
 fn get_type_ref(node: &Node, source: &[u8]) -> Option<String> {
-    get_type_ref_node(node).map(|t| node_text(&t, source).to_string())
+    get_type_ref_node(node)
+        .map(|t| node_text(&t, source).to_string())
         // Also check for specialization as a type relationship
         .or_else(|| get_supertype(node, source))
 }
@@ -1065,18 +1066,12 @@ fn walk_node_scoped(
             let mut cursor = node.walk();
             let target = node
                 .children(&mut cursor)
-                .find(|c| {
-                    matches!(
-                        c.kind(),
-                        "qualified_name" | "identifier" | "feature_chain"
-                    )
-                })
+                .find(|c| matches!(c.kind(), "qualified_name" | "identifier" | "feature_chain"))
                 .map(|c| node_text(&c, source).to_string());
             if let Some(target) = target {
-                let name = crate::model::unquote_name(
-                    target.rsplit("::").next().unwrap_or(&target),
-                )
-                .to_string();
+                let name =
+                    crate::model::unquote_name(target.rsplit("::").next().unwrap_or(&target))
+                        .to_string();
                 let value_expr = get_value_expr(&node, source);
                 model.usages.push(Usage {
                     kind: "attribute".to_string(),
@@ -1307,8 +1302,7 @@ fn walk_node_scoped(
             if refs.len() >= 2 {
                 model.connections.push(Connection {
                     name: None,
-                    type_ref: get_type_ref_node(&node)
-                        .map(|t| node_text(&t, source).to_string()),
+                    type_ref: get_type_ref_node(&node).map(|t| node_text(&t, source).to_string()),
                     source: refs[0].clone(),
                     target: refs[1].clone(),
                     span: Span::from_node(&node),
@@ -1416,10 +1410,8 @@ fn walk_node_scoped(
                                         // Keyword-named fields are written
                                         // quoted ('occurrence' = 3) in
                                         // conformant SysML - normalize.
-                                        let key = crate::model::unquote_name(
-                                            node_text(&n, source),
-                                        )
-                                        .to_string();
+                                        let key = crate::model::unquote_name(node_text(&n, source))
+                                            .to_string();
                                         values.push((key, vtext));
                                     }
                                 }
@@ -1467,8 +1459,7 @@ fn walk_node_scoped(
                 model.annotations.push(MetadataAnnotation {
                     metadata_type: meta_name.clone(),
                     values,
-                    target: about_target
-                        .or_else(|| parent_def_name.map(|s| s.to_string())),
+                    target: about_target.or_else(|| parent_def_name.map(|s| s.to_string())),
                     span: Span::from_node(&node),
                 });
                 model.usages.push(Usage {
@@ -1788,8 +1779,7 @@ fn extract_connect_clause(node: &Node, source: &[u8], model: &mut Model) {
             if refs.len() >= 2 {
                 model.connections.push(Connection {
                     name: field_text(node, "name", source),
-                    type_ref: get_type_ref_node(node)
-                        .map(|t| node_text(&t, source).to_string()),
+                    type_ref: get_type_ref_node(node).map(|t| node_text(&t, source).to_string()),
                     source: refs[0].clone(),
                     target: refs[1].clone(),
                     span: Span::from_node(&child),

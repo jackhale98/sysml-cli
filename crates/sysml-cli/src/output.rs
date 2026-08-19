@@ -91,7 +91,10 @@ fn table_text(t: &RenderedTable) {
             .to_string()
     };
     println!("{}", line(&t.columns));
-    println!("{}", "-".repeat(widths.iter().sum::<usize>() + 2 * (widths.len().saturating_sub(1))));
+    println!(
+        "{}",
+        "-".repeat(widths.iter().sum::<usize>() + 2 * (widths.len().saturating_sub(1)))
+    );
     for row in &t.rows {
         println!("{}", line(row));
     }
@@ -108,7 +111,11 @@ fn table_csv(t: &RenderedTable) {
     };
     println!(
         "{}",
-        t.columns.iter().map(|c| esc(c)).collect::<Vec<_>>().join(",")
+        t.columns
+            .iter()
+            .map(|c| esc(c))
+            .collect::<Vec<_>>()
+            .join(",")
     );
     for row in &t.rows {
         println!(
@@ -122,7 +129,11 @@ fn table_markdown(t: &RenderedTable) {
     let esc = |s: &str| s.replace('|', "\\|");
     println!(
         "| {} |",
-        t.columns.iter().map(|c| esc(c)).collect::<Vec<_>>().join(" | ")
+        t.columns
+            .iter()
+            .map(|c| esc(c))
+            .collect::<Vec<_>>()
+            .join(" | ")
     );
     println!("|{}|", vec!["---"; t.columns.len()].join("|"));
     for row in &t.rows {

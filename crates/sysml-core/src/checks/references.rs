@@ -424,7 +424,9 @@ mod tests {
         let model = crate::parser::parse_file("test.sysml", source);
         let diags = UnresolvedTypeCheck.run(&model);
         assert!(
-            diags.iter().any(|d| d.message.contains("ISQ::doesNotExist")),
+            diags
+                .iter()
+                .any(|d| d.message.contains("ISQ::doesNotExist")),
             "nonexistent stdlib member must be flagged: {:?}",
             diags.iter().map(|d| &d.message).collect::<Vec<_>>()
         );

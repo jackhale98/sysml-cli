@@ -62,9 +62,7 @@ pub fn run(cli: &Cli, name: Option<&str>, files: &[PathBuf], renderer: &str) -> 
         if cli.format == "json" {
             let items: Vec<_> = views
                 .iter()
-                .map(|(n, f, spec)| {
-                    serde_json::json!({ "name": n, "file": f, "renderable": spec })
-                })
+                .map(|(n, f, spec)| serde_json::json!({ "name": n, "file": f, "renderable": spec }))
                 .collect();
             println!("{}", serde_json::to_string_pretty(&items).unwrap());
         } else {

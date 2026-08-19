@@ -5,7 +5,12 @@ use crate::convert::span_to_range;
 use crate::document_symbols::def_kind_to_symbol_kind;
 
 /// Build a TypeHierarchyItem for a definition by name.
-pub fn prepare_type_hierarchy(model: &Model, source: &str, uri: &Uri, name: &str) -> Option<TypeHierarchyItem> {
+pub fn prepare_type_hierarchy(
+    model: &Model,
+    source: &str,
+    uri: &Uri,
+    name: &str,
+) -> Option<TypeHierarchyItem> {
     let def = model.find_def(name)?;
     Some(make_item(
         &def.name,

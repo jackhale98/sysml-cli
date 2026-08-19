@@ -161,12 +161,7 @@ fn metadata_matches(model: &Model, element: &str, filter: &ListFilter) -> bool {
         return true;
     };
     use crate::model::unquote_name;
-    let loose = |v: &str| {
-        unquote_name(
-            simple_name(v.trim().trim_matches('"')),
-        )
-        .to_string()
-    };
+    let loose = |v: &str| unquote_name(simple_name(v.trim().trim_matches('"'))).to_string();
     model.annotations.iter().any(|a| {
         a.target.as_deref().map(unquote_name) == Some(unquote_name(element))
             && simple_name(&a.metadata_type) == meta_type.as_str()
@@ -386,10 +381,9 @@ pub fn parse_kind_filter(s: &str) -> Option<KindFilter> {
             "attribute".to_string(),
         )),
         "items" | "item" => Some(KindFilter::Both(DefKind::Item, "item".to_string())),
-        "analyses" | "analysis" => Some(KindFilter::Both(
-            DefKind::Analysis,
-            "analysis".to_string(),
-        )),
+        "analyses" | "analysis" => {
+            Some(KindFilter::Both(DefKind::Analysis, "analysis".to_string()))
+        }
 
         // Definition-only filters (suffix -def)
         "part-def" => Some(KindFilter::DefKind(DefKind::Part)),
@@ -469,8 +463,7 @@ pub fn trace_requirements(model: &Model) -> Vec<TraceRow> {
     let mut rows = Vec::new();
 
     for usage in &req_usages {
-        let (satisfied_by, verified_by) =
-            collect_matches(&usage.name, usage.short_name.as_deref());
+        let (satisfied_by, verified_by) = collect_matches(&usage.name, usage.short_name.as_deref());
         rows.push(TraceRow {
             requirement: usage.name.clone(),
             id: usage
@@ -773,7 +766,11 @@ pub fn dependency_analysis(model: &Model, target_name: &str) -> DepAnalysis {
     // what either means.
     for c in &model.connections {
         let label = |dir: &str| {
-            let ty = c.type_ref.as_deref().map(simple_name).unwrap_or("connection");
+            let ty = c
+                .type_ref
+                .as_deref()
+                .map(simple_name)
+                .unwrap_or("connection");
             match c.name.as_deref() {
                 Some(n) => format!("{dir} {ty} ({n})"),
                 None => format!("{dir} {ty}"),
@@ -1240,10 +1237,8 @@ pub fn evaluate_gate(
         env.bind(*k, Value::Number(*v));
     }
 
-    let exprs = crate::checks::value_constraints::constraints_of(
-        std::slice::from_ref(model),
-        &def_name,
-    );
+    let exprs =
+        crate::checks::value_constraints::constraints_of(std::slice::from_ref(model), &def_name);
     let mut failed = Vec::new();
     for (expr, _, _) in &exprs {
         let ok = crate::sim::expr_parser::parse_expr_str(expr)
@@ -1272,15 +1267,22 @@ pub fn evaluate_gate(
 /// vocabulary is fixed — `documented`, `typedUsages`, `reqSatisfied`,
 /// `reqVerified` (each 0-100) — and the expression may use any subset,
 /// so models control the weighting without any tool-side configuration.
-fn model_quality_score(model: &Model, documented: f64, typed: f64, sat: f64, ver: f64) -> Option<f64> {
+fn model_quality_score(
+    model: &Model,
+    documented: f64,
+    typed: f64,
+    sat: f64,
+    ver: f64,
+) -> Option<f64> {
     use crate::model::unquote_name;
     let def = model
         .definitions
         .iter()
         .find(|d| d.kind == DefKind::Calc && unquote_name(&d.name) == "QualityScore")?;
-    let ret = model.usages.iter().find(|u| {
-        u.parent_def.as_deref() == Some(def.name.as_str()) && u.kind == "return"
-    })?;
+    let ret = model
+        .usages
+        .iter()
+        .find(|u| u.parent_def.as_deref() == Some(def.name.as_str()) && u.kind == "return")?;
     let expr = ret.value_expr.as_deref()?;
     let parsed = crate::sim::expr_parser::parse_expr_str(expr).ok()?;
     let mut env = crate::sim::expr::Env::new();
@@ -1651,10 +1653,16 @@ mod tests {
         let rows = trace_requirements(&model);
         // The def is typed by a usage, so only the two usages are rows.
         assert_eq!(rows.len(), 2, "rows: {rows:?}");
-        let flight = rows.iter().find(|r| r.requirement == "uavFlightTime").unwrap();
+        let flight = rows
+            .iter()
+            .find(|r| r.requirement == "uavFlightTime")
+            .unwrap();
         assert_eq!(flight.id.as_deref(), Some("REQ2"));
         assert!(!flight.satisfied_by.is_empty(), "usage satisfy must match");
-        let speed = rows.iter().find(|r| r.requirement == "uavMaxSpeed").unwrap();
+        let speed = rows
+            .iter()
+            .find(|r| r.requirement == "uavMaxSpeed")
+            .unwrap();
         assert_eq!(speed.id.as_deref(), Some("REQ3"));
         assert_eq!(speed.satisfied_by, vec!["theDrone".to_string()]);
     }
@@ -2164,7 +2172,10 @@ mod tests {
         let elements = list_elements(&model, &filter);
         let names: Vec<&str> = elements.iter().map(|e| e.name()).collect();
         assert!(names.contains(&"Engine"), "{names:?}");
-        assert!(!names.contains(&"Chassis"), "where clause filters: {names:?}");
+        assert!(
+            !names.contains(&"Chassis"),
+            "where clause filters: {names:?}"
+        );
     }
 
     #[test]

@@ -50,8 +50,7 @@ pub fn check_value_constraints(models: &[Model], target_files: &[String]) -> Vec
                     continue;
                 };
                 // The field's declared type on the metadata def.
-                let Some(field_type) = member_type(models, meta_def_model, meta_name, field)
-                else {
+                let Some(field_type) = member_type(models, meta_def_model, meta_name, field) else {
                     continue;
                 };
                 let mut env = Env::new();
@@ -65,9 +64,10 @@ pub fn check_value_constraints(models: &[Model], target_files: &[String]) -> Vec
                             &format!(
                                 "@{} {field} = {raw} violates constraint {} of `{}` ({})",
                                 meta_name,
-                                cname.as_deref().map(|n| format!("`{n}`")).unwrap_or_else(
-                                    || "".to_string()
-                                ),
+                                cname
+                                    .as_deref()
+                                    .map(|n| format!("`{n}`"))
+                                    .unwrap_or_else(|| "".to_string()),
                                 tname,
                                 cexpr.trim()
                             ),
@@ -113,7 +113,10 @@ pub fn check_value_constraints(models: &[Model], target_files: &[String]) -> Vec
                         &format!(
                             "`{}` violates constraint {} of `{}` ({})",
                             u.name,
-                            cname.as_deref().map(|n| format!("`{n}`")).unwrap_or_default(),
+                            cname
+                                .as_deref()
+                                .map(|n| format!("`{n}`"))
+                                .unwrap_or_default(),
                             tname,
                             cexpr.trim()
                         ),
@@ -127,8 +130,10 @@ pub fn check_value_constraints(models: &[Model], target_files: &[String]) -> Vec
 }
 
 fn violation(file: &str, span: crate::model::Span, msg: &str) -> Diagnostic {
-    Diagnostic::warning(file, span, codes::CONSTRAINT_VIOLATION, msg.to_string())
-        .with_suggestion("the constraint comes from the value's declared type — fix the value or the type".to_string())
+    Diagnostic::warning(file, span, codes::CONSTRAINT_VIOLATION, msg.to_string()).with_suggestion(
+        "the constraint comes from the value's declared type — fix the value or the type"
+            .to_string(),
+    )
 }
 
 /// Evaluate a constraint expression; None when it cannot be evaluated
@@ -140,7 +145,10 @@ fn eval_constraint(expr: &str, env: &Env) -> Option<bool> {
 
 /// All assert-constraint expressions on a definition and its supertypes:
 /// (expression, constraint name, owning type name).
-pub(crate) fn constraints_of(models: &[Model], type_name: &str) -> Vec<(String, Option<String>, String)> {
+pub(crate) fn constraints_of(
+    models: &[Model],
+    type_name: &str,
+) -> Vec<(String, Option<String>, String)> {
     let mut out = Vec::new();
     let mut current = type_name.to_string();
     let mut seen = HashSet::new();
@@ -149,13 +157,15 @@ pub(crate) fn constraints_of(models: &[Model], type_name: &str) -> Vec<(String, 
             break;
         };
         for u in &m.usages {
-            if u.kind == "constraint"
-                && u.parent_def.as_deref() == Some(current.as_str())
-            {
+            if u.kind == "constraint" && u.parent_def.as_deref() == Some(current.as_str()) {
                 if let Some(ref expr) = u.value_expr {
                     out.push((
                         expr.clone(),
-                        if u.name.is_empty() { None } else { Some(u.name.clone()) },
+                        if u.name.is_empty() {
+                            None
+                        } else {
+                            Some(u.name.clone())
+                        },
                         current.clone(),
                     ));
                 }
@@ -173,11 +183,7 @@ pub(crate) fn constraints_of(models: &[Model], type_name: &str) -> Vec<(String, 
 }
 
 /// The model that defines `name` (optionally restricted by kind).
-fn find_def_model<'a>(
-    models: &'a [Model],
-    name: &str,
-    kind: Option<DefKind>,
-) -> Option<&'a Model> {
+fn find_def_model<'a>(models: &'a [Model], name: &str, kind: Option<DefKind>) -> Option<&'a Model> {
     models.iter().find(|m| {
         m.definitions
             .iter()
@@ -197,9 +203,11 @@ fn member_type(
     let mut seen = HashSet::new();
     let mut m = start_model;
     while seen.insert(current.clone()) {
-        if let Some(u) = m.usages.iter().find(|u| {
-            u.name == field && u.parent_def.as_deref() == Some(current.as_str())
-        }) {
+        if let Some(u) = m
+            .usages
+            .iter()
+            .find(|u| u.name == field && u.parent_def.as_deref() == Some(current.as_str()))
+        {
             return u.type_ref.as_deref().map(|t| simple_name(t).to_string());
         }
         let def = m.definitions.iter().find(|d| d.name == current)?;
@@ -247,10 +255,7 @@ mod tests {
     "#;
 
     fn run(user: &str) -> Vec<String> {
-        let models = vec![
-            parse_file("lib.sysml", LIB),
-            parse_file("user.sysml", user),
-        ];
+        let models = vec![parse_file("lib.sysml", LIB), parse_file("user.sysml", user)];
         check_value_constraints(&models, &["user.sysml".to_string()])
             .into_iter()
             .map(|d| d.message)

@@ -15,9 +15,10 @@ pub(crate) fn run(cli: &Cli, file: &PathBuf, element: &str, raw: bool) -> ExitCo
     // --raw mode: extract and print original SysML source text
     if raw {
         // Try definition first, then usage
-        let span = model.find_def_by_key(element).map(|d| &d.span).or_else(|| {
-            model.find_usage_by_key(element).map(|u| &u.span)
-        });
+        let span = model
+            .find_def_by_key(element)
+            .map(|d| &d.span)
+            .or_else(|| model.find_usage_by_key(element).map(|u| &u.span));
         match span {
             Some(span) => {
                 let text = &source[span.start_byte..span.end_byte];

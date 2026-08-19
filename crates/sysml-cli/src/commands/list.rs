@@ -82,9 +82,11 @@ pub(crate) fn run(
         type_names: type_name.map(|t| {
             let context = crate::load_per_file_models(cli, files).unwrap_or_default();
             let closure = query::specialization_closure(&context, t);
-            if closure.len() == 1 && !context.iter().any(|m| {
-                m.definitions.iter().any(|d| d.name == t)
-            }) {
+            if closure.len() == 1
+                && !context
+                    .iter()
+                    .any(|m| m.definitions.iter().any(|d| d.name == t))
+            {
                 eprintln!(
                     "warning: no definition named `{t}` found; \
                      matching on that name alone (is its library on the include path?)"

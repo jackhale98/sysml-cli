@@ -434,7 +434,12 @@ pub fn solve_equations(
     loop {
         let mut progress = false;
         for eq in equations {
-            let Expr::BinaryOp { op: BinOp::Eq, lhs, rhs } = eq else {
+            let Expr::BinaryOp {
+                op: BinOp::Eq,
+                lhs,
+                rhs,
+            } = eq
+            else {
                 continue;
             };
             let try_bind = |var: &Expr,
@@ -453,9 +458,7 @@ pub fn solve_equations(
                 }
                 false
             };
-            if try_bind(lhs, rhs, env, &mut outcome)
-                || try_bind(rhs, lhs, env, &mut outcome)
-            {
+            if try_bind(lhs, rhs, env, &mut outcome) || try_bind(rhs, lhs, env, &mut outcome) {
                 progress = true;
             }
         }
@@ -515,16 +518,15 @@ pub fn evaluate_trade_study(_model: &Model, case: &AnalysisCaseModel) -> TradeRe
         .map(|alt| {
             // Try to compute a score from overrides
             // Look for numeric overrides that could serve as evaluation criteria
-            let score = alt
-                .overrides
-                .iter()
-                .find(|(k, _)| k.contains("cost") || k.contains("mass") || k.contains("eval"))
-                .and_then(|(_, v)| {
-                    v.trim()
-                        .parse::<f64>()
-                        .ok()
-                        .or_else(|| crate::sim::resolve::parse_value_with_unit(v).map(|(n, _)| n))
-                });
+            let score =
+                alt.overrides
+                    .iter()
+                    .find(|(k, _)| k.contains("cost") || k.contains("mass") || k.contains("eval"))
+                    .and_then(|(_, v)| {
+                        v.trim().parse::<f64>().ok().or_else(|| {
+                            crate::sim::resolve::parse_value_with_unit(v).map(|(n, _)| n)
+                        })
+                    });
 
             AlternativeScore {
                 name: alt.name.clone(),
@@ -781,7 +783,10 @@ mod tests {
             }
         "#;
         let constraints = crate::sim::constraint_eval::extract_constraints("t.sysml", source);
-        let equations: Vec<_> = constraints.into_iter().filter_map(|c| c.expression).collect();
+        let equations: Vec<_> = constraints
+            .into_iter()
+            .filter_map(|c| c.expression)
+            .collect();
         assert_eq!(equations.len(), 2, "both assert constraints extracted");
 
         let mut env = Env::new();
@@ -801,7 +806,10 @@ mod tests {
             }
         "#;
         let constraints = crate::sim::constraint_eval::extract_constraints("t.sysml", source);
-        let equations: Vec<_> = constraints.into_iter().filter_map(|c| c.expression).collect();
+        let equations: Vec<_> = constraints
+            .into_iter()
+            .filter_map(|c| c.expression)
+            .collect();
         let mut env = Env::new();
         let outcome = solve_equations(&equations, &mut env);
         assert!(outcome.solved.is_empty());

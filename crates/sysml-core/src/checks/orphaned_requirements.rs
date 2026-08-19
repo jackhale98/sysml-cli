@@ -73,16 +73,13 @@ impl Check for OrphanedRequirementCheck {
             if def.kind != DefKind::Requirement {
                 continue;
             }
-            if referenced.contains(def.name.as_str())
-                || id_referenced.contains(def.name.as_str())
-            {
+            if referenced.contains(def.name.as_str()) || id_referenced.contains(def.name.as_str()) {
                 continue;
             }
             // Cross-file wiring: referenced (typed, specialized, subset) or
             // satisfied/verified by a sibling file in the same invocation.
-            let ext = |t: &String| {
-                crate::model::target_matches(t, &def.name, def.short_name.as_deref())
-            };
+            let ext =
+                |t: &String| crate::model::target_matches(t, &def.name, def.short_name.as_deref());
             if model.external_references.iter().any(|r| r == &def.name)
                 || model.external_satisfied.iter().any(ext)
                 || model.external_verified.iter().any(ext)

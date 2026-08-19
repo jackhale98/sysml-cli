@@ -838,7 +838,10 @@ fn quoted_keyword_names_normalize() {
 #[test]
 fn normalize_name_path_leaves_non_names_alone() {
     use sysml_core::model::normalize_name_path;
-    assert_eq!(normalize_name_path("RiskCategory::'use'"), "RiskCategory::use");
+    assert_eq!(
+        normalize_name_path("RiskCategory::'use'"),
+        "RiskCategory::use"
+    );
     assert_eq!(normalize_name_path("'transition'"), "transition");
     assert_eq!(normalize_name_path("plain::path"), "plain::path");
     // String literals and expressions pass through untouched.

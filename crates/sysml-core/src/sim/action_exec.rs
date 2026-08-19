@@ -146,9 +146,12 @@ fn execute_step(action_step: &ActionStep, state: &mut ActionExecState, config: &
                 let guard_ok = match &branch.guard {
                     None => true,
                     Some(expr) => eval::evaluate_constraint(expr, &state.env).unwrap_or_else(|e| {
-                eprintln!("warning: guard failed to evaluate ({}); treating as false", e.message);
-                false
-            }),
+                        eprintln!(
+                            "warning: guard failed to evaluate ({}); treating as false",
+                            e.message
+                        );
+                        false
+                    }),
                 };
                 if guard_ok {
                     taken = Some(branch);
@@ -195,10 +198,14 @@ fn execute_step(action_step: &ActionStep, state: &mut ActionExecState, config: &
             else_step,
             ..
         } => {
-            let cond_result = eval::evaluate_constraint(condition, &state.env).unwrap_or_else(|e| {
-                eprintln!("warning: condition failed to evaluate ({}); treating as false", e.message);
-                false
-            });
+            let cond_result =
+                eval::evaluate_constraint(condition, &state.env).unwrap_or_else(|e| {
+                    eprintln!(
+                        "warning: condition failed to evaluate ({}); treating as false",
+                        e.message
+                    );
+                    false
+                });
             state.trace.push(ActionExecStep {
                 step: state.step,
                 kind: "if".to_string(),
@@ -262,10 +269,14 @@ fn execute_step(action_step: &ActionStep, state: &mut ActionExecState, config: &
                     state.status = ActionExecStatus::MaxSteps;
                     break;
                 }
-                let cond_result = eval::evaluate_constraint(condition, &state.env).unwrap_or_else(|e| {
-                eprintln!("warning: condition failed to evaluate ({}); treating as false", e.message);
-                false
-            });
+                let cond_result =
+                    eval::evaluate_constraint(condition, &state.env).unwrap_or_else(|e| {
+                        eprintln!(
+                            "warning: condition failed to evaluate ({}); treating as false",
+                            e.message
+                        );
+                        false
+                    });
                 if !cond_result {
                     break;
                 }
@@ -676,9 +687,7 @@ mod tests {
         );
         // Exactly ONE decide branch executes
         let found = performed.iter().any(|d| d.contains("signalTargetFound"));
-        let not_found = performed
-            .iter()
-            .any(|d| d.contains("signalTargetNotFound"));
+        let not_found = performed.iter().any(|d| d.contains("signalTargetNotFound"));
         assert!(
             found ^ not_found,
             "exactly one decide branch must execute: {performed:?}"

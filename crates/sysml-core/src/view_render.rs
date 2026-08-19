@@ -71,7 +71,9 @@ pub fn render_view(
     targets: &[String],
     view_name: &str,
 ) -> Result<RenderedTable, String> {
-    let view_exists = models.iter().any(|m| m.views.iter().any(|v| v.name == view_name));
+    let view_exists = models
+        .iter()
+        .any(|m| m.views.iter().any(|v| v.name == view_name));
     if !view_exists {
         let names: Vec<String> = available_views(models)
             .into_iter()
@@ -188,9 +190,7 @@ pub fn render_view(
 type Row = Vec<(String, String)>;
 
 fn field(row: &Row, name: &str) -> Option<String> {
-    row.iter()
-        .find(|(k, _)| k == name)
-        .map(|(_, v)| v.clone())
+    row.iter().find(|(k, _)| k == name).map(|(_, v)| v.clone())
 }
 
 /// Models whose content produces rows: the targets, or everything when
@@ -469,8 +469,7 @@ fn relation_rows(content: &[Model], models: &[Model], rel: &str) -> Result<Vec<R
                     if u.kind != "succession" {
                         continue;
                     }
-                    let (Some(src), Some(tgt)) = (u.source.as_deref(), u.target.as_deref())
-                    else {
+                    let (Some(src), Some(tgt)) = (u.source.as_deref(), u.target.as_deref()) else {
                         continue;
                     };
                     match (type_filter, u.type_ref.as_deref()) {
@@ -531,8 +530,14 @@ fn trace_rows(models: &[Model]) -> Vec<Row> {
                         .map(|s| crate::model::unquote_name(s).to_string())
                         .unwrap_or_default(),
                 ),
-                ("satisfied".into(), if satisfied { "yes" } else { "no" }.into()),
-                ("verified".into(), if verified { "yes" } else { "no" }.into()),
+                (
+                    "satisfied".into(),
+                    if satisfied { "yes" } else { "no" }.into(),
+                ),
+                (
+                    "verified".into(),
+                    if verified { "yes" } else { "no" }.into(),
+                ),
                 ("file".into(), m.file.clone()),
             ]);
         }
@@ -578,11 +583,7 @@ fn kindcount_rows(models: &[Model]) -> Vec<Row> {
 }
 
 /// One row per uncertainty analysis case, evaluated (worst-case + RSS).
-fn uncertainty_rows(
-    content: &[Model],
-    models: &[Model],
-    warnings: &mut Vec<String>,
-) -> Vec<Row> {
+fn uncertainty_rows(content: &[Model], models: &[Model], warnings: &mut Vec<String>) -> Vec<Row> {
     use crate::sim::uncertainty::{rss, worst_case, PassFail};
     use crate::sim::uncertainty_model::{extract_case, find_uncertainty_cases};
 
@@ -896,7 +897,14 @@ mod tests {
         let t = render_view(&models(), &[], "Worksheet").expect("render");
         assert_eq!(
             t.columns,
-            vec!["element", "failureMode", "severity", "occurrence", "detection", "rpn"]
+            vec![
+                "element",
+                "failureMode",
+                "severity",
+                "occurrence",
+                "detection",
+                "rpn"
+            ]
         );
         assert_eq!(t.rows.len(), 2);
         // Sorted by RPN descending: 9*3*4=108 first, 5*6*3=90 second.
@@ -1025,11 +1033,7 @@ mod tests {
         "#;
         let ms = vec![parse_file("f.sysml", src)];
         let out = render_view(&ms, &[], "Fits").unwrap();
-        let names: Vec<&str> = out
-            .rows
-            .iter()
-            .map(|r| r[0].as_str())
-            .collect();
+        let names: Vec<&str> = out.rows.iter().map(|r| r[0].as_str()).collect();
         // Bolted specializes Mate, so it is a fit; Causation is not.
         assert_eq!(names, vec!["m1", "m2"], "{out:?}");
     }

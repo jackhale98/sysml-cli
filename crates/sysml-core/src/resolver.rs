@@ -97,10 +97,7 @@ impl Project {
             for def in &model.definitions {
                 if def.kind == crate::model::DefKind::Package {
                     if let Some(ref sn) = def.short_name {
-                        aliases.insert(
-                            unquote(sn).to_string(),
-                            unquote(&def.name).to_string(),
-                        );
+                        aliases.insert(unquote(sn).to_string(), unquote(&def.name).to_string());
                     }
                 }
             }
@@ -691,8 +688,18 @@ mod tests {
         model.external_verified = verified.into_iter().collect();
         model.external_references = proj.external_references_for(&model);
         let mut msgs = Vec::new();
-        msgs.extend(UnsatisfiedReqCheck.run(&model).into_iter().map(|d| d.message));
-        msgs.extend(UnverifiedReqCheck.run(&model).into_iter().map(|d| d.message));
+        msgs.extend(
+            UnsatisfiedReqCheck
+                .run(&model)
+                .into_iter()
+                .map(|d| d.message),
+        );
+        msgs.extend(
+            UnverifiedReqCheck
+                .run(&model)
+                .into_iter()
+                .map(|d| d.message),
+        );
         msgs.extend(
             OrphanedRequirementCheck
                 .run(&model)
@@ -757,4 +764,3 @@ mod tests {
         );
     }
 }
-

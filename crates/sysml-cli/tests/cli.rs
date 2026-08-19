@@ -847,8 +847,6 @@ fn rollup_unknown_method() {
 // analyze
 // ========================================================================
 
-
-
 #[test]
 fn analyze_run() {
     cmd()

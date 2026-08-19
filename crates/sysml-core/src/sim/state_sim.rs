@@ -334,7 +334,10 @@ pub fn step(
         let guard_result = match &transition.guard {
             None => true,
             Some(expr) => eval::evaluate_constraint(expr, &state.env).unwrap_or_else(|e| {
-                eprintln!("warning: guard failed to evaluate ({}); treating as false", e.message);
+                eprintln!(
+                    "warning: guard failed to evaluate ({}); treating as false",
+                    e.message
+                );
                 false
             }),
         };
@@ -836,7 +839,9 @@ mod tests {
         let machines = crate::sim::state_parser::extract_state_machines("t.sysml", source);
         let m = machines.iter().find(|m| m.name == "M").unwrap();
         assert!(
-            m.transitions.iter().any(|t| t.source == "a" && t.target == "b"),
+            m.transitions
+                .iter()
+                .any(|t| t.source == "a" && t.target == "b"),
             "shorthand transition extracted: {:?}",
             m.transitions
         );

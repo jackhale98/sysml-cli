@@ -227,8 +227,7 @@ fn extract_state_body(
     // disambiguated — leading name that IS a state is a source shorthand
     // (Ch 28); one that isn't (e.g. `initial`) is an initial
     // pseudo-transition.
-    let mut known_states: std::collections::HashSet<String> =
-        std::collections::HashSet::new();
+    let mut known_states: std::collections::HashSet<String> = std::collections::HashSet::new();
     {
         let mut c = body.walk();
         for child in body.children(&mut c) {

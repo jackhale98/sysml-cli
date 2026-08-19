@@ -113,7 +113,11 @@ fn run_compute(
     }
 
     let result = sysml_core::sim::rollup::evaluate_rollup_with_variants(
-        &model, root, attr, agg, &selections,
+        &model,
+        root,
+        attr,
+        agg,
+        &selections,
     );
     print_conversion_warnings(&result);
 

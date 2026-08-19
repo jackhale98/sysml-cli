@@ -55,10 +55,7 @@ pub fn is_uncertainty_type(models: &[Model], type_name: &str) -> bool {
 /// `scope`. The two differ whenever the user names specific files: the
 /// case is theirs, but `ToleranceStackup :> UncertaintyCase` is only
 /// reachable through the libraries on the include path.
-pub fn find_uncertainty_cases(
-    content: &[Model],
-    scope: &[Model],
-) -> Vec<(String, String, String)> {
+pub fn find_uncertainty_cases(content: &[Model], scope: &[Model]) -> Vec<(String, String, String)> {
     let mut cases = Vec::new();
     for m in content {
         for u in &m.usages {
@@ -331,19 +328,15 @@ fn lookup_member<'a>(
 
 /// Read nominal/plus/minus/distribution/unit from an attribute usage's
 /// body redefinitions (with library defaults for the optional ones).
-fn harvest_values(
-    _models: &[Model],
-    m: &Model,
-    attr: &Usage,
-) -> Result<DimValues, String> {
+fn harvest_values(_models: &[Model], m: &Model, attr: &Usage) -> Result<DimValues, String> {
     let get = |name: &str| child_value_f64(m, attr, name);
 
     let (nominal, mut unit) = get("nominal")
         .ok_or_else(|| format!("dimension `{}` has no `nominal` value", attr.name))?;
-    let (plus, u2) = get("plus")
-        .ok_or_else(|| format!("dimension `{}` has no `plus` value", attr.name))?;
-    let (minus, u3) = get("minus")
-        .ok_or_else(|| format!("dimension `{}` has no `minus` value", attr.name))?;
+    let (plus, u2) =
+        get("plus").ok_or_else(|| format!("dimension `{}` has no `plus` value", attr.name))?;
+    let (minus, u3) =
+        get("minus").ok_or_else(|| format!("dimension `{}` has no `minus` value", attr.name))?;
     unit = unit.or(u2).or(u3);
 
     // Explicit `unit` attribute wins over unit brackets on the numbers.
@@ -351,13 +344,12 @@ fn harvest_values(
         unit = Some(u.trim().trim_matches('"').to_string());
     }
 
-    let distribution = match child_named(m, attr, "distribution")
-        .and_then(|u| u.value_expr.as_deref())
-    {
-        Some(v) if v.contains("uniform") => Distribution::Uniform,
-        Some(v) if v.contains("triangular") => Distribution::Triangular,
-        _ => Distribution::Normal,
-    };
+    let distribution =
+        match child_named(m, attr, "distribution").and_then(|u| u.value_expr.as_deref()) {
+            Some(v) if v.contains("uniform") => Distribution::Uniform,
+            Some(v) if v.contains("triangular") => Distribution::Triangular,
+            _ => Distribution::Normal,
+        };
 
     if plus < 0.0 || minus < 0.0 {
         return Err(format!(
@@ -683,7 +675,10 @@ mod tests {
         "#;
         let ms = vec![parse_file("bad.sysml", bad)];
         let err = extract_case(&ms, "gap").unwrap_err();
-        assert!(err.contains("nowhere") || err.contains("cannot resolve"), "{err}");
+        assert!(
+            err.contains("nowhere") || err.contains("cannot resolve"),
+            "{err}"
+        );
     }
 
     #[test]

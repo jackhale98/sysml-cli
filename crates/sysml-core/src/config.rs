@@ -946,7 +946,8 @@ mod gates_tests {
 
     #[test]
     fn gates_section_roundtrip() {
-        let toml = "[project]\nname = \"G\"\n\n[gates]\ncoverage = \"ShipGate\"\ntrace = \"RtmGate\"\n";
+        let toml =
+            "[project]\nname = \"G\"\n\n[gates]\ncoverage = \"ShipGate\"\ntrace = \"RtmGate\"\n";
         let cfg = ProjectConfig::from_toml_str(toml).unwrap();
         assert_eq!(cfg.gates.coverage.as_deref(), Some("ShipGate"));
         assert_eq!(cfg.gates.trace.as_deref(), Some("RtmGate"));

@@ -244,7 +244,11 @@ fn qualified_completions(
 
     // Definitions in the current file under a package with this name
     for def in &model.definitions {
-        if def.parent_def.as_deref().map(sysml_core::model::unquote_name) == Some(pkg)
+        if def
+            .parent_def
+            .as_deref()
+            .map(sysml_core::model::unquote_name)
+            == Some(pkg)
             && seen.insert(def.name.clone())
         {
             items.push(CompletionItem {
@@ -261,9 +265,7 @@ fn qualified_completions(
         if let Some(ref qn) = loc.qualified_name {
             let in_pkg = qn
                 .rsplit_once("::")
-                .map(|(prefix, _)| {
-                    prefix == pkg || prefix.ends_with(&format!("::{}", pkg))
-                })
+                .map(|(prefix, _)| prefix == pkg || prefix.ends_with(&format!("::{}", pkg)))
                 .unwrap_or(false);
             if in_pkg && seen.insert(loc.name.clone()) {
                 items.push(CompletionItem {

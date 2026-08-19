@@ -518,8 +518,7 @@ impl Model {
     pub fn find_def_by_key(&self, key: &str) -> Option<&Definition> {
         let k = unquote_name(key);
         self.definitions.iter().find(|d| {
-            unquote_name(&d.name) == k
-                || d.short_name.as_deref().map(unquote_name) == Some(k)
+            unquote_name(&d.name) == k || d.short_name.as_deref().map(unquote_name) == Some(k)
         })
     }
 
@@ -527,8 +526,7 @@ impl Model {
     pub fn find_usage_by_key(&self, key: &str) -> Option<&Usage> {
         let k = unquote_name(key);
         self.usages.iter().find(|u| {
-            unquote_name(&u.name) == k
-                || u.short_name.as_deref().map(unquote_name) == Some(k)
+            unquote_name(&u.name) == k || u.short_name.as_deref().map(unquote_name) == Some(k)
         })
     }
 
@@ -610,7 +608,9 @@ pub fn unquote_name(name: &str) -> &str {
 pub fn normalize_name_path(value: &str) -> String {
     let is_plain = |s: &str| {
         !s.is_empty()
-            && s.chars().next().is_some_and(|c| c.is_alphabetic() || c == '_')
+            && s.chars()
+                .next()
+                .is_some_and(|c| c.is_alphabetic() || c == '_')
             && s.chars().all(|c| c.is_alphanumeric() || c == '_')
     };
     let segs: Vec<&str> = value.split("::").collect();
@@ -621,7 +621,10 @@ pub fn normalize_name_path(value: &str) -> String {
                 .is_some_and(|inner| !inner.is_empty() && !inner.contains('\''))
     });
     if ok && !segs.is_empty() {
-        segs.iter().map(|s| unquote_name(s)).collect::<Vec<_>>().join("::")
+        segs.iter()
+            .map(|s| unquote_name(s))
+            .collect::<Vec<_>>()
+            .join("::")
     } else {
         value.to_string()
     }

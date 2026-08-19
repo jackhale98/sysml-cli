@@ -81,10 +81,8 @@ fn build_graph_from_body(body: &Node, source: &[u8]) -> FlowGraph {
                                 g.guards.insert((f.clone(), t.clone()), gd);
                             }
                             g.adj.entry(f).or_default().push(t.clone());
-                            fanout = matches!(
-                                g.kinds.get(t.as_str()),
-                                Some(&"fork") | Some(&"decide")
-                            );
+                            fanout =
+                                matches!(g.kinds.get(t.as_str()), Some(&"fork") | Some(&"decide"));
                             anchor = Some(t);
                         }
                         None => {
@@ -173,8 +171,7 @@ fn build_graph_from_body(body: &Node, source: &[u8]) -> FlowGraph {
                                     g.others.push(ActionStep::IfAction {
                                         condition,
                                         then_step,
-                                        else_step: extract_else_action(next, source)
-                                            .map(Box::new),
+                                        else_step: extract_else_action(next, source).map(Box::new),
                                         span,
                                     });
                                     i += 2;
@@ -264,8 +261,7 @@ fn then_target(node: &Node, source: &[u8]) -> ThenTarget {
     // Behavioral payloads are not flow-graph nodes
     if children.iter().any(|c| {
         matches!(c.kind(), "accept_clause" | "terminate_statement")
-            || (!c.is_named()
-                && matches!(node_text(c, source), "send" | "assign" | "while" | "if"))
+            || (!c.is_named() && matches!(node_text(c, source), "send" | "assign" | "while" | "if"))
     }) {
         return ThenTarget::Other;
     }
@@ -318,14 +314,7 @@ fn structure_graph(g: &FlowGraph) -> Vec<ActionStep> {
             .cloned()
     };
     let mut steps = match start {
-        Some(s) => walk_graph(
-            &s,
-            &g.adj,
-            &g.kinds,
-            &g.spans,
-            &g.guards,
-            &mut visited,
-        ),
+        Some(s) => walk_graph(&s, &g.adj, &g.kinds, &g.spans, &g.guards, &mut visited),
         None => Vec::new(),
     };
     // Declared join/merge nodes never reached by an edge still appear
@@ -336,9 +325,7 @@ fn structure_graph(g: &FlowGraph) -> Vec<ActionStep> {
         .filter(|(n, k)| matches!(**k, "join" | "merge") && !visited.contains(*n))
         .map(|(n, k)| (n, *k))
         .collect();
-    leftovers.sort_by_key(|(n, _)| {
-        g.spans.get(*n).map(|s| s.start_byte).unwrap_or(usize::MAX)
-    });
+    leftovers.sort_by_key(|(n, _)| g.spans.get(*n).map(|s| s.start_byte).unwrap_or(usize::MAX));
     for (n, k) in leftovers {
         let span = g.spans.get(n).cloned().unwrap_or_default();
         steps.push(if k == "join" {

@@ -236,8 +236,16 @@ pub fn build_ibd(model: &Model, def_name: &str) -> DiagramGraph {
         // Port paths (`flightController.escOut`) become the edge label so
         // the diagram shows WHICH ports connect.
         let port_label = {
-            let sp = conn.source.strip_prefix(src).unwrap_or("").trim_start_matches('.');
-            let tp = conn.target.strip_prefix(tgt).unwrap_or("").trim_start_matches('.');
+            let sp = conn
+                .source
+                .strip_prefix(src)
+                .unwrap_or("")
+                .trim_start_matches('.');
+            let tp = conn
+                .target
+                .strip_prefix(tgt)
+                .unwrap_or("")
+                .trim_start_matches('.');
             if sp.is_empty() && tp.is_empty() {
                 None
             } else {
@@ -2015,8 +2023,7 @@ mod tests {
         let mut graph = build_bdd(&model, None);
         let initial_count = graph.nodes.len();
         assert!(initial_count >= 3, "Should have Vehicle, Engine, FuelPort");
-        let matched = apply_view_filter(&mut graph, &model, "PartsOnly")
-            .expect("view exists");
+        let matched = apply_view_filter(&mut graph, &model, "PartsOnly").expect("view exists");
         assert!(matched > 0, "view should match part definitions");
         // After filtering, only part definitions should remain
         assert!(
@@ -2027,8 +2034,11 @@ mod tests {
 
     #[test]
     fn view_filter_unknown_view_errors() {
-        let model = parse_file("test.sysml", "part def Vehicle;
-");
+        let model = parse_file(
+            "test.sysml",
+            "part def Vehicle;
+",
+        );
         let mut graph = build_bdd(&model, None);
         let err = apply_view_filter(&mut graph, &model, "NoSuchView");
         assert!(err.is_err(), "unknown view must be an error, not a no-op");

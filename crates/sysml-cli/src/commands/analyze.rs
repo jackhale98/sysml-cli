@@ -5,8 +5,7 @@ use std::process::ExitCode;
 
 use sysml_core::parser as sysml_parser;
 use sysml_core::sim::analysis::{
-    evaluate_analysis, evaluate_trade_study, extract_analysis_cases_from_model,
-    AnalysisCaseModel,
+    evaluate_analysis, evaluate_trade_study, extract_analysis_cases_from_model, AnalysisCaseModel,
 };
 
 use crate::cli::AnalyzeCommand;
@@ -117,9 +116,7 @@ fn try_run_uncertainty(
             if cases.len() == 1 {
                 cases[0].0.clone()
             } else {
-                eprintln!(
-                    "error: multiple uncertainty analysis cases found; pick one with -n:"
-                );
+                eprintln!("error: multiple uncertainty analysis cases found; pick one with -n:");
                 for (n, file, ty) in &cases {
                     eprintln!("  {n} : {ty}  ({file})");
                 }
@@ -332,7 +329,6 @@ fn print_histogram(
 fn parse_models(cli: &Cli, files: &[PathBuf]) -> Option<sysml_core::model::Model> {
     crate::load_model(cli, files)
 }
-
 
 fn run_execute(cli: &Cli, files: &[PathBuf], name: Option<&str>, bindings: &[String]) -> ExitCode {
     let Some(model) = parse_models(cli, files) else {

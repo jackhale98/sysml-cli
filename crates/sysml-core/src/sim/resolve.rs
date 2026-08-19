@@ -56,9 +56,7 @@ pub fn parse_value_with_unit(expr: &str) -> Option<(f64, Option<String>)> {
     }
     let value: f64 = expr[..open].trim().parse().ok()?;
     let raw_unit = expr[open + 1..close].trim();
-    let unit = crate::model::unquote_name(
-        raw_unit.rsplit("::").next().unwrap_or(raw_unit),
-    );
+    let unit = crate::model::unquote_name(raw_unit.rsplit("::").next().unwrap_or(raw_unit));
     Some((value, Some(unit.to_string())))
 }
 
@@ -91,15 +89,20 @@ pub fn resolve_attribute_tree_with_variants(
     attribute_name: &str,
     selections: &std::collections::HashMap<String, String>,
 ) -> AttributeTree {
-    let (own_value, unit) =
-        match find_attribute_value_with_unit(model, root_def, attribute_name) {
-            Some((v, u)) => (Some(v), u),
-            None => (None, None),
-        };
+    let (own_value, unit) = match find_attribute_value_with_unit(model, root_def, attribute_name) {
+        Some((v, u)) => (Some(v), u),
+        None => (None, None),
+    };
     let mut visited = HashSet::new();
     visited.insert(root_def.to_string());
-    let children =
-        resolve_children(model, root_def, root_def, attribute_name, &mut visited, selections);
+    let children = resolve_children(
+        model,
+        root_def,
+        root_def,
+        attribute_name,
+        &mut visited,
+        selections,
+    );
 
     AttributeTree {
         root: root_def.to_string(),

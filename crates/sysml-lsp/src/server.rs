@@ -287,8 +287,7 @@ impl LanguageServer for SysmlLanguageServer {
         let Some(file_state) = self.state.files.get(&uri_str) else {
             return Ok(None);
         };
-        let symbols =
-            document_symbols::document_symbols(&file_state.model, &file_state.source);
+        let symbols = document_symbols::document_symbols(&file_state.model, &file_state.source);
         Ok(Some(DocumentSymbolResponse::Nested(symbols)))
     }
 
@@ -733,7 +732,13 @@ impl LanguageServer for SysmlLanguageServer {
             .state
             .files
             .iter()
-            .map(|e| (e.key().clone(), e.value().source.clone(), e.value().model.clone()))
+            .map(|e| {
+                (
+                    e.key().clone(),
+                    e.value().source.clone(),
+                    e.value().model.clone(),
+                )
+            })
             .collect();
         let models_refs: Vec<(&str, &str, &sysml_core::model::Model)> = models_data
             .iter()
@@ -757,7 +762,13 @@ impl LanguageServer for SysmlLanguageServer {
             .state
             .files
             .iter()
-            .map(|e| (e.key().clone(), e.value().source.clone(), e.value().model.clone()))
+            .map(|e| {
+                (
+                    e.key().clone(),
+                    e.value().source.clone(),
+                    e.value().model.clone(),
+                )
+            })
             .collect();
         let models_refs: Vec<(&str, &str, &sysml_core::model::Model)> = models_data
             .iter()
