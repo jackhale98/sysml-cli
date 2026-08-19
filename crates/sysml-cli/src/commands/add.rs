@@ -499,8 +499,8 @@ fn parse_file_context(file: &PathBuf) -> Option<sysml_core::model::Model> {
         }
         if let Ok((ext_path, ext_source)) = read_source(extra) {
             let ext_model = sysml_parser::parse_file(&ext_path, &ext_source);
-            model.definitions.extend(ext_model.definitions.into_iter());
-            model.usages.extend(ext_model.usages.into_iter());
+            model.definitions.extend(ext_model.definitions);
+            model.usages.extend(ext_model.usages);
         }
     }
 
