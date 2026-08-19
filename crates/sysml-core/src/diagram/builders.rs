@@ -431,11 +431,11 @@ pub fn build_req(model: &Model) -> DiagramGraph {
             model
                 .definitions
                 .iter()
-                .filter(|d| d.has_body)
-                .filter(|d| {
-                    d.span.start_byte <= s.span.start_byte && s.span.end_byte <= d.span.end_byte
+                .rfind(|d| {
+                    d.has_body
+                        && d.span.start_byte <= s.span.start_byte
+                        && s.span.end_byte <= d.span.end_byte
                 })
-                .next_back()
                 .map(|d| (i, d.name.as_str()))
         })
         .collect();
@@ -1153,11 +1153,11 @@ pub fn build_trace(model: &Model) -> DiagramGraph {
             model
                 .definitions
                 .iter()
-                .filter(|d| d.has_body)
-                .filter(|d| {
-                    d.span.start_byte <= s.span.start_byte && s.span.end_byte <= d.span.end_byte
+                .rfind(|d| {
+                    d.has_body
+                        && d.span.start_byte <= s.span.start_byte
+                        && s.span.end_byte <= d.span.end_byte
                 })
-                .next_back()
                 .map(|d| (i, d.name.as_str()))
         })
         .collect();

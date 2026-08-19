@@ -37,8 +37,7 @@ impl Check for ImportCycleCheck {
             let enclosing = model
                 .definitions
                 .iter()
-                .filter(|d| d.kind == DefKind::Package && d.span.contains(&import.span))
-                .next_back()
+                .rfind(|d| d.kind == DefKind::Package && d.span.contains(&import.span))
                 .map(|d| d.name.as_str())
                 .unwrap_or("");
 

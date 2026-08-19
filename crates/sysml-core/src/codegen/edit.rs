@@ -50,7 +50,7 @@ impl EditPlan {
 pub fn apply_edits(source: &str, plan: &EditPlan) -> Result<String, EditError> {
     let mut edits = plan.edits.clone();
     // Sort by start_byte descending so we apply from end to start
-    edits.sort_by(|a, b| b.start_byte.cmp(&a.start_byte));
+    edits.sort_by_key(|e| std::cmp::Reverse(e.start_byte));
 
     // Validate no overlaps
     for pair in edits.windows(2) {

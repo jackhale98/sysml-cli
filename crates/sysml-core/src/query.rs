@@ -198,10 +198,8 @@ pub fn list_elements<'a>(model: &'a Model, filter: &ListFilter) -> Vec<Element<'
     if include_defs {
         for def in &model.definitions {
             match &filter.kind {
-                Some(KindFilter::DefKind(k)) | Some(KindFilter::Both(k, _)) => {
-                    if def.kind != *k {
-                        continue;
-                    }
+                Some(KindFilter::DefKind(k)) | Some(KindFilter::Both(k, _)) if def.kind != *k => {
+                    continue;
                 }
                 _ => {}
             }
@@ -254,10 +252,10 @@ pub fn list_elements<'a>(model: &'a Model, filter: &ListFilter) -> Vec<Element<'
     if include_usages {
         for usage in &model.usages {
             match &filter.kind {
-                Some(KindFilter::UsageKind(k)) | Some(KindFilter::Both(_, k)) => {
-                    if usage.kind != *k {
-                        continue;
-                    }
+                Some(KindFilter::UsageKind(k)) | Some(KindFilter::Both(_, k))
+                    if usage.kind != *k =>
+                {
+                    continue;
                 }
                 _ => {}
             }

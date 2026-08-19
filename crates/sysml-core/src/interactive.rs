@@ -308,10 +308,7 @@ pub trait WizardRunner {
 pub fn run_wizard(runner: &dyn WizardRunner, steps: &[WizardStep]) -> Option<WizardResult> {
     let mut result = WizardResult::new();
     for step in steps {
-        match runner.run_step(step) {
-            Some(answer) => result.set(&step.id, answer),
-            None => return None,
-        }
+        result.set(&step.id, runner.run_step(step)?);
     }
     Some(result)
 }

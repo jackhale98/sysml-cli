@@ -294,12 +294,10 @@ fn extract_calc_body(
                     }
                 }
             }
-            "expression_statement" | "result_expression" => {
-                // Bare expression in calc body — use as return expression if none set
-                if return_expr.is_none() {
-                    if let Ok(expr) = extract_expr(&child, source) {
-                        *return_expr = Some(expr);
-                    }
+            // Bare expression in calc body — use as return expression if none set
+            "expression_statement" | "result_expression" if return_expr.is_none() => {
+                if let Ok(expr) = extract_expr(&child, source) {
+                    *return_expr = Some(expr);
                 }
             }
             _ => {}
