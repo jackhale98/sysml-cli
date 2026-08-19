@@ -74,8 +74,10 @@ view def FmeaWorksheet {
 ```
 
 `rows` selects a row provider (`@Metadata` annotations, `type:Def`
-usages, `kind:port`, `relation:satisfy|verify|allocation|connection`,
-`relation:connection:<Type>`, `composition` / `composition:<Root>`,
+usages, `kind:port`,
+`relation:satisfy|verify|allocation|connection|succession`,
+`relation:connection:<Type>`, `relation:succession:<Type>`,
+`composition` / `composition:<Root>`,
 `trace`, `kindcounts`, `uncertainty`); `columns` copies row fields or
 computes derived values with the standard expression language; `where`
 filters rows; `sortBy` orders (`-` prefix for descending); `pivot`
@@ -119,6 +121,27 @@ view def FitTable {
     }
 }
 ```
+
+### Dependency edges
+
+`relation:succession` returns the succession edges of an action flow —
+`succession s1 first a then b`, the anonymous `first a then b`, and the
+feature-chain form `first a.inner then b.inner`. Columns are
+`succession`, `type`, `source`, `target`, `parent`, `file`.
+
+A succession's type is its dependency kind, so the same type filter that
+connections use applies and closes over specialization:
+
+```sysml
+view def Dependencies {
+    @TableRendering {
+        rows = "relation:succession";
+        columns = "succession; type; source; target";
+    }
+}
+```
+
+This is the graph a critical-path or Gantt export reads.
 
 ### Bills of materials
 

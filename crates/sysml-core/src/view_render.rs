@@ -398,9 +398,10 @@ fn relation_rows(content: &[Model], models: &[Model], rel: &str) -> Result<Vec<R
         Some((base, ty)) => (base.trim(), Some(ty.trim())),
         None => (rel, None),
     };
-    if type_filter.is_some() && rel != "connection" {
+    if type_filter.is_some() && !matches!(rel, "connection" | "succession") {
         return Err(format!(
-            "relation `{rel}` takes no type filter (only `connection:<Type>` does)"
+            "relation `{rel}` takes no type filter (only `connection:<Type>` \
+             and `succession:<Type>` do)"
         ));
     }
     let models = if models.is_empty() { content } else { models };
@@ -459,9 +460,42 @@ fn relation_rows(content: &[Model], models: &[Model], rel: &str) -> Result<Vec<R
                 }
             }
         }
+        // The dependency edges of an action flow. A named succession keeps
+        // its name *and* its endpoints, so this is the graph a scheduler or
+        // critical-path export reads.
+        "succession" => {
+            for m in content {
+                for u in &m.usages {
+                    if u.kind != "succession" {
+                        continue;
+                    }
+                    let (Some(src), Some(tgt)) = (u.source.as_deref(), u.target.as_deref())
+                    else {
+                        continue;
+                    };
+                    match (type_filter, u.type_ref.as_deref()) {
+                        (Some(want), Some(have)) if specializes_type(models, have, want) => {}
+                        (Some(_), _) => continue,
+                        (None, _) => {}
+                    }
+                    rows.push(vec![
+                        ("succession".into(), u.name.clone()),
+                        (
+                            "type".into(),
+                            u.type_ref.as_deref().map(simple_name).unwrap_or("").into(),
+                        ),
+                        ("source".into(), src.to_string()),
+                        ("target".into(), tgt.to_string()),
+                        ("parent".into(), u.parent_def.clone().unwrap_or_default()),
+                        ("file".into(), m.file.clone()),
+                    ]);
+                }
+            }
+        }
         other => {
             return Err(format!(
-                "unknown relation `{other}` (allocation, satisfy, verify, connection)"
+                "unknown relation `{other}` \
+                 (allocation, satisfy, verify, connection, succession)"
             ))
         }
     }
@@ -998,6 +1032,102 @@ mod tests {
             .collect();
         // Bolted specializes Mate, so it is a fit; Causation is not.
         assert_eq!(names, vec!["m1", "m2"], "{out:?}");
+    }
+
+    /// A named succession keeps its name, its type, *and* its endpoints.
+    /// The endpoints used to be stored in `name`/`type_ref`, so naming a
+    /// succession silently discarded the edge it declared.
+    #[test]
+    fn succession_rows_keep_name_type_and_endpoints() {
+        let src = r#"
+            package P {
+                metadata def TableRendering;
+                action def Dependency;
+                action def StartToStart :> Dependency;
+                action def Prog {
+                    action a; action b; action c; action d;
+                    succession s1 first a then b;
+                    first b then c;
+                    succession s2 : StartToStart first c then d;
+                }
+                view def Links {
+                    @TableRendering {
+                        rows = "relation:succession";
+                        columns = "succession; type; source; target";
+                    }
+                }
+            }
+        "#;
+        let ms = vec![parse_file("f.sysml", src)];
+        let out = render_view(&ms, &[], "Links").unwrap();
+        let got: Vec<Vec<&str>> = out
+            .rows
+            .iter()
+            .map(|r| r.iter().map(|c| c.as_str()).collect())
+            .collect();
+        assert_eq!(
+            got,
+            vec![
+                vec!["s1", "", "a", "b"],
+                // The anonymous form is still an edge, just an unnamed one.
+                vec!["", "", "b", "c"],
+                // The type must not be mistaken for an endpoint.
+                vec!["s2", "StartToStart", "c", "d"],
+            ],
+            "{out:?}"
+        );
+    }
+
+    /// Dependency kind is a type on the succession, so the same type filter
+    /// that connections use applies — closing over specialization.
+    #[test]
+    fn succession_rows_filter_by_type() {
+        let src = r#"
+            package P {
+                metadata def TableRendering;
+                action def Dependency;
+                action def StartToStart :> Dependency;
+                action def Prog {
+                    action a; action b; action c; action d;
+                    succession plain first a then b;
+                    succession ss : StartToStart first c then d;
+                }
+                view def Deps {
+                    @TableRendering {
+                        rows = "relation:succession:Dependency";
+                        columns = "succession; source; target";
+                    }
+                }
+            }
+        "#;
+        let ms = vec![parse_file("f.sysml", src)];
+        let out = render_view(&ms, &[], "Deps").unwrap();
+        let names: Vec<&str> = out.rows.iter().map(|r| r[0].as_str()).collect();
+        assert_eq!(names, vec!["ss"], "{out:?}");
+    }
+
+    /// Endpoints may be feature chains, not just plain names.
+    #[test]
+    fn succession_endpoints_may_be_feature_chains() {
+        let src = r#"
+            package P {
+                metadata def TableRendering;
+                action def Prog {
+                    action a; action b;
+                    first a.inner then b.inner;
+                }
+                view def Links {
+                    @TableRendering {
+                        rows = "relation:succession";
+                        columns = "source; target";
+                    }
+                }
+            }
+        "#;
+        let ms = vec![parse_file("f.sysml", src)];
+        let out = render_view(&ms, &[], "Links").unwrap();
+        assert_eq!(out.rows.len(), 1, "{out:?}");
+        assert_eq!(out.rows[0], vec!["a.inner", "b.inner"], "{out:?}");
     }
 
     /// The BOM is parts and items only, with quantity multiplied down the

@@ -493,6 +493,38 @@ fn extract_doc_text(node: &Node, source: &[u8]) -> Option<String> {
     None
 }
 
+/// Extract the two endpoints of a succession or succession-flow usage.
+///
+/// The grammar admits `first A then B`, a bare `A then B`, and for flows
+/// `from A to B` / `A to B`. Pivoting on the `then`/`to` keyword is what
+/// keeps a type reference (`succession s : Dependency first A then B`) from
+/// being mistaken for an endpoint, which collecting every `qualified_name`
+/// child would do.
+fn get_endpoints(node: &Node, source: &[u8]) -> Option<(String, String)> {
+    fn is_ref(kind: &str) -> bool {
+        kind == "qualified_name" || kind == "feature_chain"
+    }
+    let mut cursor = node.walk();
+    let children: Vec<Node> = node.children(&mut cursor).collect();
+    let pivot = children
+        .iter()
+        .position(|c| matches!(c.kind(), "then" | "to"))?;
+    let target = children[pivot + 1..]
+        .iter()
+        .find(|c| is_ref(c.kind()))
+        .map(|c| node_text(c, source).to_string())?;
+    // `first`/`from` marks the source explicitly; without it the source is
+    // the last reference before the pivot.
+    let src = match children[..pivot]
+        .iter()
+        .position(|c| matches!(c.kind(), "first" | "from"))
+    {
+        Some(i) => children[i + 1..pivot].iter().find(|c| is_ref(c.kind())),
+        None => children[..pivot].iter().rfind(|c| is_ref(c.kind())),
+    }?;
+    Some((node_text(src, source).to_string(), target))
+}
+
 /// Extract multiplicity from a usage node.
 fn get_multiplicity(node: &Node, source: &[u8]) -> Option<Multiplicity> {
     let mut cursor = node.walk();
@@ -861,6 +893,8 @@ fn walk_node_scoped(
                             is_variant: false,
                             is_variation: false,
                             qualified_name: None,
+                            source: None,
+                            target: None,
                         });
                     }
                 }
@@ -900,6 +934,11 @@ fn walk_node_scoped(
             let usage_kind = usage_kind_from_node(&node, source).unwrap_or("feature");
             let redefinition = get_redefinition(&node, source);
             let subsets = get_subsets(&node, source);
+            let endpoints = if matches!(kind, "succession_usage" | "succession_flow_usage") {
+                get_endpoints(&node, source)
+            } else {
+                None
+            };
             // Fall back to redefines/subsets target as usage name
             // (e.g. `part redefines foo { ... }` → name is "foo")
             let name = field_text(&node, "name", source)
@@ -913,7 +952,11 @@ fn walk_node_scoped(
                     subsets
                         .as_ref()
                         .map(|s| s.rsplit("::").next().unwrap_or(s).to_string())
-                });
+                })
+                // An anonymous `succession first a then b;` is still an edge
+                // worth recording, so it gets an empty name rather than
+                // being dropped for having none.
+                .or_else(|| endpoints.as_ref().map(|_| String::new()));
             if let Some(name) = name {
                 let type_ref = get_type_ref(&node, source);
                 if let Some(ref t) = type_ref {
@@ -958,6 +1001,8 @@ fn walk_node_scoped(
                     is_variant: has_modifier(&node, "variant"),
                     is_variation: has_modifier(&node, "variation"),
                     qualified_name: None,
+                    source: endpoints.as_ref().map(|(s, _)| s.clone()),
+                    target: endpoints.map(|(_, t)| t),
                 });
 
                 // Connection and interface usages can have connect clauses
@@ -1001,9 +1046,11 @@ fn walk_node_scoped(
                             redefinition: None,
                             subsets: None,
                             doc: None,
-                    is_variant: false,
-                    is_variation: false,
-                    qualified_name: None,
+                            is_variant: false,
+                            is_variation: false,
+                            qualified_name: None,
+                            source: None,
+                            target: None,
                         });
                     }
                 }
@@ -1048,6 +1095,8 @@ fn walk_node_scoped(
                     is_variant: false,
                     is_variation: false,
                     qualified_name: None,
+                    source: None,
+                    target: None,
                 });
             }
         }
@@ -1111,6 +1160,8 @@ fn walk_node_scoped(
                     is_variant: false,
                     is_variation: false,
                     qualified_name: None,
+                    source: None,
+                    target: None,
                 });
             }
         }
@@ -1187,6 +1238,8 @@ fn walk_node_scoped(
                     is_variant: false,
                     is_variation: false,
                     qualified_name: None,
+                    source: None,
+                    target: None,
                 });
             }
         }
@@ -1435,6 +1488,8 @@ fn walk_node_scoped(
                     is_variant: false,
                     is_variation: false,
                     qualified_name: None,
+                    source: None,
+                    target: None,
                 });
             }
         }
@@ -1503,9 +1558,11 @@ fn walk_node_scoped(
                 redefinition: None,
                 subsets: None,
                 doc: None,
-                    is_variant: false,
-                    is_variation: false,
-                    qualified_name: None,
+                is_variant: false,
+                is_variation: false,
+                qualified_name: None,
+                source: None,
+                target: None,
             });
             // Recurse into body for nested elements
             let mut cursor = node.walk();
@@ -1541,27 +1598,25 @@ fn walk_node_scoped(
                 redefinition: None,
                 subsets: None,
                 doc: None,
-                    is_variant: false,
-                    is_variation: false,
-                    qualified_name: None,
+                is_variant: false,
+                is_variation: false,
+                qualified_name: None,
+                source: None,
+                target: None,
             });
         }
 
         // --- Succession statement: `first X then Y` ---
         "succession_statement" => {
-            let mut names: Vec<String> = Vec::new();
-            let mut cursor = node.walk();
-            for child in node.children(&mut cursor) {
-                if child.kind() == "qualified_name" || child.kind() == "identifier" {
-                    names.push(node_text(&child, source).to_string());
-                }
-            }
-            if names.len() >= 2 {
-                // Create a succession usage with source→target in name/type_ref
+            let endpoints = get_endpoints(&node, source);
+            if endpoints.is_some() {
+                // The name is the succession's own (`succession s1 first a
+                // then b`), not an endpoint; endpoints live in source/target
+                // so a named succession keeps all three.
                 model.usages.push(Usage {
                     kind: "succession".to_string(),
-                    name: names[0].clone(),
-                    type_ref: Some(names[1].clone()),
+                    name: field_text(&node, "name", source).unwrap_or_default(),
+                    type_ref: get_type_ref(&node, source),
                     span: Span::from_node(&node),
                     direction: None,
                     is_conjugated: false,
@@ -1575,6 +1630,8 @@ fn walk_node_scoped(
                     is_variant: false,
                     is_variation: false,
                     qualified_name: None,
+                    source: endpoints.as_ref().map(|(s, _)| s.clone()),
+                    target: endpoints.map(|(_, t)| t),
                 });
             }
             // Check for then_succession children (fork branches: `then X;`)
@@ -1601,9 +1658,11 @@ fn walk_node_scoped(
                                 redefinition: None,
                                 subsets: None,
                                 doc: None,
-                    is_variant: false,
-                    is_variation: false,
-                    qualified_name: None,
+                                is_variant: false,
+                                is_variation: false,
+                                qualified_name: None,
+                                source: None,
+                                target: None,
                             });
                             break;
                         }
@@ -1633,9 +1692,11 @@ fn walk_node_scoped(
                         redefinition: None,
                         subsets: None,
                         doc: None,
-                    is_variant: false,
-                    is_variation: false,
-                    qualified_name: None,
+                        is_variant: false,
+                        is_variation: false,
+                        qualified_name: None,
+                        source: None,
+                        target: None,
                     });
                     break;
                 }

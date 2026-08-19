@@ -298,6 +298,14 @@ pub struct Usage {
     /// Fully qualified name (populated by qualify_model).
     #[serde(skip_serializing_if = "Option::is_none")]
     pub qualified_name: Option<crate::qualified_name::QualifiedName>,
+    /// Source endpoint, for usages that relate two elements (`succession`,
+    /// `succession flow`). Kept separate from `name`/`type_ref` so a *named*
+    /// succession keeps its name, its type, and its endpoints.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub source: Option<String>,
+    /// Target endpoint. See [`Usage::source`].
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub target: Option<String>,
 }
 
 /// A metadata annotation (`@Status { status = "draft"; }`) applied to an

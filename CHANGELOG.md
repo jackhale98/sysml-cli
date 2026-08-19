@@ -1,5 +1,28 @@
 # Changelog
 
+## Unreleased
+
+### Fixed
+- **Naming a succession discarded the edge it declared.** `succession s1
+  first a then b;` recorded the name and dropped both endpoints, because
+  endpoints were stored by overloading the `name` and `type_ref` fields —
+  which the name and type immediately took back. `Usage` now has real
+  `source` and `target` fields, and all three forms populate them: named,
+  anonymous (`first a then b;`), and typed (`succession s : Dependency
+  first a then b;`). Endpoints may be feature chains, and a succession's
+  type is no longer mistaken for an endpoint.
+- An anonymous `succession first a then b;` was dropped entirely for
+  having no name. It is still an edge, so it is recorded with an empty
+  name.
+
+### Added
+- `relation:succession` row provider, with a `relation:succession:<Type>`
+  filter that closes over specialization exactly as `connection:<Type>`
+  does. Columns: `succession`, `type`, `source`, `target`, `parent`,
+  `file`. The dependency graph of an action flow was previously
+  unreachable from `sysml view` in every declaration form — this is what
+  a critical-path or Gantt export reads.
+
 ## 0.9.3 — 2026-08-18
 
 ### Changed
