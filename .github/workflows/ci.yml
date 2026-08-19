@@ -19,6 +19,13 @@ jobs:
 
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+
+      # Before the cache and the build: formatting needs neither, so a
+      # formatting-only failure reports in seconds.
+      - name: Format
+        run: cargo fmt --check
 
       - name: Cache cargo
         uses: actions/cache@v4
@@ -31,6 +38,9 @@ jobs:
 
       - name: Build
         run: cargo build --workspace
+
+      - name: Clippy
+        run: cargo clippy --workspace --all-targets -- -D warnings
 
       - name: Test
         run: cargo test --workspace
