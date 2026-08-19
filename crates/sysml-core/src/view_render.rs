@@ -96,7 +96,7 @@ pub fn render_view(
     let get = |key: &str| -> Option<String> {
         ann.iter()
             .find(|(k, _)| k == key)
-            .map(|(_, v)| unquote(v).to_string())
+            .map(|(_, v)| unescape(unquote(v)))
     };
     let rows_spec = get("rows").ok_or("missing `rows` in @TableRendering")?;
     let mut warnings = Vec::new();
@@ -557,7 +557,7 @@ fn uncertainty_rows(
     for (name, _file, ty) in find_uncertainty_cases(content, models) {
         match extract_case(models, &name) {
             Ok(case) => {
-                let wc = worst_case(&case.inputs, &case.target);
+                let wc = worst_case(&case.inputs, &case.target, &case.settings);
                 let r = rss(&case.inputs, &case.target, &case.settings);
                 let verdict = match (wc.result, r.result) {
                     (PassFail::Fail, _) | (_, PassFail::Fail) => "FAIL",
@@ -666,7 +666,12 @@ fn row_env(row: &Row) -> crate::sim::expr::Env {
         if let Ok(n) = v.parse::<f64>() {
             env.bind(k.clone(), Value::Number(n));
         } else {
-            env.bind(k.clone(), Value::String(v.clone()));
+            // Enum values arrive qualified (`RiskCategory::software`) but
+            // a `where` clause is written with the name a person says, so
+            // bind the simple name — the same loose comparison
+            // `list --metadata --where` uses. The displayed column keeps
+            // the qualified value.
+            env.bind(k.clone(), Value::String(simple_name(v).to_string()));
         }
     }
     env
@@ -692,8 +697,37 @@ fn format_num(v: f64) -> String {
     }
 }
 
+/// Strip one layer of quoting. `trim_matches` would strip every trailing
+/// quote, which eats the closing quote of a nested string: the spec
+/// `"category == \"software\""` ends in two quotes and only the outer
+/// one is delimiting.
 fn unquote(s: &str) -> &str {
-    s.trim().trim_matches('"')
+    let s = s.trim();
+    match (s.strip_prefix('"'), s.strip_suffix('"')) {
+        (Some(_), Some(_)) if s.len() >= 2 => &s[1..s.len() - 1],
+        _ => s,
+    }
+}
+
+/// Resolve the escapes a SysML string literal carries, so a spec that
+/// nests a string — `where = "category == \"software\""` — reaches the
+/// expression parser as the expression the author wrote.
+fn unescape(s: &str) -> String {
+    let mut out = String::with_capacity(s.len());
+    let mut chars = s.chars();
+    while let Some(c) = chars.next() {
+        if c != '\\' {
+            out.push(c);
+            continue;
+        }
+        match chars.next() {
+            Some('n') => out.push('\n'),
+            Some('t') => out.push('\t'),
+            Some(other) => out.push(other),
+            None => out.push('\\'),
+        }
+    }
+    out
 }
 
 /// The composition tree under `root`, one row per part or item usage:
@@ -901,6 +935,34 @@ mod tests {
         let out = render_view(&ms, &["target.sysml".to_string()], "Stack").unwrap();
         assert_eq!(out.rows.len(), 1, "case should be found: {out:?}");
         assert_eq!(out.rows[0][0], "gap");
+    }
+
+    /// A `where` clause comparing strings — filtering a worksheet to one
+    /// category is the ordinary case, and the value arrives qualified
+    /// (`RiskCategory::software`) while the author writes the plain name.
+    #[test]
+    fn where_clause_compares_strings() {
+        let src = r#"
+            package P {
+                metadata def TableRendering;
+                metadata def Line { attribute failureMode : String; attribute category : String; }
+                part w {
+                    @Line { failureMode = "A"; category = RiskCategory::software; }
+                    @Line { failureMode = "B"; category = RiskCategory::design; }
+                }
+                view def SW {
+                    @TableRendering {
+                        rows = "@Line";
+                        columns = "failureMode; category";
+                        where = "category == \"software\"";
+                    }
+                }
+            }
+        "#;
+        let ms = vec![parse_file("w.sysml", src)];
+        let out = render_view(&ms, &[], "SW").unwrap();
+        let names: Vec<&str> = out.rows.iter().map(|r| r[0].as_str()).collect();
+        assert_eq!(names, vec!["A"], "{out:?}");
     }
 
     /// A "fit table" must not list hazard causations. Before connections

@@ -1,5 +1,32 @@
 # Changelog
 
+## 0.9.3 — 2026-08-18
+
+### Changed
+- **The PASS / MARGINAL / FAIL threshold comes from the model.** "Within
+  10% of a limit is too close to call a pass" was a constant in the
+  analyzer; it is now `UncertaintyAnalysis::marginalFraction`, which a
+  project overrides on one analysis (`attribute :>> marginalFraction =
+  0.25;`) or across a class of them by specializing the def. A verdict
+  is an acceptance policy, not arithmetic, so it belongs where the
+  thresholds a team argues about already live.
+- Analysis settings (`sigmaLevel`, `meanShiftK`, `iterations`,
+  `marginalFraction`) resolve case body → type-chain defaults →
+  built-in. The library's `default` values were previously
+  documentation, with the real defaults duplicated in Rust: editing the
+  library changed the docs and nothing else.
+
+### Fixed
+- **A `where` clause could not compare strings.** `unquote` used
+  `trim_matches('"')`, which strips *every* trailing quote — so a spec
+  nesting a string, `where = "category == \"software\""`, lost the
+  inner closing quote and failed to parse, silently filtering every row
+  out. Escapes are now resolved after a single layer of quoting is
+  removed.
+- Enum values bind to `where` by their simple name, so
+  `category == "software"` matches `RiskCategory::software` — the loose
+  comparison `list --metadata --where` already used.
+
 ## 0.9.2 — 2026-08-18
 
 Generic primitives for questions the libraries used to have to answer.

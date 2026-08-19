@@ -82,6 +82,29 @@ filters rows; `sortBy` orders (`-` prefix for descending); `pivot`
 renders a count grid. The full contract — every provider and its
 fields — is documented in `libraries/Reporting.sysml`.
 
+`where` compares numbers and strings. A nested string needs escaping,
+and enum values match on their simple name:
+
+```sysml
+where = "severity * likelihood * detection >= 80";
+where = "category == \"software\"";   // matches RiskCategory::software
+```
+
+### Verdicts come from the model
+
+The PASS / MARGINAL / FAIL of an evaluated analysis is not arithmetic —
+it is a project's judgement about how close to a limit is too close, so
+it is model content: `UncertaintyAnalysis::marginalFraction` (default
+0.10) is the fraction of the tolerance band within which a positive
+margin still reports MARGINAL. Override it per analysis, or across a
+class of them:
+
+```sysml
+analysis def CriticalFit :> ToleranceStackup {
+    attribute :>> marginalFraction = 0.25;
+}
+```
+
 ### Filtering connections by type
 
 `relation:connection` returns every connection in the model. Naming a

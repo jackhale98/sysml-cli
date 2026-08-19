@@ -172,7 +172,7 @@ fn run_uncertainty(
 
     let wc = methods
         .contains(&"worst-case")
-        .then(|| worst_case(&case.inputs, &case.target));
+        .then(|| worst_case(&case.inputs, &case.target, &case.settings));
     let rss_r = methods
         .contains(&"rss")
         .then(|| rss(&case.inputs, &case.target, &case.settings));

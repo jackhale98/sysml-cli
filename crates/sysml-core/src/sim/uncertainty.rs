@@ -52,6 +52,12 @@ pub struct Settings {
     pub mean_shift_k: f64,
     pub iterations: u64,
     pub seed: Option<u64>,
+    /// A positive margin below this fraction of the tolerance band
+    /// reports MARGINAL rather than PASS. Acceptance policy, not
+    /// arithmetic: the model owns it
+    /// (`UncertaintyAnalysis::marginalFraction`), and this value is only
+    /// the fallback for a model that declares nothing.
+    pub marginal_fraction: f64,
 }
 
 impl Default for Settings {
@@ -61,6 +67,7 @@ impl Default for Settings {
             mean_shift_k: 0.0,
             iterations: 10_000,
             seed: None,
+            marginal_fraction: 0.10,
         }
     }
 }
@@ -73,13 +80,16 @@ pub enum PassFail {
     Fail,
 }
 
-/// Pass when the margin clears 10% of the tolerance band, marginal when
-/// positive but under 10%, fail when negative.
-fn classify(margin: f64, target: &Target) -> PassFail {
+/// Fail on a negative margin; otherwise marginal while the margin is
+/// under `marginal_fraction` of the tolerance band. The fraction comes
+/// from the model (`UncertaintyAnalysis::marginalFraction`), so what
+/// counts as too close to a limit is a project decision rather than a
+/// constant compiled into the analyzer.
+fn classify(margin: f64, target: &Target, marginal_fraction: f64) -> PassFail {
     let band = target.upper - target.lower;
     if margin < 0.0 {
         PassFail::Fail
-    } else if margin < 0.10 * band {
+    } else if margin < marginal_fraction * band {
         PassFail::Marginal
     } else {
         PassFail::Pass
@@ -96,7 +106,11 @@ pub struct WorstCaseResult {
 
 /// Worst-case interval arithmetic: every input simultaneously at the
 /// limit that drives the result toward each extreme.
-pub fn worst_case(inputs: &[UncertainInput], target: &Target) -> WorstCaseResult {
+pub fn worst_case(
+    inputs: &[UncertainInput],
+    target: &Target,
+    settings: &Settings,
+) -> WorstCaseResult {
     let mut min = 0.0;
     let mut max = 0.0;
     for c in inputs {
@@ -113,7 +127,7 @@ pub fn worst_case(inputs: &[UncertainInput], target: &Target) -> WorstCaseResult
         min,
         max,
         margin,
-        result: classify(margin, target),
+        result: classify(margin, target, settings.marginal_fraction),
     }
 }
 
@@ -196,7 +210,7 @@ pub fn rss(inputs: &[UncertainInput], target: &Target, settings: &Settings) -> R
         yield_percent,
         sensitivity,
         margin,
-        result: classify(margin, target),
+        result: classify(margin, target, settings.marginal_fraction),
     }
 }
 
@@ -317,7 +331,7 @@ pub fn monte_carlo(
         percentile_97_5: percentile(97.5),
         pp,
         ppk,
-        result: classify(margin, target),
+        result: classify(margin, target, settings.marginal_fraction),
         histogram: build_histogram(&sorted, 21),
     }
 }
@@ -465,7 +479,7 @@ mod tests {
 
     #[test]
     fn worst_case_hand_checked() {
-        let wc = worst_case(&enclosure_inputs(), &target());
+        let wc = worst_case(&enclosure_inputs(), &target(), &Settings::default());
         // min = 49.9 - 45.08 - 2.15 = 2.67; max = 50.1 - 44.92 - 1.9 = 3.28
         assert!((wc.min - 2.67).abs() < 1e-9, "min = {}", wc.min);
         assert!((wc.max - 3.28).abs() < 1e-9, "max = {}", wc.max);
@@ -485,6 +499,7 @@ mod tests {
                 lower: 2.7,
                 upper: 3.2,
             },
+            &Settings::default(),
         );
         assert_eq!(fail.result, PassFail::Fail);
         // Barely-clearing limits: [2.65, 3.30] -> margin 0.02 < 10% of 0.65
@@ -495,8 +510,40 @@ mod tests {
                 lower: 2.65,
                 upper: 3.30,
             },
+            &Settings::default(),
         );
         assert_eq!(marginal.result, PassFail::Marginal);
+
+        // The same geometry with the model's acceptance policy relaxed:
+        // a project that only wants PASS/FAIL sets marginalFraction to 0.
+        let strict_off = worst_case(
+            &inputs,
+            &Target {
+                nominal: 3.0,
+                lower: 2.65,
+                upper: 3.30,
+            },
+            &Settings {
+                marginal_fraction: 0.0,
+                ..Settings::default()
+            },
+        );
+        assert_eq!(strict_off.result, PassFail::Pass);
+
+        // ...and tightened: 10% was not enough for this reviewer.
+        let stricter = worst_case(
+            &inputs,
+            &Target {
+                nominal: 3.0,
+                lower: 2.6,
+                upper: 3.4,
+            },
+            &Settings {
+                marginal_fraction: 0.5,
+                ..Settings::default()
+            },
+        );
+        assert_eq!(stricter.result, PassFail::Marginal);
     }
 
     #[test]

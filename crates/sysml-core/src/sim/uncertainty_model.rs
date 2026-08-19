@@ -112,15 +112,19 @@ pub fn extract_case(models: &[Model], case_name: &str) -> Result<UncertaintyCase
     };
 
     // Settings, with UncertaintyAnalysis defaults.
+    // Settings resolve case body -> type chain defaults -> built-in.
     let mut settings = Settings::default();
-    if let Some((v, _)) = child_value_f64(case_model, case, "sigmaLevel") {
+    if let Some(v) = setting_f64(models, case_model, case, &type_name, "sigmaLevel") {
         settings.sigma_level = v;
     }
-    if let Some((v, _)) = child_value_f64(case_model, case, "meanShiftK") {
+    if let Some(v) = setting_f64(models, case_model, case, &type_name, "meanShiftK") {
         settings.mean_shift_k = v;
     }
-    if let Some((v, _)) = child_value_f64(case_model, case, "iterations") {
+    if let Some(v) = setting_f64(models, case_model, case, &type_name, "iterations") {
         settings.iterations = v as u64;
+    }
+    if let Some(v) = setting_f64(models, case_model, case, &type_name, "marginalFraction") {
+        settings.marginal_fraction = v;
     }
     if let Some((v, _)) = child_value_f64(case_model, case, "seed") {
         settings.seed = Some(v as u64);
@@ -402,6 +406,48 @@ fn child_value_f64(m: &Model, parent: &Usage, name: &str) -> Option<(f64, Option
     crate::sim::resolve::parse_value_with_unit(expr)
 }
 
+/// A setting's value for this case: the case's own body first, then the
+/// defaults declared on its type and every supertype, walking up to
+/// `UncertaintyAnalysis`.
+///
+/// The library is where a default belongs — `attribute marginalFraction :
+/// Real default 0.10` in `UncertaintyAnalysis`, or a stricter value on a
+/// project's own `analysis def` specializing it. Without this walk, the
+/// library's `default` would be documentation and the real value would be
+/// a constant in the analyzer, so editing the library would change the
+/// docs and nothing else.
+fn setting_f64(
+    models: &[Model],
+    case_model: &Model,
+    case: &Usage,
+    type_name: &str,
+    name: &str,
+) -> Option<f64> {
+    if let Some((v, _)) = child_value_f64(case_model, case, name) {
+        return Some(v);
+    }
+    let mut current = type_name.to_string();
+    let mut seen = HashSet::new();
+    loop {
+        if !seen.insert(current.clone()) {
+            return None;
+        }
+        for m in models {
+            for u in m.usages_in_def(&current) {
+                if simple_name(&u.name) == name {
+                    if let Some(expr) = u.value_expr.as_deref() {
+                        if let Some((v, _)) = crate::sim::resolve::parse_value_with_unit(expr) {
+                            return Some(v);
+                        }
+                    }
+                }
+            }
+        }
+        let def = find_def(models, &current)?;
+        current = simple_name(def.super_type.as_deref()?).to_string();
+    }
+}
+
 fn find_def<'a>(models: &'a [Model], name: &str) -> Option<&'a crate::model::Definition> {
     models
         .iter()
@@ -583,7 +629,7 @@ mod tests {
         let ms = models();
         let case = extract_case(&ms, "gapAnalysis").expect("extraction");
 
-        let wc = worst_case(&case.inputs, &case.target);
+        let wc = worst_case(&case.inputs, &case.target, &case.settings);
         assert!((wc.min - 2.67).abs() < 1e-9, "min = {}", wc.min);
         assert!((wc.max - 3.28).abs() < 1e-9, "max = {}", wc.max);
         assert_eq!(wc.result, PassFail::Pass);
