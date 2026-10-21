@@ -15,6 +15,33 @@ pub struct StateMachineModel {
     /// Non-empty regions are simulated concurrently with broadcast events.
     #[serde(skip_serializing_if = "Vec::is_empty")]
     pub regions: Vec<StateMachineModel>,
+    /// Attributes declared in the machine body (`attribute soc : Real =
+    /// 0.3;`). Their defaults seed the simulation environment, and guards
+    /// and change triggers read them.
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub variables: Vec<StateVariable>,
+    pub span: Span,
+}
+
+/// An attribute of a state machine, used as a simulation variable.
+#[derive(Debug, Clone, Serialize)]
+pub struct StateVariable {
+    pub name: String,
+    /// Declared type (`Real`, `Boolean`, ...).
+    #[serde(rename = "type", skip_serializing_if = "Option::is_none")]
+    pub type_ref: Option<String>,
+    /// Source text of the default value, if any.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub value: Option<String>,
+    /// The default value as an expression, when the evaluator supports it.
+    #[serde(skip)]
+    pub expr: Option<Expr>,
+    /// `in`, `out` or `inout`, when declared.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub direction: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub doc: Option<String>,
+    #[serde(skip)]
     pub span: Span,
 }
 
@@ -36,6 +63,10 @@ pub struct Transition {
     pub target: String,
     pub trigger: Option<Trigger>,
     pub guard: Option<Expr>,
+    /// Source text of the guard. Set whenever the transition has an `if`,
+    /// even when `guard` is `None` because the evaluator cannot parse it;
+    /// simulators treat such a guard as blocking.
+    pub guard_text: Option<String>,
     pub effect: Option<ActionRef>,
     pub span: Span,
 }
@@ -47,6 +78,32 @@ pub enum Trigger {
     Signal(String),
     /// Completion trigger (implicit when do-action finishes).
     Completion,
+    /// Change trigger (`accept when <condition>`): fires when the condition
+    /// holds. `text` is the source text after `when`; `expr` is `None` when
+    /// the evaluator cannot parse the condition.
+    Change { text: String, expr: Option<Expr> },
+    /// Time trigger (`accept after 5 [s]`, `accept at t`), as source text.
+    /// Simulators treat it as an event of that name.
+    Time(String),
+}
+
+impl Trigger {
+    /// The event name a simulator matches against: the signal, `when
+    /// <condition>`, or the time trigger's text.
+    pub fn event_name(&self) -> String {
+        self.to_string()
+    }
+}
+
+/// One `assign target := value` in an action.
+#[derive(Debug, Clone, Serialize)]
+pub struct Assignment {
+    pub target: String,
+    /// Source text of the assigned expression.
+    pub value: String,
+    /// The value as an expression, when the evaluator supports it.
+    #[serde(skip)]
+    pub expr: Option<Expr>,
 }
 
 /// An action reference (effect, entry, do, exit).
@@ -62,6 +119,10 @@ pub enum ActionRef {
     },
     /// Inline description.
     Inline(String),
+    /// Assignments (`entry assign x := x + 1;`, `do assign ...`, or an
+    /// action body of `assign` statements). Simulators apply them to the
+    /// environment in order.
+    Assign(Vec<Assignment>),
 }
 
 impl std::fmt::Display for Trigger {
@@ -69,6 +130,8 @@ impl std::fmt::Display for Trigger {
         match self {
             Trigger::Signal(s) => write!(f, "{}", s),
             Trigger::Completion => write!(f, "completion"),
+            Trigger::Change { text, .. } => write!(f, "when {}", text),
+            Trigger::Time(text) => write!(f, "{}", text),
         }
     }
 }
@@ -91,6 +154,15 @@ impl std::fmt::Display for ActionRef {
                 Ok(())
             }
             ActionRef::Inline(text) => write!(f, "{}", text),
+            ActionRef::Assign(assignments) => {
+                for (i, a) in assignments.iter().enumerate() {
+                    if i > 0 {
+                        write!(f, "; ")?;
+                    }
+                    write!(f, "assign {} := {}", a.target, a.value)?;
+                }
+                Ok(())
+            }
         }
     }
 }

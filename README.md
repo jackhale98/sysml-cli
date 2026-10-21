@@ -496,5 +496,6 @@ Apache-2.0 license, shall be dual licensed as above, without any additional
 terms or conditions.
 
 Third-party content keeps its own licence: the OMG SysML v2 standard library
-embedded from the `sysml-v2-release` submodule is EPL-2.0 (see that
-repository's `LICENSE`), and `third_party/ls-types` is MIT.
+embedded from the `sysml-v2-release` submodule is LGPL-3.0 (see that
+repository's `README.md`, `LICENSE` and `LICENSE-GPL`), and
+`third_party/ls-types` is MIT.

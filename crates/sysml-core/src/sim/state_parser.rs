@@ -65,6 +65,8 @@ fn extract_state_machine_from_node(node: &Node, source: &[u8]) -> Option<StateMa
     let mut transitions = Vec::new();
     let mut entry_state = None;
 
+    let mut variables = Vec::new();
+
     let mut cursor = node.walk();
     for child in node.children(&mut cursor) {
         if child.kind() == "state_body" || child.kind() == "definition_body" {
@@ -75,6 +77,7 @@ fn extract_state_machine_from_node(node: &Node, source: &[u8]) -> Option<StateMa
                 &mut transitions,
                 &mut entry_state,
             );
+            variables.extend(extract_variables(&child, source));
         }
     }
 
@@ -84,6 +87,7 @@ fn extract_state_machine_from_node(node: &Node, source: &[u8]) -> Option<StateMa
         transitions,
         entry_state,
         regions: Vec::new(),
+        variables,
         span: Span::from_node(node),
     })
 }
@@ -117,6 +121,7 @@ fn extract_state_machine_from_state_usage(node: &Node, source: &[u8]) -> Option<
     let mut transitions = Vec::new();
     let mut entry_state = None;
     let mut regions = Vec::new();
+    let mut variables = Vec::new();
 
     let mut cursor = node.walk();
     for child in node.children(&mut cursor) {
@@ -128,6 +133,7 @@ fn extract_state_machine_from_state_usage(node: &Node, source: &[u8]) -> Option<
                 &mut transitions,
                 &mut entry_state,
             );
+            variables.extend(extract_variables(&child, source));
             if is_parallel {
                 // Direct child states with their own bodies are the
                 // orthogonal regions.
@@ -157,6 +163,7 @@ fn extract_state_machine_from_state_usage(node: &Node, source: &[u8]) -> Option<
         transitions,
         entry_state,
         regions,
+        variables,
         span: Span::from_node(node),
     })
 }
@@ -192,6 +199,13 @@ fn extract_state_machine_from_exhibit(node: &Node, source: &[u8]) -> Option<Stat
     let mut transitions = Vec::new();
     let mut entry_state = None;
 
+    // The owning definition's attributes are in scope of the exhibited
+    // state (`part def Drone { attribute soc; exhibit state modes {..} }`).
+    let mut variables = node
+        .parent()
+        .map(|body| extract_variables(&body, source))
+        .unwrap_or_default();
+
     // Find state_body in the exhibit
     let mut cursor = node.walk();
     for child in node.children(&mut cursor) {
@@ -203,6 +217,7 @@ fn extract_state_machine_from_exhibit(node: &Node, source: &[u8]) -> Option<Stat
                 &mut transitions,
                 &mut entry_state,
             );
+            variables.extend(extract_variables(&child, source));
         }
     }
 
@@ -212,11 +227,12 @@ fn extract_state_machine_from_exhibit(node: &Node, source: &[u8]) -> Option<Stat
         transitions,
         entry_state,
         regions: Vec::new(),
+        variables,
         span: Span::from_node(node),
     })
 }
 
-fn extract_state_body(
+pub(crate) fn extract_state_body(
     body: &Node,
     source: &[u8],
     states: &mut Vec<StateNode>,
@@ -238,11 +254,15 @@ fn extract_state_body(
             }
         }
     }
+    // The most recent state declared in this body: the source of a target
+    // transition that omits `first` (`state a; accept Go then b;`).
+    let mut previous_state: Option<String> = None;
     let mut cursor = body.walk();
     for child in body.children(&mut cursor) {
         match child.kind() {
             "state_usage" => {
                 if let Some(state) = extract_state_node(&child, source) {
+                    previous_state = Some(state.name.clone());
                     states.push(state);
                 }
             }
@@ -265,11 +285,40 @@ fn extract_state_body(
             "transition_statement" => {
                 if let Some(t) = extract_transition(&child, source, &known_states) {
                     transitions.push(t);
-                } else if entry_state.is_none() {
+                    continue;
+                }
+                let target = extract_initial_transition_target(&child, source);
+                let has_trigger_or_guard = {
+                    let mut c = child.walk();
+                    let kids: Vec<_> = child.children(&mut c).collect();
+                    kids.iter()
+                        .any(|k| k.kind() == "accept_clause" || k.kind() == "if")
+                };
+                if entry_state.is_none() && !has_trigger_or_guard {
                     // Handle initial pseudo-transition: `transition initial then off;`
                     // (has `then` target but no `first` source)
-                    if let Some(target) = extract_initial_transition_target(&child, source) {
+                    if let Some(target) = target {
                         *entry_state = Some(target);
+                    }
+                } else if let Some(prev) = &previous_state {
+                    // `transition accept Go then b;` after `state a;`
+                    if let Some(t) = extract_transition_from(&child, source, prev) {
+                        transitions.push(t);
+                    }
+                }
+            }
+            // `accept Go then b;` after `state a;` parses as an accept action.
+            "accept_action" => {
+                if let Some(prev) = &previous_state {
+                    if let Some(t) = extract_accept_then(&child, source, prev) {
+                        transitions.push(t);
+                    }
+                }
+            }
+            "inline_transition" => {
+                if let Some(prev) = &previous_state {
+                    if let Some(t) = extract_transition_from(&child, source, prev) {
+                        transitions.push(t);
                     }
                 }
             }
@@ -282,6 +331,106 @@ fn extract_state_body(
             _ => {}
         }
     }
+}
+
+/// `accept Sig then target;` in a state body: a transition from `from`.
+fn extract_accept_then(node: &Node, source: &[u8], from: &str) -> Option<Transition> {
+    let mut cursor = node.walk();
+    let children: Vec<Node> = node.children(&mut cursor).collect();
+    let then = children
+        .iter()
+        .position(|c| !c.is_named() && node_text(c, source) == "then")?;
+    let target = children[then + 1..].iter().find(|c| c.is_named())?;
+    let signal = children[..then]
+        .iter()
+        .filter(|c| c.kind() == "typed_by")
+        .find_map(|c| c.child_by_field_name("type"))
+        .or_else(|| {
+            children[..then]
+                .iter()
+                .find(|c| matches!(c.kind(), "qualified_name" | "identifier"))
+                .copied()
+        })?;
+    Some(Transition {
+        name: None,
+        source: from.to_string(),
+        target: node_text(target, source).to_string(),
+        trigger: Some(Trigger::Signal(node_text(&signal, source).to_string())),
+        guard: None,
+        guard_text: None,
+        effect: None,
+        span: Span::from_node(node),
+    })
+}
+
+/// A transition with an implied source (target transition after a state).
+fn extract_transition_from(node: &Node, source: &[u8], from: &str) -> Option<Transition> {
+    let mut t = extract_transition_parts(node, source)?;
+    if t.source.is_empty() {
+        t.source = from.to_string();
+    }
+    Some(t)
+}
+
+/// Attributes declared directly in a body (`[in] attribute x : T = v;`).
+pub(crate) fn extract_variables(body: &Node, source: &[u8]) -> Vec<StateVariable> {
+    let mut vars = Vec::new();
+    let mut previous: Option<Node> = None;
+    let mut cursor = body.walk();
+    for child in body.children(&mut cursor) {
+        if child.kind() == "usage" && is_attribute_usage(&child, source) {
+            if let Some(name) = child.child_by_field_name("name") {
+                let direction = previous
+                    .filter(|p| p.kind() == "modifier")
+                    .map(|p| node_text(&p, source).trim().to_string())
+                    .filter(|d| matches!(d.as_str(), "in" | "out" | "inout"));
+                let mut type_ref = None;
+                let mut value = None;
+                let mut expr = None;
+                let mut c = child.walk();
+                for part in child.children(&mut c) {
+                    match part.kind() {
+                        "typed_by" => {
+                            type_ref = part
+                                .child_by_field_name("type")
+                                .map(|t| node_text(&t, source).to_string());
+                        }
+                        "value_assignment" => {
+                            let mut vc = part.walk();
+                            let value_node = part.children(&mut vc).find(|n| n.is_named());
+                            if let Some(e) = value_node {
+                                value = Some(node_text(&e, source).trim().to_string());
+                                expr = extract_expr(&e, source).ok();
+                            }
+                        }
+                        _ => {}
+                    }
+                }
+                vars.push(StateVariable {
+                    name: node_text(&name, source).to_string(),
+                    type_ref,
+                    value,
+                    expr,
+                    direction,
+                    doc: crate::parser::get_doc_comment(&child, source),
+                    span: Span::from_node(&child),
+                });
+            }
+        }
+        if child.is_named() {
+            previous = Some(child);
+        }
+    }
+    vars
+}
+
+fn is_attribute_usage(node: &Node, source: &[u8]) -> bool {
+    let mut c = node.walk();
+    let found = node
+        .children(&mut c)
+        .take_while(|k| k.kind() != "identifier")
+        .any(|k| !k.is_named() && node_text(&k, source) == "attribute");
+    found
 }
 
 fn extract_state_node(node: &Node, source: &[u8]) -> Option<StateNode> {
@@ -326,10 +475,34 @@ fn extract_state_node(node: &Node, source: &[u8]) -> Option<StateNode> {
 
 fn extract_action_ref(node: &Node, source: &[u8]) -> Option<ActionRef> {
     let mut cursor = node.walk();
-    for child in node.children(&mut cursor) {
+    let children: Vec<Node> = node.children(&mut cursor).collect();
+    // `entry assign x := e;` / `do assign x := e;`
+    if let Some(pos) = children
+        .iter()
+        .position(|c| !c.is_named() && node_text(c, source) == "assign")
+    {
+        let target = children[pos + 1..]
+            .iter()
+            .find(|c| c.is_named())
+            .map(|c| node_text(c, source).to_string())?;
+        let value = children
+            .iter()
+            .skip_while(|c| node_text(c, source) != ":=")
+            .skip(1)
+            .find(|c| c.is_named())?;
+        return Some(ActionRef::Assign(vec![Assignment {
+            target,
+            value: node_text(value, source).trim().to_string(),
+            expr: extract_expr(value, source).ok(),
+        }]));
+    }
+    for child in &children {
         match child.kind() {
+            // `entry; then x;` — the `then` names the initial substate,
+            // not an action.
+            "then" => return None,
             "identifier" | "qualified_name" => {
-                let text = node_text(&child, source).to_string();
+                let text = node_text(child, source).to_string();
                 // Skip keywords like "entry", "do", "exit", "action", "then", "send"
                 if !matches!(
                     text.as_str(),
@@ -339,12 +512,97 @@ fn extract_action_ref(node: &Node, source: &[u8]) -> Option<ActionRef> {
                 }
             }
             "send_action" => {
-                return Some(extract_send_action(&child, source));
+                return Some(extract_send_action(child, source));
+            }
+            // `entry action { assign x := 0; }`
+            "definition_body" | "action_body" => {
+                let mut assignments = Vec::new();
+                let mut bc = child.walk();
+                for item in child.children(&mut bc) {
+                    if item.kind() == "assign_action" {
+                        if let Some(ActionRef::Assign(mut a)) = extract_action_ref(&item, source) {
+                            assignments.append(&mut a);
+                        }
+                    }
+                }
+                if !assignments.is_empty() {
+                    return Some(ActionRef::Assign(assignments));
+                }
             }
             _ => {}
         }
     }
     None
+}
+
+/// Parse an effect from its source text (the part between `do` and
+/// `then`). Text, not nodes, because the grammar does not accept every
+/// effect form (`do assign x := e` parses with an error node).
+fn parse_effect_text(text: &str) -> Option<ActionRef> {
+    let text = text.trim();
+    if text.is_empty() {
+        return None;
+    }
+    if text
+        .split_whitespace()
+        .any(|w| w == "assign" || w == "{assign")
+    {
+        let assignments: Vec<Assignment> = text
+            .split(';')
+            .filter_map(|part| {
+                let part = part
+                    .trim()
+                    .trim_start_matches("action")
+                    .trim()
+                    .trim_start_matches('{')
+                    .trim()
+                    .trim_end_matches('}')
+                    .trim();
+                let rest = part.strip_prefix("assign")?;
+                let (target, value) = rest.split_once(":=")?;
+                let value = value.trim().to_string();
+                Some(Assignment {
+                    target: target.trim().to_string(),
+                    expr: crate::sim::expr_parser::parse_expr_str(&value).ok(),
+                    value,
+                })
+            })
+            .collect();
+        if !assignments.is_empty() {
+            return Some(ActionRef::Assign(assignments));
+        }
+    }
+    let send = text
+        .strip_prefix("action")
+        .map(str::trim_start)
+        .unwrap_or(text);
+    if let Some(rest) = send.strip_prefix("send") {
+        let mut payload = rest.trim();
+        let mut to = None;
+        let mut via = None;
+        if let Some((p, t)) = payload.rsplit_once(" to ") {
+            to = Some(t.trim().to_string());
+            payload = p.trim();
+        }
+        if let Some((p, v)) = payload.rsplit_once(" via ") {
+            via = Some(v.trim().to_string());
+            payload = p.trim();
+        }
+        return Some(ActionRef::Send {
+            payload: (!payload.is_empty()).then(|| payload.to_string()),
+            via,
+            to,
+        });
+    }
+    let named = text.strip_prefix("action ").map(str::trim).unwrap_or(text);
+    let is_name = named
+        .chars()
+        .all(|c| c.is_alphanumeric() || c == '_' || c == ':' || c == '.' || c == '\'');
+    if is_name {
+        Some(ActionRef::Named(named.to_string()))
+    } else {
+        Some(ActionRef::Inline(text.to_string()))
+    }
 }
 
 fn extract_send_action(node: &Node, source: &[u8]) -> ActionRef {
@@ -386,6 +644,26 @@ fn extract_transition(
     source: &[u8],
     known_states: &std::collections::HashSet<String>,
 ) -> Option<Transition> {
+    let mut t = extract_transition_parts(node, source)?;
+
+    // `transition stabilizing then moving;` — without a `first` clause a
+    // leading name that names a DECLARED state doubles as the source
+    // (book Ch 28 shorthand). Non-state names like `initial` stay as
+    // pseudo-transition names handled by the caller.
+    if t.source.is_empty() {
+        match t.name.take() {
+            Some(n) if known_states.contains(n.as_str()) => t.source = n,
+            other => {
+                t.name = other;
+                return None;
+            }
+        }
+    }
+    Some(t)
+}
+
+/// The parts of a transition. `source` is empty when there is no `first`.
+fn extract_transition_parts(node: &Node, source: &[u8]) -> Option<Transition> {
     let name = node
         .child_by_field_name("name")
         .map(|n| node_text(&n, source).to_string());
@@ -394,11 +672,11 @@ fn extract_transition(
     let mut target_state = None;
     let mut trigger = None;
     let mut guard = None;
-    let mut effect = None;
+    let mut guard_text = None;
+    let mut effect_range: Option<(usize, usize)> = None;
 
     let mut saw_first = false;
     let mut saw_if = false;
-    let mut saw_do = false;
     let mut saw_then = false;
 
     let mut cursor = node.walk();
@@ -406,71 +684,55 @@ fn extract_transition(
         match child.kind() {
             "first" => saw_first = true,
             "if" => saw_if = true,
-            "do" => saw_do = true,
-            "then" => saw_then = true,
+            "do" => effect_range = Some((child.end_byte(), child.end_byte())),
+            "then" => {
+                saw_then = true;
+                if let Some((start, end)) = effect_range.as_mut() {
+                    if *end == *start {
+                        *end = child.start_byte();
+                    }
+                }
+            }
             "accept_clause" => {
                 trigger = extract_trigger(&child, source);
             }
-            "identifier" | "qualified_name" | "feature_chain" => {
+            _ if !child.is_named() => {}
+            _ if effect_range.is_some_and(|(s, e)| s == e) && !saw_then => {
+                // Part of the effect; read as text below.
+            }
+            "identifier" | "qualified_name" | "feature_chain"
+                if saw_then || saw_first && !saw_if =>
+            {
                 let text = node_text(&child, source).to_string();
-                if text == "transition" {
-                    continue;
-                }
                 if saw_then {
                     target_state = Some(text);
                     saw_then = false;
-                } else if saw_do {
-                    effect = Some(ActionRef::Named(text));
-                    saw_do = false;
-                } else if saw_if {
-                    // Guard is an expression — try to extract
-                    if let Ok(expr) = extract_expr(&child, source) {
-                        guard = Some(expr);
-                    }
-                    saw_if = false;
-                } else if saw_first {
+                } else {
                     source_state = Some(text);
                     saw_first = false;
                 }
             }
-            _ => {
-                // Try to extract guard from non-identifier expression nodes
-                if saw_if && child.is_named() {
-                    if let Ok(expr) = extract_expr(&child, source) {
-                        guard = Some(expr);
-                    }
-                    saw_if = false;
-                }
-                if saw_do && child.is_named() {
-                    effect = extract_action_ref(&child, source)
-                        .or_else(|| Some(ActionRef::Inline(node_text(&child, source).to_string())));
-                    saw_do = false;
-                }
+            _ if saw_if => {
+                guard_text = Some(node_text(&child, source).trim().to_string());
+                guard = extract_expr(&child, source).ok();
+                saw_if = false;
             }
+            _ => {}
         }
     }
 
-    // `transition stabilizing then moving;` — without a `first` clause a
-    // leading name that names a DECLARED state doubles as the source
-    // (book Ch 28 shorthand). Non-state names like `initial` stay as
-    // pseudo-transition names handled by the caller.
-    let (name, source_state) = match (source_state, &name) {
-        (None, Some(n)) if target_state.is_some() && known_states.contains(n.as_str()) => {
-            (None, name)
-        }
-        (src, _) => (name, src),
-    };
-
-    // Need at least source and target
-    let src = source_state?;
-    let tgt = target_state?;
+    let effect = effect_range
+        .filter(|(s, e)| e > s)
+        .and_then(|(s, e)| std::str::from_utf8(&source[s..e]).ok())
+        .and_then(parse_effect_text);
 
     Some(Transition {
         name,
-        source: src,
-        target: tgt,
+        source: source_state.unwrap_or_default(),
+        target: target_state?,
         trigger,
         guard,
+        guard_text,
         effect,
         span: Span::from_node(node),
     })
@@ -499,15 +761,43 @@ fn extract_initial_transition_target(node: &Node, source: &[u8]) -> Option<Strin
 
 fn extract_trigger(node: &Node, source: &[u8]) -> Option<Trigger> {
     let mut cursor = node.walk();
-    for child in node.children(&mut cursor) {
-        match child.kind() {
-            "identifier" | "qualified_name" => {
-                let text = node_text(&child, source).to_string();
-                if text != "accept" && text != "when" && text != "at" && text != "after" {
-                    return Some(Trigger::Signal(text));
-                }
+    let children: Vec<Node> = node.children(&mut cursor).collect();
+    let keyword = children
+        .iter()
+        .find(|c| !c.is_named() && node_text(c, source) != "accept")
+        .map(|c| node_text(c, source));
+    let first_named = children.iter().find(|c| c.is_named());
+    match (keyword, first_named) {
+        (Some("when"), Some(cond))
+            if children.iter().position(|c| c.id() == cond.id()) > Some(1) =>
+        {
+            return Some(Trigger::Change {
+                text: node_text(cond, source).trim().to_string(),
+                expr: extract_expr(cond, source).ok(),
+            })
+        }
+        (Some("at" | "after"), Some(cond))
+            if children.iter().position(|c| c.id() == cond.id()) > Some(1) =>
+        {
+            let text = node_text(node, source);
+            let text = text.strip_prefix("accept").unwrap_or(text).trim();
+            return Some(Trigger::Time(text.to_string()));
+        }
+        _ => {}
+    }
+    // `accept sig : Sig via port` — the event is the payload type; a bare
+    // `accept Sig` names it directly.
+    if let Some(typed) = children.iter().find(|c| c.kind() == "typed_by") {
+        if let Some(ty) = typed.child_by_field_name("type") {
+            return Some(Trigger::Signal(node_text(&ty, source).to_string()));
+        }
+    }
+    for child in &children {
+        if matches!(child.kind(), "identifier" | "qualified_name") {
+            let text = node_text(child, source).to_string();
+            if text != "accept" && text != "when" && text != "at" && text != "after" {
+                return Some(Trigger::Signal(text));
             }
-            _ => {}
         }
     }
     None
@@ -534,6 +824,7 @@ fn extract_succession_as_transition(node: &Node, source: &[u8]) -> Option<Transi
             target: refs[1].clone(),
             trigger: None,
             guard: None,
+            guard_text: None,
             effect: None,
             span: Span::from_node(node),
         })
@@ -759,5 +1050,94 @@ mod tests {
         assert_eq!(machines[2].name, "healthStates");
         assert_eq!(machines[2].states.len(), 2);
         assert_eq!(machines[2].transitions.len(), 1);
+    }
+
+    #[test]
+    fn change_and_time_triggers_guards_and_effects() {
+        let source = r#"
+            state def M {
+                attribute count : Integer = 0;
+                in attribute soc : Real;
+                entry; then a;
+                state a;
+                state b;
+                transition low first a accept when soc < 0.3 then b;
+                transition later first a accept after 5 [s] then b;
+                transition typed first a accept sig : Sig via port1 then b;
+                transition guarded first b accept Go if count > 1 and soc >= 0.5 then a;
+                transition bump first b accept Bump do assign count := count + 2 then b;
+                transition say first b accept Say do send Hello() to a then b;
+            }
+        "#;
+        let m = &extract_state_machines("t.sysml", source)[0];
+        let by_name = |n: &str| {
+            m.transitions
+                .iter()
+                .find(|t| t.name.as_deref() == Some(n))
+                .unwrap()
+        };
+        assert!(matches!(
+            &by_name("low").trigger,
+            Some(Trigger::Change { text, expr: Some(_) }) if text == "soc < 0.3"
+        ));
+        assert!(matches!(&by_name("later").trigger, Some(Trigger::Time(t)) if t == "after 5 [s]"));
+        assert!(matches!(&by_name("typed").trigger, Some(Trigger::Signal(s)) if s == "Sig"));
+        let guarded = by_name("guarded");
+        assert_eq!(
+            guarded.guard_text.as_deref(),
+            Some("count > 1 and soc >= 0.5")
+        );
+        assert!(guarded.guard.is_some());
+        match &by_name("bump").effect {
+            Some(ActionRef::Assign(a)) => {
+                assert_eq!(a[0].target, "count");
+                assert_eq!(a[0].value, "count + 2");
+                assert!(a[0].expr.is_some());
+            }
+            other => panic!("expected an assignment, got {other:?}"),
+        }
+        assert!(
+            matches!(&by_name("say").effect, Some(ActionRef::Send { to: Some(t), .. }) if t == "a")
+        );
+        let vars: Vec<_> = m.variables.iter().map(|v| v.name.as_str()).collect();
+        assert_eq!(vars, vec!["count", "soc"]);
+        assert_eq!(m.variables[1].direction.as_deref(), Some("in"));
+    }
+
+    #[test]
+    fn target_transitions_take_the_preceding_state() {
+        let source = r#"
+            state def M {
+                entry; then a;
+                state a;
+                accept Go then b;
+                state b;
+                transition accept Back then a;
+            }
+        "#;
+        let m = &extract_state_machines("t.sysml", source)[0];
+        let pairs: Vec<_> = m
+            .transitions
+            .iter()
+            .map(|t| (t.source.as_str(), t.target.as_str()))
+            .collect();
+        assert_eq!(pairs, vec![("a", "b"), ("b", "a")]);
+        assert_eq!(m.entry_state.as_deref(), Some("a"));
+    }
+
+    #[test]
+    fn composite_initial_state_is_not_an_entry_action() {
+        let source = r#"
+            state def M {
+                entry; then on;
+                state on { entry; then x; state x; }
+                state lit { entry assign n := 1; }
+            }
+        "#;
+        let m = &extract_state_machines("t.sysml", source)[0];
+        assert!(m.states[0].entry_action.is_none());
+        assert!(
+            matches!(&m.states[1].entry_action, Some(ActionRef::Assign(a)) if a[0].target == "n")
+        );
     }
 }

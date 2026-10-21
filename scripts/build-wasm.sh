@@ -19,6 +19,11 @@ rm -rf "$out"
 wasm-bindgen --target web --out-dir "$out" \
     target/wasm32-unknown-unknown/wasm/sysml_wasm.wasm
 cp LICENSE-APACHE LICENSE-MIT "$out/"
+# The embedded OMG standard library is LGPL-3.0 (see libraryLicense()).
+if [ -f sysml-v2-release/LICENSE ]; then
+    cp sysml-v2-release/LICENSE "$out/LICENSE-SYSML-LIBRARY"
+    cp sysml-v2-release/LICENSE-GPL "$out/LICENSE-SYSML-LIBRARY-GPL"
+fi
 
 wasm="$out/sysml_wasm_bg.wasm"
 printf 'sysml-wasm %s\n  raw:  %s bytes\n  gzip: %s bytes\n' \

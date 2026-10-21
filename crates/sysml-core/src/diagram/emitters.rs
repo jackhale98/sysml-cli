@@ -1113,11 +1113,13 @@ mod tests {
                 target: "Green".to_string(),
                 trigger: Some(Trigger::Signal("timer".to_string())),
                 guard: None,
+                guard_text: None,
                 effect: Some(ActionRef::Named("startGo".to_string())),
                 span: Span::default(),
             }],
             entry_state: Some("Red".to_string()),
             regions: Vec::new(),
+            variables: Vec::new(),
             span: Span::default(),
         };
         let graph = builders::build_stm_from_state_machine(&sm);
