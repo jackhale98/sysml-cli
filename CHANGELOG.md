@@ -16,6 +16,13 @@
   project-wide resolution, as `sysml check` does, so cross-file types and
   references no longer raise W004/W005 in the browser.
 
+### Changed
+- **Scoped general views show what a package is built from.** Definitions
+  that in-scope parts are typed by, and in-scope supertypes, are drawn too,
+  so a package's view shows its decomposition. Packages list their parts in
+  a compartment instead of drawing composition diamonds (a package owns
+  members; it is not composed of them).
+
 ### Fixed
 - **Members could not be inserted into packages.** Package bodies were not
   recorded (`body_end_byte` was `None`), so `insert_member` (and the web
