@@ -19,7 +19,10 @@
 ### Changed
 - **Scoped general views show what a package is built from.** Definitions
   that in-scope parts are typed by, and in-scope supertypes, are drawn too,
-  so a package's view shows its decomposition. Packages list their parts in
+  so a package's view shows its decomposition. The package's own part
+  usages are drawn as a usage tree (rounded nodes with dotted-path ids such
+  as `drone.battery`, composed of their nested parts, three levels deep).
+  Packages list their parts in
   a compartment instead of drawing composition diamonds (a package owns
   members; it is not composed of them).
 

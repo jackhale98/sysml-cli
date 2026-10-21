@@ -96,6 +96,17 @@ pub fn build_bdd(model: &Model, scope: Option<&str>) -> DiagramGraph {
         });
     }
 
+    // Usage decomposition: the scope's own part usages (a design such as
+    // `part drone : DeliveryDrone { part battery : Battery; … }`), drawn as
+    // rounded usage nodes composed of their nested parts.
+    if let Some(scope_name) = scope {
+        for u in model.usages_in_def(scope_name) {
+            if u.kind == "part" && !u.name.is_empty() {
+                add_usage_tree(model, &mut graph, u, u.name.clone(), 0);
+            }
+        }
+    }
+
     // Specialization edges
     for def in &defs {
         if let Some(ref st) = def.super_type {
@@ -135,6 +146,77 @@ pub fn build_bdd(model: &Model, scope: Option<&str>) -> DiagramGraph {
     }
 
     graph
+}
+
+/// Maximum depth of the part-usage tree drawn in a general view.
+const USAGE_TREE_DEPTH: usize = 3;
+
+/// `name : Type [mult]` as written in a usage's declaration.
+fn usage_label(u: &Usage) -> String {
+    let conj = if u.is_conjugated { "~" } else { "" };
+    let typed = u
+        .type_ref
+        .as_deref()
+        .map(|t| format!(" : {}{}", conj, t))
+        .unwrap_or_default();
+    let mult = u
+        .multiplicity
+        .as_ref()
+        .map(|m| format!(" {}", m))
+        .unwrap_or_default();
+    format!("{}{}{}", u.name, typed, mult)
+}
+
+/// Add a part usage and, recursively, its nested part usages. Node ids are
+/// dotted paths (`drone.battery`) so equally named parts stay distinct.
+fn add_usage_tree(
+    model: &Model,
+    graph: &mut DiagramGraph,
+    usage: &Usage,
+    id: String,
+    depth: usize,
+) {
+    if graph.has_node(&id) {
+        return;
+    }
+    let children: Vec<&Usage> = model
+        .usages
+        .iter()
+        .filter(|c| {
+            c.parent_def.as_deref() == Some(usage.name.as_str())
+                && usage.span.contains(&c.span)
+                && !c.name.is_empty()
+        })
+        .collect();
+    let mut attrs = Vec::new();
+    for c in &children {
+        if c.kind != "part" || depth + 1 >= USAGE_TREE_DEPTH {
+            attrs.push((c.kind.clone(), usage_label(c)));
+        }
+    }
+    graph.add_node(DiagramNode {
+        id: id.clone(),
+        label: usage_label(usage),
+        kind: NodeKind::Block,
+        stereotype: Some("<<part>>".to_string()),
+        attributes: attrs,
+        is_definition: false,
+    });
+    if depth + 1 >= USAGE_TREE_DEPTH {
+        return;
+    }
+    for c in children {
+        if c.kind == "part" {
+            let child_id = format!("{}.{}", id, c.name);
+            add_usage_tree(model, graph, c, child_id.clone(), depth + 1);
+            graph.add_edge(DiagramEdge {
+                source: id.clone(),
+                target: child_id,
+                label: None,
+                kind: EdgeKind::Composition,
+            });
+        }
+    }
 }
 
 /// Build an Internal Block Diagram for a specific definition.
@@ -1721,6 +1803,40 @@ mod tests {
         assert!(kinds.contains(&("Drone", "Machine", EdgeKind::Specialization)));
         // The package lists its parts; it is not composed of them.
         assert!(!kinds.iter().any(|(s, _, _)| *s == "Architecture"));
+    }
+
+    #[test]
+    fn bdd_scoped_draws_part_usage_tree() {
+        let model = parse_file(
+            "test.sysml",
+            r#"
+            package Architecture {
+                part def Drone;
+                part drone : Drone {
+                    part battery : Battery;
+                    part rotors : Rotor[4] {
+                        part blade : Blade;
+                    }
+                    attribute mass : Real;
+                }
+            }
+        "#,
+        );
+        let graph = build_bdd(&model, Some("Architecture"));
+        let drone = graph.nodes.iter().find(|n| n.id == "drone").unwrap();
+        assert!(!drone.is_definition);
+        assert_eq!(drone.label, "drone : Drone");
+        assert!(drone
+            .attributes
+            .iter()
+            .any(|(k, v)| k == "attribute" && v.starts_with("mass")));
+        assert!(graph.has_node("drone.battery"));
+        assert!(graph.has_node("drone.rotors.blade"));
+        let rotors = graph.nodes.iter().find(|n| n.id == "drone.rotors").unwrap();
+        assert!(rotors.label.starts_with("rotors : Rotor"));
+        assert!(graph.edges.iter().any(|e| e.source == "drone"
+            && e.target == "drone.rotors"
+            && e.kind == EdgeKind::Composition));
     }
 
     #[test]
