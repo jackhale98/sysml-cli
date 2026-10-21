@@ -76,6 +76,7 @@ pub(crate) fn run(cli: &Cli, files: &[PathBuf], check: bool, gate: Option<&str>)
                 .collect(),
             warnings: Vec::new(),
             sources: Vec::new(),
+            ..Default::default()
         };
         crate::output::print_table(&cli.format, &table);
 

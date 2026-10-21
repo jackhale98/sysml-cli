@@ -7,11 +7,13 @@
 use serde::{Deserialize, Serialize};
 use sysml_core::checks;
 use sysml_core::codegen::edit::{self, EditPlan, TextEdit};
+use sysml_core::codegen::field_edit;
 use sysml_core::diagnostic::Diagnostic;
 use sysml_core::diagram::{self, DiagramGraph};
 use sysml_core::highlight;
 use sysml_core::model::Model;
 use sysml_core::parser::parse_file;
+use sysml_core::view_edit::FieldSpec;
 
 /// Maps UTF-8 byte offsets of one source to UTF-16 offsets.
 pub struct Utf16Index {
@@ -182,6 +184,47 @@ pub enum EditRequest {
         from: String,
         to: String,
     },
+    /// Set one field of one element — an edited table cell. `element` and
+    /// `line` come from the row's `sources` entry, `field` from the
+    /// column's `editable` entry; `value` is the cell text (an enum
+    /// literal, a comma-separated list of them, a number or text; empty
+    /// clears the field). `files`, the project as `[{ path, text }]`, is
+    /// optional: it resolves the field's type when the element has no
+    /// value yet (`Priority::low` rather than `"low"`).
+    SetField {
+        path: String,
+        source: String,
+        element: String,
+        #[serde(default)]
+        line: usize,
+        field: String,
+        value: String,
+        #[serde(default)]
+        files: Option<Vec<SourceFile>>,
+    },
+    /// Set the columns of view `view`: its def's `@TableRendering`
+    /// `columns`, or a usage's override (inserted when missing; removed
+    /// by an empty list).
+    SetTableColumns {
+        path: String,
+        source: String,
+        view: String,
+        columns: Vec<String>,
+    },
+}
+
+/// The models a field's type resolves against: the project (with this
+/// file's current text) or just this file, plus the bundled libraries.
+fn field_context(path: &str, source: &str, files: Option<Vec<SourceFile>>) -> Vec<Model> {
+    let mut files = files.unwrap_or_default();
+    match files.iter_mut().find(|f| f.path == path) {
+        Some(f) => f.text = source.to_owned(),
+        None => files.push(SourceFile {
+            path: path.to_owned(),
+            text: source.to_owned(),
+        }),
+    }
+    crate::views::load(&files).0
 }
 
 #[derive(Serialize, Debug, PartialEq)]
@@ -231,6 +274,32 @@ pub fn apply_request(request: EditRequest) -> Result<EditResult, String> {
         } => {
             let model = parse_file(&path, &source);
             let plan = edit::rename_element(&source, &model, &from, &to).map_err(|e| e.message)?;
+            (path, source, plan)
+        }
+        EditRequest::SetField {
+            path,
+            source,
+            element,
+            line,
+            field,
+            value,
+            files,
+        } => {
+            let spec = FieldSpec::parse(&field)?;
+            let models = field_context(&path, &source, files);
+            let ty = field_edit::resolve_field_type(&models, &source, &element, line, &spec);
+            let plan = field_edit::set_field(&source, &element, line, &spec, &value, ty.as_ref())
+                .map_err(|e| e.message)?;
+            (path, source, plan)
+        }
+        EditRequest::SetTableColumns {
+            path,
+            source,
+            view,
+            columns,
+        } => {
+            let plan =
+                field_edit::set_table_columns(&source, &view, &columns).map_err(|e| e.message)?;
             (path, source, plan)
         }
     };
@@ -325,6 +394,60 @@ mod tests {
         })
         .unwrap();
         assert!(!result.syntax_errors.is_empty());
+    }
+
+    #[test]
+    fn set_field_edits_one_value() {
+        let source = "package R {\n    enum def Priority { enum high; enum low; }\n    requirement def D { attribute priority : Priority; }\n    requirement r : D;\n}\n";
+        let request = |value: &str| EditRequest::SetField {
+            path: "r.sysml".into(),
+            source: source.into(),
+            element: "R::r".into(),
+            line: 4,
+            field: "feature:priority".into(),
+            value: value.into(),
+            files: None,
+        };
+        let result = apply_request(request("low")).unwrap();
+        assert!(result.syntax_errors.is_empty());
+        let semi = source.find("D;").unwrap() as u32 + 1;
+        assert_eq!(
+            result.changes,
+            vec![Change {
+                from: semi,
+                to: semi + 1,
+                insert: " {\n        :>> priority = Priority::low;\n    }".into(),
+            }]
+        );
+        let err = apply_request(request("medium")).unwrap_err();
+        assert!(err.contains("high, low"), "{err}");
+        let bad = EditRequest::SetField {
+            path: "r.sysml".into(),
+            source: source.into(),
+            element: "r".into(),
+            line: 0,
+            field: "title".into(),
+            value: "x".into(),
+            files: None,
+        };
+        assert!(apply_request(bad).unwrap_err().contains("unknown field"));
+    }
+
+    #[test]
+    fn set_table_columns_overrides_a_usage() {
+        let source = "view v : RequirementsTable;";
+        let result = apply_request(EditRequest::SetTableColumns {
+            path: "v.sysml".into(),
+            source: source.into(),
+            view: "v".into(),
+            columns: vec!["id".into(), "title".into()],
+        })
+        .unwrap();
+        assert!(result.syntax_errors.is_empty());
+        assert_eq!(
+            result.changes[0].insert,
+            " {\n    @TableRendering { columns = \"id; title\"; }\n}"
+        );
     }
 
     #[test]

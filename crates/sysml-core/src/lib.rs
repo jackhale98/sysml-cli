@@ -30,4 +30,5 @@ pub mod query;
 pub mod resolver;
 pub mod sim;
 pub mod stdlib;
+pub mod view_edit;
 pub mod view_render;
