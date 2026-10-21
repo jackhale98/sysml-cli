@@ -1,3 +1,4 @@
+use sysml_core::lang::symbols::{self as lang, SymbolOrigin};
 use sysml_core::model::{DefKind, Model};
 use tower_lsp_server::ls_types::{DocumentSymbol, SymbolKind};
 
@@ -46,84 +47,38 @@ fn usage_kind_to_symbol_kind(kind: &str) -> SymbolKind {
 }
 
 /// Build a hierarchical list of document symbols from a model.
-#[allow(deprecated)] // DocumentSymbol::children is deprecated in newer lsp_types but required
 pub fn document_symbols(model: &Model, source: &str) -> Vec<DocumentSymbol> {
-    // Build top-level definitions (no parent), then nest children
-    let mut top_level: Vec<DocumentSymbol> = Vec::new();
-
-    for def in &model.definitions {
-        if def.parent_def.is_some() {
-            continue; // handled as child
-        }
-
-        let children = build_children(model, source, &def.name);
-        let range = span_to_range(&def.span, source);
-
-        top_level.push(DocumentSymbol {
-            name: def.name.clone(),
-            detail: def.super_type.clone(),
-            kind: def_kind_to_symbol_kind(def.kind),
-            tags: None,
-            deprecated: None,
-            range,
-            selection_range: range,
-            children: if children.is_empty() {
-                None
-            } else {
-                Some(children)
-            },
-        });
-    }
-
-    top_level
+    lang::document_symbols(model)
+        .into_iter()
+        .map(|s| to_lsp(s, source))
+        .collect()
 }
 
-#[allow(deprecated)]
-fn build_children(model: &Model, source: &str, parent_name: &str) -> Vec<DocumentSymbol> {
-    let mut children = Vec::new();
-
-    // Child definitions
-    for def in &model.definitions {
-        if def.parent_def.as_deref() != Some(parent_name) {
-            continue;
-        }
-        let grandchildren = build_children(model, source, &def.name);
-        let range = span_to_range(&def.span, source);
-        children.push(DocumentSymbol {
-            name: def.name.clone(),
-            detail: def.super_type.clone(),
-            kind: def_kind_to_symbol_kind(def.kind),
-            tags: None,
-            deprecated: None,
-            range,
-            selection_range: range,
-            children: if grandchildren.is_empty() {
-                None
-            } else {
-                Some(grandchildren)
-            },
-        });
+#[allow(deprecated)] // DocumentSymbol::deprecated is deprecated but required
+fn to_lsp(symbol: lang::Symbol, source: &str) -> DocumentSymbol {
+    let range = span_to_range(&symbol.span, source);
+    let children: Vec<DocumentSymbol> = symbol
+        .children
+        .into_iter()
+        .map(|c| to_lsp(c, source))
+        .collect();
+    DocumentSymbol {
+        name: symbol.name,
+        detail: symbol.detail,
+        kind: match &symbol.origin {
+            SymbolOrigin::Def(kind) => def_kind_to_symbol_kind(*kind),
+            SymbolOrigin::Usage(kind) => usage_kind_to_symbol_kind(kind),
+        },
+        tags: None,
+        deprecated: None,
+        range,
+        selection_range: range,
+        children: if children.is_empty() {
+            None
+        } else {
+            Some(children)
+        },
     }
-
-    // Child usages
-    for usage in &model.usages {
-        if usage.parent_def.as_deref() != Some(parent_name) {
-            continue;
-        }
-        let range = span_to_range(&usage.span, source);
-        children.push(DocumentSymbol {
-            name: usage.name.clone(),
-            detail: usage.type_ref.clone(),
-            kind: usage_kind_to_symbol_kind(&usage.kind),
-            tags: None,
-            deprecated: None,
-            range,
-            selection_range: range,
-            children: None,
-        });
-    }
-
-    children
 }
 
 #[cfg(test)]

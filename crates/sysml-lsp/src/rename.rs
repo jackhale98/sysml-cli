@@ -1,203 +1,13 @@
+//! Rename: occurrences come from `sysml_core::lang::rename`; this module
+//! builds the LSP workspace edit.
+
 use std::collections::HashMap;
 
-use sysml_core::model::{simple_name, Model};
-use tower_lsp_server::ls_types::{TextEdit, Uri, WorkspaceEdit};
+use sysml_core::lang::rename as lang;
+use sysml_core::model::Model;
+use tower_lsp_server::ls_types::{Range, TextEdit, Uri, WorkspaceEdit};
 
-/// A text occurrence of a name in source: byte start and byte end.
-#[derive(Debug)]
-struct Occurrence {
-    start_byte: usize,
-    end_byte: usize,
-}
-
-/// Find all byte-level occurrences of `old_name` as a complete identifier in the source,
-/// scoped to spans from the model (definitions, usages, type_references).
-fn find_occurrences(model: &Model, source: &str, old_name: &str) -> Vec<Occurrence> {
-    let target = simple_name(old_name);
-    let mut occs = Vec::new();
-
-    // Definition names
-    for def in &model.definitions {
-        if def.name == target {
-            let text = &source[def.span.start_byte..def.span.end_byte];
-            if let Some(pos) = find_word_in(text, target) {
-                occs.push(Occurrence {
-                    start_byte: def.span.start_byte + pos,
-                    end_byte: def.span.start_byte + pos + target.len(),
-                });
-            }
-        }
-        // Supertype reference
-        if let Some(ref st) = def.super_type {
-            if simple_name(st) == target {
-                let text = &source[def.span.start_byte..def.span.end_byte];
-                // Find the last occurrence (supertype comes after `:`/`:>`)
-                if let Some(pos) = rfind_word_in(text, target) {
-                    occs.push(Occurrence {
-                        start_byte: def.span.start_byte + pos,
-                        end_byte: def.span.start_byte + pos + target.len(),
-                    });
-                }
-            }
-        }
-    }
-
-    // Usage names and type_refs
-    for usage in &model.usages {
-        let text = &source[usage.span.start_byte..usage.span.end_byte];
-        if usage.name == target {
-            if let Some(pos) = find_word_in(text, target) {
-                occs.push(Occurrence {
-                    start_byte: usage.span.start_byte + pos,
-                    end_byte: usage.span.start_byte + pos + target.len(),
-                });
-            }
-        }
-        if let Some(ref tr) = usage.type_ref {
-            if simple_name(tr) == target {
-                if let Some(pos) = rfind_word_in(text, target) {
-                    let abs = usage.span.start_byte + pos;
-                    // Don't duplicate if same position as usage name
-                    if !occs.iter().any(|o| o.start_byte == abs) {
-                        occs.push(Occurrence {
-                            start_byte: abs,
-                            end_byte: abs + target.len(),
-                        });
-                    }
-                }
-            }
-        }
-    }
-
-    // Explicit type_references
-    for tr in &model.type_references {
-        if simple_name(&tr.name) == target {
-            let text = &source[tr.span.start_byte..tr.span.end_byte];
-            if let Some(pos) = find_word_in(text, target) {
-                let abs = tr.span.start_byte + pos;
-                if !occs.iter().any(|o| o.start_byte == abs) {
-                    occs.push(Occurrence {
-                        start_byte: abs,
-                        end_byte: abs + target.len(),
-                    });
-                }
-            }
-        }
-    }
-
-    // Relationship statements and imports mention names too — a rename
-    // that skips them silently corrupts traceability. Scan every
-    // whole-word occurrence within each statement's span.
-    let mut scan_span = |span: &sysml_core::model::Span, mentions: bool| {
-        if !mentions || span.end_byte > source.len() || span.start_byte >= span.end_byte {
-            return;
-        }
-        let text = &source[span.start_byte..span.end_byte];
-        for pos in find_all_words_in(text, target) {
-            let abs = span.start_byte + pos;
-            if !occs.iter().any(|o| o.start_byte == abs) {
-                occs.push(Occurrence {
-                    start_byte: abs,
-                    end_byte: abs + target.len(),
-                });
-            }
-        }
-    };
-
-    for imp in &model.imports {
-        scan_span(&imp.span, imp.path.split("::").any(|seg| seg == target));
-    }
-    for s in &model.satisfactions {
-        let mentions = simple_name(&s.requirement) == target
-            || s.requirement
-                .split("::")
-                .any(|seg| simple_name(seg) == target)
-            || s.by.as_deref().map(simple_name) == Some(target);
-        scan_span(&s.span, mentions);
-    }
-    for v in &model.verifications {
-        let mentions = simple_name(&v.requirement) == target
-            || v.requirement
-                .split("::")
-                .any(|seg| simple_name(seg) == target)
-            || simple_name(&v.by) == target;
-        scan_span(&v.span, mentions);
-    }
-    for c in &model.connections {
-        let mentions = [&c.source, &c.target]
-            .iter()
-            .any(|r| r.split(['.', ':']).any(|seg| seg == target));
-        scan_span(&c.span, mentions);
-    }
-    for f in &model.flows {
-        let mentions = [&f.source, &f.target]
-            .iter()
-            .any(|r| r.split(['.', ':']).any(|seg| seg == target))
-            || f.item_type.as_deref().map(simple_name) == Some(target);
-        scan_span(&f.span, mentions);
-    }
-    for a in &model.allocations {
-        let mentions = [&a.source, &a.target]
-            .iter()
-            .any(|r| r.split(['.', ':']).any(|seg| seg == target));
-        scan_span(&a.span, mentions);
-    }
-
-    // Sort and dedup
-    occs.sort_by_key(|o| o.start_byte);
-    occs.dedup_by_key(|o| o.start_byte);
-    occs
-}
-
-/// Find all whole-word occurrences of `word` in `text`.
-fn find_all_words_in(text: &str, word: &str) -> Vec<usize> {
-    let mut result = Vec::new();
-    let mut start = 0;
-    while let Some(pos) = text[start..].find(word) {
-        let abs = start + pos;
-        if is_word_boundary(text, abs, word.len()) {
-            result.push(abs);
-        }
-        start = abs + 1;
-    }
-    result
-}
-
-/// Find a whole-word occurrence of `word` in `text` (first match).
-fn find_word_in(text: &str, word: &str) -> Option<usize> {
-    let mut start = 0;
-    while let Some(pos) = text[start..].find(word) {
-        let abs = start + pos;
-        if is_word_boundary(text, abs, word.len()) {
-            return Some(abs);
-        }
-        start = abs + 1;
-    }
-    None
-}
-
-/// Find a whole-word occurrence of `word` in `text` (last match).
-fn rfind_word_in(text: &str, word: &str) -> Option<usize> {
-    let mut last = None;
-    let mut start = 0;
-    while let Some(pos) = text[start..].find(word) {
-        let abs = start + pos;
-        if is_word_boundary(text, abs, word.len()) {
-            last = Some(abs);
-        }
-        start = abs + 1;
-    }
-    last
-}
-
-fn is_word_boundary(text: &str, pos: usize, len: usize) -> bool {
-    let before_ok = pos == 0
-        || !text.as_bytes()[pos - 1].is_ascii_alphanumeric() && text.as_bytes()[pos - 1] != b'_';
-    let after = pos + len;
-    let after_ok = after >= text.len()
-        || !text.as_bytes()[after].is_ascii_alphanumeric() && text.as_bytes()[after] != b'_';
-    before_ok && after_ok
-}
+use crate::convert::offset_to_position;
 
 /// Build a WorkspaceEdit that renames `old_name` to `new_name` across all provided models.
 pub fn rename_symbol(
@@ -206,31 +16,23 @@ pub fn rename_symbol(
     new_name: &str,
 ) -> Option<WorkspaceEdit> {
     let mut changes: HashMap<Uri, Vec<TextEdit>> = HashMap::new();
-
-    for &(uri_str, source, model) in models {
-        let occs = find_occurrences(model, source, old_name);
-        if occs.is_empty() {
-            continue;
-        }
+    for (uri_str, source, occs) in lang::rename_occurrences(models, old_name) {
         let uri = uri_str.parse::<Uri>().ok()?;
-        let edits: Vec<TextEdit> = occs
+        let edits = occs
             .iter()
-            .map(|occ| {
-                let start = crate::convert::offset_to_position(source, occ.start_byte);
-                let end = crate::convert::offset_to_position(source, occ.end_byte);
-                TextEdit {
-                    range: tower_lsp_server::ls_types::Range::new(start, end),
-                    new_text: new_name.to_string(),
-                }
+            .map(|occ| TextEdit {
+                range: Range::new(
+                    offset_to_position(source, occ.start_byte),
+                    offset_to_position(source, occ.end_byte),
+                ),
+                new_text: new_name.to_string(),
             })
             .collect();
         changes.insert(uri, edits);
     }
-
     if changes.is_empty() {
         return None;
     }
-
     Some(WorkspaceEdit {
         changes: Some(changes),
         ..Default::default()
@@ -238,55 +40,21 @@ pub fn rename_symbol(
 }
 
 /// Check if a position is on a renameable identifier and return its name + range.
-pub fn prepare_rename(
-    model: &Model,
-    source: &str,
-    offset: usize,
-) -> Option<(String, tower_lsp_server::ls_types::Range)> {
-    // Check definitions
-    for def in &model.definitions {
-        if def.span.start_byte <= offset && offset < def.span.end_byte {
-            let text = &source[def.span.start_byte..def.span.end_byte];
-            if let Some(pos) = find_word_in(text, &def.name) {
-                let abs_start = def.span.start_byte + pos;
-                let abs_end = abs_start + def.name.len();
-                if abs_start <= offset && offset < abs_end {
-                    let start = crate::convert::offset_to_position(source, abs_start);
-                    let end = crate::convert::offset_to_position(source, abs_end);
-                    return Some((
-                        def.name.clone(),
-                        tower_lsp_server::ls_types::Range::new(start, end),
-                    ));
-                }
-            }
-        }
-    }
-
-    // Check usages
-    for usage in &model.usages {
-        if usage.span.start_byte <= offset && offset < usage.span.end_byte {
-            let text = &source[usage.span.start_byte..usage.span.end_byte];
-            if let Some(pos) = find_word_in(text, &usage.name) {
-                let abs_start = usage.span.start_byte + pos;
-                let abs_end = abs_start + usage.name.len();
-                if abs_start <= offset && offset < abs_end {
-                    let start = crate::convert::offset_to_position(source, abs_start);
-                    let end = crate::convert::offset_to_position(source, abs_end);
-                    return Some((
-                        usage.name.clone(),
-                        tower_lsp_server::ls_types::Range::new(start, end),
-                    ));
-                }
-            }
-        }
-    }
-
-    None
+pub fn prepare_rename(model: &Model, source: &str, offset: usize) -> Option<(String, Range)> {
+    let (name, start, end) = lang::prepare_rename(model, source, offset)?;
+    Some((
+        name,
+        Range::new(
+            offset_to_position(source, start),
+            offset_to_position(source, end),
+        ),
+    ))
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use sysml_core::lang::rename::find_occurrences;
     use sysml_core::parser::parse_file;
 
     #[test]

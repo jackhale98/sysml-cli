@@ -5,7 +5,7 @@ use crate::diagnostic::{codes, Diagnostic};
 use crate::model::{simple_name, DefKind, Model};
 
 /// Levenshtein edit distance between two strings.
-fn levenshtein(a: &str, b: &str) -> usize {
+pub(crate) fn levenshtein(a: &str, b: &str) -> usize {
     let n = a.len();
     let m = b.len();
     let a_bytes = a.as_bytes();

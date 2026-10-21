@@ -1,25 +1,15 @@
 use std::path::PathBuf;
 
 use dashmap::DashMap;
-use sysml_core::model::{DefKind, Model, Span};
+use sysml_core::model::Model;
+
+/// A workspace definition (shared with `sysml_core::lang`).
+pub use sysml_core::lang::WorkspaceDef as DefLocation;
 
 pub struct FileState {
     pub source: String,
     pub model: Model,
     pub version: i32,
-}
-
-#[derive(Debug, Clone)]
-pub struct DefLocation {
-    pub uri: String,
-    pub name: String,
-    pub kind: DefKind,
-    pub span: Span,
-    pub doc: Option<String>,
-    #[allow(dead_code)]
-    pub super_type: Option<String>,
-    #[allow(dead_code)]
-    pub qualified_name: Option<String>,
 }
 
 pub struct WorldState {

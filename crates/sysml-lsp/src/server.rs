@@ -4,6 +4,7 @@ use tower_lsp_server::jsonrpc::Result;
 use tower_lsp_server::ls_types::*;
 use tower_lsp_server::{Client, LanguageServer};
 
+use sysml_core::lang::definition::find_element_name_at_offset;
 use sysml_core::model::qualify_model;
 use sysml_core::parser;
 
@@ -822,38 +823,4 @@ impl LanguageServer for SysmlLanguageServer {
             Ok(Some(links))
         }
     }
-}
-
-/// Try to find a definition or usage name at the given byte offset
-/// (for hovering on the name itself, not a reference).
-fn find_element_name_at_offset(
-    model: &sysml_core::model::Model,
-    source: &str,
-    offset: usize,
-) -> Option<String> {
-    for def in &model.definitions {
-        if def.span.start_byte <= offset && offset < def.span.end_byte {
-            let def_text = &source[def.span.start_byte..def.span.end_byte];
-            if let Some(pos) = def_text.find(&def.name) {
-                let abs_start = def.span.start_byte + pos;
-                let abs_end = abs_start + def.name.len();
-                if abs_start <= offset && offset < abs_end {
-                    return Some(def.name.clone());
-                }
-            }
-        }
-    }
-    for usage in &model.usages {
-        if usage.span.start_byte <= offset && offset < usage.span.end_byte {
-            let usage_text = &source[usage.span.start_byte..usage.span.end_byte];
-            if let Some(pos) = usage_text.find(&usage.name) {
-                let abs_start = usage.span.start_byte + pos;
-                let abs_end = abs_start + usage.name.len();
-                if abs_start <= offset && offset < abs_end {
-                    return Some(usage.name.clone());
-                }
-            }
-        }
-    }
-    None
 }

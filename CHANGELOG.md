@@ -37,6 +37,41 @@
   `.kpar` with an element index and SHA256 checksums, so the browser app
   can import and export projects.
 
+### Added (editor language features in the browser)
+- **`sysml_core::lang`**: transport-free editor features on byte offsets,
+  shared by the language server and the browser engine. A project index
+  (`lang::Workspace`) records every element with the exact span of its
+  name, its owner, types and imports, and resolves names the SysML way —
+  owned, inherited and imported members outward through the enclosing
+  namespaces, feature chains (`battery.usableEnergy`), qualified names,
+  redefinitions (`:>> mass` is the inherited `mass`), the root namespace
+  shared by all files, then the embedded standard library. A small lexer
+  keeps names in comments and strings out of the way.
+- **sysml-wasm `complete`, `hover`, `definition`, `references`,
+  `renameSymbol`, `outline`, `format` and `codeActions`** for the
+  CodeMirror editor, project-wide (`files` as `[{ path, text }]`) with
+  UTF-16 offsets: context-aware completion (types after `:`/`:>`,
+  inherited features after `:>>`, packages and `::*` after `import`,
+  members after `x.` and `Pkg::`, keywords and snippets at the start of a
+  statement); hovers with the declaration, kind, qualified name, doc, type
+  and members (library elements name their file); go to definition across
+  files and into the library (`{ library: { path, line } }` for
+  `libraryFile`); scope-aware references and rename (quoting
+  `'Battery pack'`, refusing clashes and library elements); a nested
+  outline; formatting as minimal re-indenting changes; and quick fixes for
+  W004/W005 (import the element from its package or qualify it, change to
+  a near name) and W001 (remove the unused definition). Parsed files are
+  cached by text hash, so a call while typing re-indexes only the edited
+  file (the drone demo in Node: `hover` 2 ms, `complete` 3 ms with a
+  prefix and 9 ms for all 1,700 types after a bare `: `).
+- `lang::analyze_models` is the project analysis behind `analyzeProject`.
+
+### Changed (language server)
+- `sysml-lsp`'s completion, hover, definition, references, rename,
+  document symbols, formatting and code-action helpers now live in
+  `sysml_core::lang`; the server maps them to LSP types and behaves as
+  before.
+
 ### Added (standard library browser, state machine emulator)
 - **sysml-wasm `libraryIndex()`, `libraryFile(path)`, `librarySearch(query,
   limit)` and `libraryLicense()`** over the embedded OMG standard library:

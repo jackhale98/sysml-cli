@@ -11,6 +11,7 @@
 //! - [`resolver`] — Multi-file import resolution
 //! - [`diagnostic`] — Diagnostic types and error codes
 //! - [`checks`] — Validation checks (lint rules)
+//! - [`lang`] — Editor language features (completion, hover, rename, ...)
 //! - [`sim`] — Simulation engine (constraints, state machines, action flows)
 //! - [`export`] — Export to FMI, Modelica, and SSP formats
 
@@ -22,6 +23,7 @@ pub mod diagram;
 pub mod export;
 pub mod highlight;
 pub mod interactive;
+pub mod lang;
 pub mod model;
 pub mod parser;
 pub mod project;

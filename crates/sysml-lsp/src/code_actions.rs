@@ -5,6 +5,10 @@ use tower_lsp_server::ls_types::{
 
 use std::collections::HashMap;
 
+use sysml_core::lang::actions::{
+    extract_backtick_name, extract_did_you_mean, find_import_insert_line,
+};
+
 /// Extract quick-fix code actions from diagnostics in the given range.
 /// `workspace_names` enables "add import" suggestions for unresolved types.
 pub fn code_actions(
@@ -107,35 +111,6 @@ pub fn code_actions(
     }
 
     actions
-}
-
-/// Find the line number to insert a new import statement.
-fn find_import_insert_line(source: &str) -> u32 {
-    let mut last_import_line = 0u32;
-    for (i, line) in source.lines().enumerate() {
-        let trimmed = line.trim();
-        if trimmed.starts_with("import ") || trimmed.starts_with("private import ") {
-            last_import_line = (i + 1) as u32;
-        }
-    }
-    last_import_line
-}
-
-/// Parse a "did you mean `X`?" suggestion from a diagnostic message.
-fn extract_did_you_mean(message: &str) -> Option<String> {
-    let marker = "did you mean `";
-    let start = message.find(marker)? + marker.len();
-    let rest = &message[start..];
-    let end = rest.find('`')?;
-    Some(rest[..end].to_string())
-}
-
-/// Extract the first `backtick-quoted` name from a message.
-fn extract_backtick_name(message: &str) -> Option<&str> {
-    let start = message.find('`')? + 1;
-    let rest = &message[start..];
-    let end = rest.find('`')?;
-    Some(&rest[..end])
 }
 
 /// Expand a range to cover the full lines it spans (including trailing newline).
