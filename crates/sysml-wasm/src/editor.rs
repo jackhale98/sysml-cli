@@ -293,7 +293,10 @@ mod tests {
         let change = &result.changes[0];
         let mut edited = source.to_owned();
         edited.replace_range(change.from as usize..change.to as usize, &change.insert);
-        assert_eq!(edited, "package P {\n    part def A;\n    part def B {\n    }\n}\n");
+        assert_eq!(
+            edited,
+            "package P {\n    part def A;\n    part def B {\n    }\n}\n"
+        );
     }
 
     #[test]

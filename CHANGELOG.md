@@ -16,6 +16,11 @@
   project-wide resolution, as `sysml check` does, so cross-file types and
   references no longer raise W004/W005 in the browser.
 
+### Fixed
+- **Members could not be inserted into packages.** Package bodies were not
+  recorded (`body_end_byte` was `None`), so `insert_member` (and the web
+  app's "Add" actions) refused packages with "has no body".
+
 ### Changed
 - tree-sitter-sysml submodule bumped to the relicensed grammar with the
   deterministic `satisfy … by` parse.
