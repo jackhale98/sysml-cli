@@ -2,6 +2,31 @@
 
 ## Unreleased
 
+### Changed
+- **Licence is now `Apache-2.0 OR MIT`** (was GPL-3.0-or-later), so the
+  engine can be embedded in other tools, including the SysML Web app. The
+  embedded OMG standard library remains EPL-2.0.
+- **tree-sitter 0.27.** Required for `wasm32-unknown-unknown`; `sysml-core`
+  now also depends on `tree-sitter-language` directly so its wasm libc
+  headers reach the grammar build.
+
+### Added
+- **`sysml-semantic` crate** — the start of the shared semantic engine.
+  Normative element identity (KerML 1.0, 9.1): UUIDv5 ids from `path()`,
+  `qualifiedName` and `escapedName()`. A golden test reproduces the
+  `elementId` of all 404,686 elements of the OMG standard library
+  (`sysml.library.xmi.implied`), which pins down that ids are derived with
+  implied relationships and with SysML's naming overrides (conjugated
+  ports, perform/exhibit/include, requirement constraints, variants).
+- **`sysml-interchange` crate** — project interchange files (`.kpar`,
+  KerML 10.3): read, write (deterministic, stored entries), SHA256
+  checksums, unknown fields preserved. All ten OMG library archives load,
+  verify and round-trip.
+- **`sysml-wasm` crate** — the engine for browsers: `analyze` (parse +
+  checks), `readKpar`, `libraryElementId`. `scripts/build-wasm.sh` builds
+  it with its wasm-bindgen glue; CI builds it on every push and releases
+  attach `sysml-wasm.tar.gz`.
+
 ### Fixed
 - **Naming a succession discarded the edge it declared.** `succession s1
   first a then b;` recorded the name and dropped both endpoints, because

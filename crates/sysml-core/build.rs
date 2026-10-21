@@ -24,11 +24,17 @@ fn main() {
             )
         });
 
-    cc::Build::new()
+    let mut build = cc::Build::new();
+    build
         .include(grammar_dir)
         .file(grammar_dir.join("parser.c"))
-        .warnings(false)
-        .compile("tree-sitter-sysml");
+        .warnings(false);
+    // wasm32-unknown-unknown has no libc; tree-sitter-language ships the
+    // minimal headers the generated parser needs.
+    if let Ok(headers) = std::env::var("DEP_TREE_SITTER_LANGUAGE_WASM_HEADERS") {
+        build.include(headers);
+    }
+    build.compile("tree-sitter-sysml");
 
     println!(
         "cargo:rerun-if-changed={}",

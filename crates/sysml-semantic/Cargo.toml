@@ -1,0 +1,13 @@
+[package]
+name = "sysml-semantic"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "SysML v2 / KerML semantic model: element graph, identity and name resolution"
+
+[dependencies]
+uuid = { version = "1", default-features = false, features = ["v5"] }
+
+[dev-dependencies]
+quick-xml = "0.42"

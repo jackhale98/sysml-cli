@@ -75,7 +75,7 @@ pub fn semantic_tokens(source: &str) -> Vec<SemanticToken> {
         matches.advance();
         matches.get()
     } {
-        for capture in m.captures {
+        for capture in m.captures() {
             let capture_name = &query.capture_names()[capture.index as usize];
             let Some(token_type) = capture_to_token_type(capture_name) else {
                 continue;

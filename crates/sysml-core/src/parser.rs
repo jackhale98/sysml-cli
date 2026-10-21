@@ -331,7 +331,7 @@ fn is_structural_boundary(kind: &str) -> bool {
 
 /// Effective modifier token kind for a preceding sibling: unwraps the named
 /// `modifier` node (its single child is the keyword token).
-fn sibling_modifier_kind(sib: &Node) -> &'static str {
+fn sibling_modifier_kind<'t>(sib: &Node<'t>) -> &'t str {
     if sib.kind() == "modifier" {
         if let Some(child) = sib.child(0) {
             return child.kind();

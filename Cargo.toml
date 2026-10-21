@@ -4,15 +4,35 @@ members = [
     "crates/sysml-core",
     "crates/sysml-cli",
     "crates/sysml-lsp",
+    "crates/sysml-semantic",
+    "crates/sysml-interchange",
+    "crates/sysml-wasm",
 ]
 
 [workspace.package]
 version = "0.9.3"
 edition = "2021"
-license = "GPL-3.0-or-later"
+license = "Apache-2.0 OR MIT"
 repository = "https://github.com/jackhale98/sysml-cli"
 
 [patch.crates-io]
 # ls-types 0.0.6 + the missing ServerCapabilities.type_hierarchy_provider
 # field (LSP 3.17). See third_party/ls-types/PATCH.md.
 ls-types = { path = "third_party/ls-types" }
+
+# The standard-library golden tests walk ~400k elements; keep them fast in
+# debug builds.
+[profile.dev.package.sysml-semantic]
+opt-level = 2
+
+[profile.dev.package.quick-xml]
+opt-level = 3
+
+# Size-optimised build for the browser engine:
+#   cargo build -p sysml-wasm --target wasm32-unknown-unknown --profile wasm
+[profile.wasm]
+inherits = "release"
+opt-level = "z"
+lto = true
+codegen-units = 1
+panic = "abort"

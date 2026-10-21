@@ -1,0 +1,15 @@
+[package]
+name = "sysml-interchange"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "SysML v2 / KerML model interchange: project archives (.kpar) and serialization"
+
+[dependencies]
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+sha2 = "0.11"
+zip = { version = "9", default-features = false, features = ["deflate-flate2"] }
+# Pure-Rust inflate backend so archives can be read on wasm32-unknown-unknown.
+flate2 = { version = "1", default-features = false, features = ["rust_backend"] }
