@@ -177,7 +177,7 @@ fn def_kind_from_keyword(keyword: &str) -> Option<DefKind> {
 /// Determine DefKind from a CST node.
 /// Handles both the unified "definition" node (by inspecting keyword children)
 /// and legacy specific nodes like "state_definition", "enumeration_definition".
-fn def_kind_from_node(node: &Node, source: &[u8]) -> Option<DefKind> {
+pub(crate) fn def_kind_from_node(node: &Node, source: &[u8]) -> Option<DefKind> {
     match node.kind() {
         "definition" | "generic_definition" => {
             // Unified definition: first keyword child determines kind
@@ -236,7 +236,7 @@ fn usage_kind_from_keyword(keyword: &str) -> Option<&'static str> {
 
 /// Determine usage kind from a CST node.
 /// Handles both the unified "usage" node and specific usage nodes.
-fn usage_kind_from_node(node: &Node, source: &[u8]) -> Option<&'static str> {
+pub(crate) fn usage_kind_from_node(node: &Node, source: &[u8]) -> Option<&'static str> {
     match node.kind() {
         "usage" => {
             // Unified usage: first keyword child determines kind

@@ -2,6 +2,32 @@
 
 ## Unreleased
 
+### Added (declaration editing)
+- **`codegen::declaration::set_declaration`** changes what an element's
+  declaration says — `type` (with `conjugated` for `~T`), `specializes`
+  (`:>` on a definition, subsetting on a usage), `redefines`,
+  `multiplicity`, `value` with `valueKind` (`bind` `=`, `default`
+  `default =`, `initial` `:=`), `direction`, `abstract`, `readonly`,
+  `derived`, `end`, `shortName` and `doc` — as the smallest text change.
+  Existing parts are edited in place, keeping comments, layout and their
+  spelling (`specializes A`, `: Rotor[4]`); missing ones go where the
+  SysML v2 notation puts them (prefix modifiers, keyword, short name, name,
+  multiplicity, typing, specialization, redefinition, value). `null`
+  removes a part, a doc on a `;` element creates its body, names are
+  quoted when needed, setting what is already there changes nothing, and
+  a field the declaration cannot have is an error. Covers `part`,
+  `attribute`, `port`, `item`, `action`, `state`, `requirement`, features
+  without a keyword, the `def` forms and `package` (doc and short name).
+- **`codegen::declaration::element_details`** reads the same fields back
+  (`{ name, shortName?, kind, isDefinition, type?, conjugated?,
+  specializes, redefines?, multiplicity?, value?, valueKind?, direction?,
+  abstract?, readonly?, derived?, end?, doc?, qualifiedName }`).
+- **sysml-wasm `edit` takes `setDeclaration` `{ path, source, element,
+  line, set }`** and **`elementDetails(files, path, line, element?)`**
+  returns the details, so the browser app's inspector can edit an element
+  and its diagrams can draw `specializes`. Tested on the drone demo.
+- End features (`end e : E;`) can be located by name in `setField` too.
+
 ### Added (project archives)
 - **`Kpar::read_lenient`** reads any ZIP of a project: a `.kpar`, or a
   plain archive such as a repository download (a shared top folder is
