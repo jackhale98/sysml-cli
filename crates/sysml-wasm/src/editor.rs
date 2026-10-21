@@ -5,7 +5,9 @@
 //! `analyze` stay in UTF-8 bytes, matching the engine.)
 
 use serde::{Deserialize, Serialize};
+use sysml_core::checks;
 use sysml_core::codegen::edit::{self, EditPlan, TextEdit};
+use sysml_core::diagnostic::Diagnostic;
 use sysml_core::diagram::{self, DiagramGraph};
 use sysml_core::highlight;
 use sysml_core::model::Model;
@@ -80,6 +82,38 @@ pub fn project_model(files: &[SourceFile]) -> Model {
         merged.annotations.extend(m.annotations);
     }
     merged
+}
+
+/// One file's model and diagnostics, checked in the context of the project.
+#[derive(Serialize)]
+pub struct FileAnalysis {
+    pub model: Model,
+    pub diagnostics: Vec<Diagnostic>,
+}
+
+/// Parse and check every file with project-wide name resolution, as
+/// `sysml check` does: imports and root-namespace references resolve across
+/// files, cross-file uses count as references, and requirements traced
+/// anywhere count as traced.
+pub fn analyze_project(files: &[SourceFile]) -> Vec<FileAnalysis> {
+    let models: Vec<Model> = files.iter().map(|f| parse_file(&f.path, &f.text)).collect();
+    let project = sysml_core::resolver::Project::from_models(models.clone());
+    let (satisfied, verified) = project.traced_requirements();
+    let active = checks::all_checks();
+    models
+        .into_iter()
+        .map(|mut model| {
+            model.resolved_imports = project.resolve_imports(&model);
+            model
+                .resolved_imports
+                .extend(project.resolve_root_refs(&model));
+            model.external_references = project.external_references_for(&model);
+            model.external_satisfied = satisfied.iter().cloned().collect();
+            model.external_verified = verified.iter().cloned().collect();
+            let diagnostics = active.iter().flat_map(|c| c.run(&model)).collect();
+            FileAnalysis { model, diagnostics }
+        })
+        .collect()
 }
 
 /// Build a standard view of the project.
@@ -265,6 +299,34 @@ mod tests {
         })
         .unwrap();
         assert_eq!(result.changes.len(), 2);
+    }
+
+    #[test]
+    fn project_analysis_resolves_types_across_files() {
+        let files = [
+            SourceFile {
+                path: "a.sysml".into(),
+                text:
+                    "package A { private import B::*; part def Drone { part battery : Battery; } }"
+                        .into(),
+            },
+            SourceFile {
+                path: "b.sysml".into(),
+                text: "package B { part def Battery; }".into(),
+            },
+        ];
+        let single = sysml_core::checks::all_checks()
+            .iter()
+            .flat_map(|c| c.run(&parse_file("a.sysml", &files[0].text)))
+            .filter(|d| d.code == "W004")
+            .count();
+        assert!(single > 0, "single-file analysis should not see Battery");
+        let project = analyze_project(&files);
+        assert!(
+            project[0].diagnostics.iter().all(|d| d.code != "W004"),
+            "{:?}",
+            project[0].diagnostics
+        );
     }
 
     #[test]

@@ -12,6 +12,9 @@
   whole project (models of all files merged), and `edit(request)` for
   `insertMember`, `insertTopLevel`, `remove` and `rename`, returning changes
   in UTF-16 offsets plus any syntax errors the edit would introduce.
+- **sysml-wasm `analyzeProject(files)`**: checks every file with
+  project-wide resolution, as `sysml check` does, so cross-file types and
+  references no longer raise W004/W005 in the browser.
 
 ### Changed
 - tree-sitter-sysml submodule bumped to the relicensed grammar with the

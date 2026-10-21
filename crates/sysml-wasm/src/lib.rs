@@ -96,6 +96,15 @@ pub fn library_element_id(spec: &str, package: &str, path: &str) -> Result<Strin
     .to_string())
 }
 
+/// Analyse a whole project: `files` is JSON `[{ path, text }]`. Returns, in
+/// the same order, `[{ model, diagnostics }]` with cross-file resolution.
+#[wasm_bindgen(js_name = analyzeProject)]
+pub fn analyze_project(files: &str) -> Result<String, JsError> {
+    let files: Vec<editor::SourceFile> =
+        serde_json::from_str(files).map_err(|e| JsError::new(&e.to_string()))?;
+    Ok(to_json(&editor::analyze_project(&files)))
+}
+
 /// Syntax highlighting for one file: `{ names, spans }` where `spans` is a
 /// flat `[from, to, nameIndex, ...]` list in UTF-16 offsets.
 #[wasm_bindgen]
