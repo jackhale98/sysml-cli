@@ -2,6 +2,41 @@
 
 ## Unreleased
 
+### Added (model-defined views)
+- **`view` usages render as tables.** `view fmea : FmeaWorksheet { expose
+  Power::**; }` inherits the def's `@TableRendering` (an annotation on the
+  usage overrides single fields) and its `expose` (`P`, `P::*`, `P::**`)
+  and `filter` (`@SysML::PartUsage`, `@Fmea`, `or`) clauses narrow the
+  rows. Views are found by simple or qualified name. The parser records view
+  usages in `Model::views` (`ViewDef` gains `is_usage`, `type_ref`,
+  `filters`, `doc`), and `view_render::list_views` describes every view
+  def and usage.
+- **`requirements` row provider**: one row per requirement usage (and per
+  requirement def that is not just a classifier of usages) with id, title,
+  text, type, body attribute values (kind, priority, verificationMethod,
+  ...), `@StatusInfo` status/owner, `@Rationale`, `@Issue`, satisfiedBy /
+  verifiedBy from every file and numeric `satisfied` / `verified` (1/0) for
+  gap filters.
+- **`kind:` rows** add owner, conjugated type (`~PowerPort`), the direction
+  a port def implies (flipped by conjugation), `connectedTo` and `via`;
+  **`relation:satisfy|verify` rows** name the requirement as "ID title";
+  **`composition`** walks usage bodies and subsetted usages, so a
+  `part drone : Drone { part ... }` design gets a full bill of materials.
+- **Pivots honour `sortBy`** on the row field.
+- **`RenderedTable.sources`**: the element (qualified name), file and line
+  behind each row, so viewers can link rows to the model.
+- **`libraries/ModelViews.sysml`**: standard tables as SysML view defs —
+  `RequirementsTable`, `RequirementGaps`, `TraceMatrix`,
+  `VerificationMatrix`, `InterfaceTable`, `BillOfMaterials`.
+- **sysml-wasm `listViews(files)`, `renderView(files, name)` and
+  `viewLibraries()`**, with `Reporting` and `ModelViews` bundled for
+  projects that lack them. Tested against the SysML Web drone demo.
+
+### Changed (model-defined views)
+- **`trace` rows cover requirement usages**, not only defs; defs that only
+  type requirement usages are no longer listed as requirements.
+- View row `line` fields were one too high (spans are already 1-based).
+
 ### Added (editor services)
 - **`highlight` module** in sysml-core: non-overlapping highlight spans from
   the grammar's `highlights.scm` (innermost node wins), for editors that

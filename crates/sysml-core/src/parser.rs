@@ -866,7 +866,11 @@ fn walk_node_scoped(
 
                 // Extract view definition body (expose/filter)
                 if def_kind == DefKind::View {
-                    let view = extract_view_body(&node, source, &name);
+                    let mut view = extract_view_body(&node, source, &name);
+                    if let Some(d) = model.definitions.last() {
+                        view.type_ref = d.super_type.clone();
+                        view.doc = d.doc.clone();
+                    }
                     model.views.push(view);
                 }
 
@@ -1005,6 +1009,18 @@ fn walk_node_scoped(
                     source: endpoints.as_ref().map(|(s, _)| s.clone()),
                     target: endpoints.map(|(_, t)| t),
                 });
+
+                // A view usage carries its own expose/filter clauses; it is
+                // listed with the view defs so it can be rendered too.
+                if usage_kind == "view" {
+                    let mut view = extract_view_body(&node, source, &name);
+                    if let Some(u) = model.usages.last() {
+                        view.is_usage = true;
+                        view.type_ref = u.type_ref.clone();
+                        view.doc = u.doc.clone();
+                    }
+                    model.views.push(view);
+                }
 
                 // Connection and interface usages can have connect clauses
                 if kind == "connection_usage" || kind == "interface_usage" {
@@ -1867,37 +1883,27 @@ fn get_body_braces(node: &Node) -> (Option<usize>, Option<usize>) {
 
 /// Extract expose and filter clauses from a view definition body.
 fn extract_view_body(node: &Node, source: &[u8], name: &str) -> ViewDef {
-    let mut exposes = Vec::new();
-    let mut kind_filters = Vec::new();
-    let mut render_as = None;
-
+    let mut view = ViewDef {
+        name: name.to_string(),
+        exposes: Vec::new(),
+        kind_filters: Vec::new(),
+        render_as: None,
+        span: Span::from_node(node),
+        is_usage: false,
+        type_ref: None,
+        filters: Vec::new(),
+        doc: None,
+    };
     let mut cursor = node.walk();
     for child in node.children(&mut cursor) {
-        visit_view_body_node(
-            &child,
-            source,
-            &mut exposes,
-            &mut kind_filters,
-            &mut render_as,
-        );
+        visit_view_body_node(&child, source, &mut view);
     }
-
-    ViewDef {
-        name: name.to_string(),
-        exposes,
-        kind_filters,
-        render_as,
-        span: Span::from_node(node),
-    }
+    view
 }
 
-fn visit_view_body_node(
-    node: &Node,
-    source: &[u8],
-    exposes: &mut Vec<String>,
-    kind_filters: &mut Vec<String>,
-    render_as: &mut Option<String>,
-) {
+fn visit_view_body_node(node: &Node, source: &[u8], view: &mut ViewDef) {
+    let exposes = &mut view.exposes;
+    let kind_filters = &mut view.kind_filters;
     match node.kind() {
         "expose_statement" => {
             // Collect the full text of the expose, extracting the qualified name
@@ -1917,6 +1923,14 @@ fn visit_view_body_node(
             // Look for patterns like: filter @SysML::Metadata::KindFilter {kind = part;}
             // or simpler usage-kind patterns
             let text = node_text(node, source).trim().to_string();
+            let condition = text
+                .strip_prefix("filter")
+                .unwrap_or(&text)
+                .trim_end_matches(';')
+                .trim();
+            if !condition.is_empty() {
+                view.filters.push(condition.to_string());
+            }
             // Extract kind= value if present
             if let Some(pos) = text.find("kind") {
                 let after = &text[pos + 4..];
@@ -1940,13 +1954,13 @@ fn visit_view_body_node(
                     .trim_end_matches(';')
                     .trim();
                 if !val.is_empty() {
-                    *render_as = Some(val.to_string());
+                    view.render_as = Some(val.to_string());
                 }
             }
             // Recurse into child nodes
             let mut cursor = node.walk();
             for child in node.children(&mut cursor) {
-                visit_view_body_node(&child, source, exposes, kind_filters, render_as);
+                visit_view_body_node(&child, source, view);
             }
         }
     }

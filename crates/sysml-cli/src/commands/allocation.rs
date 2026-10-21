@@ -30,6 +30,7 @@ pub(crate) fn run(cli: &Cli, files: &[PathBuf], check: bool, unallocated_only: b
                         .map(|r| vec![r.source.clone(), r.target.clone()])
                         .collect(),
                     warnings: Vec::new(),
+                    sources: Vec::new(),
                 };
                 crate::output::print_table(&cli.format, &table);
             }
