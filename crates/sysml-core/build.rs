@@ -36,6 +36,13 @@ fn main() {
     }
     build.compile("tree-sitter-sysml");
 
+    // Embed the grammar's highlight query for `highlight::highlight`.
+    let out_dir = std::env::var("OUT_DIR").unwrap();
+    let highlights = grammar_dir.join("../queries/highlights.scm");
+    let query = std::fs::read_to_string(&highlights).unwrap_or_default();
+    std::fs::write(Path::new(&out_dir).join("highlights.scm"), query).unwrap();
+    println!("cargo:rerun-if-changed={}", highlights.display());
+
     println!(
         "cargo:rerun-if-changed={}",
         grammar_dir.join("parser.c").display()

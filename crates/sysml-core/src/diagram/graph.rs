@@ -4,8 +4,11 @@
 //! GeneralView, InterconnectionView, ActionFlowView, StateTransitionView,
 //! SequenceView, GridView, BrowserView.
 
+use serde::Serialize;
+
 /// The kind of diagram, aligned with SysML v2 StandardViewDefinitions.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "snake_case")]
 pub enum DiagramKind {
     /// GeneralView (gv) — general graph of definitions and relationships.
     GeneralView(GeneralViewFlavor),
@@ -23,14 +26,16 @@ pub enum DiagramKind {
     BrowserView,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "snake_case")]
 pub enum GeneralViewFlavor {
     Default,
     Parametric,
     UseCase,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "snake_case")]
 pub enum GridViewFlavor {
     Default,
     Requirements,
@@ -110,7 +115,8 @@ impl DiagramKind {
 }
 
 /// Layout direction for the diagram.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize)]
+#[serde(rename_all = "snake_case")]
 pub enum LayoutDirection {
     #[default]
     TopBottom,
@@ -160,7 +166,7 @@ impl LayoutDirection {
 }
 
 /// A node in the diagram graph.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize)]
 pub struct DiagramNode {
     pub id: String,
     pub label: String,
@@ -198,7 +204,8 @@ impl DiagramNode {
 }
 
 /// Classification of diagram nodes.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "snake_case")]
 pub enum NodeKind {
     Block,
     Port,
@@ -219,7 +226,7 @@ pub enum NodeKind {
 }
 
 /// An edge in the diagram graph.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize)]
 pub struct DiagramEdge {
     pub source: String,
     pub target: String,
@@ -228,7 +235,8 @@ pub struct DiagramEdge {
 }
 
 /// Classification of diagram edges.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "snake_case")]
 pub enum EdgeKind {
     Composition,
     Specialization,
@@ -245,7 +253,7 @@ pub enum EdgeKind {
 }
 
 /// A subgraph (containment group).
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize)]
 pub struct Subgraph {
     pub id: String,
     pub label: String,
@@ -253,7 +261,7 @@ pub struct Subgraph {
 }
 
 /// The complete diagram graph.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize)]
 pub struct DiagramGraph {
     pub title: String,
     pub kind: DiagramKind,

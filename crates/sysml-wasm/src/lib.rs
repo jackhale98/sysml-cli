@@ -5,6 +5,8 @@
 //! surface small while the engine API is still settling. Every function is
 //! also callable natively, so the protocol is tested with `cargo test`.
 
+mod editor;
+
 use serde::Serialize;
 use sysml_core::checks;
 use sysml_core::diagnostic::Diagnostic;
@@ -92,6 +94,39 @@ pub fn library_element_id(spec: &str, package: &str, path: &str) -> Result<Strin
         ElementId::contained(package_id, path)
     }
     .to_string())
+}
+
+/// Syntax highlighting for one file: `{ names, spans }` where `spans` is a
+/// flat `[from, to, nameIndex, ...]` list in UTF-16 offsets.
+#[wasm_bindgen]
+pub fn highlight(source: &str) -> String {
+    to_json(&editor::highlights(source))
+}
+
+/// A standard view of the project as a diagram graph (nodes, edges,
+/// subgraphs). `files` is JSON `[{ path, text }]`; `view` is `general`,
+/// `interconnection` (with `scope`), `requirements`, `states`, `packages` or
+/// `trace`.
+#[wasm_bindgen]
+pub fn diagram(view: &str, files: &str, scope: Option<String>) -> Result<String, JsError> {
+    let files: Vec<editor::SourceFile> =
+        serde_json::from_str(files).map_err(|e| JsError::new(&e.to_string()))?;
+    let model = editor::project_model(&files);
+    let graph =
+        editor::build_diagram(view, &model, scope.as_deref()).map_err(|e| JsError::new(&e))?;
+    Ok(to_json(&graph))
+}
+
+/// Compute a source edit. `request` is JSON tagged by `op`: `insertMember`
+/// `{ path, source, parent, text }`, `insertTopLevel` `{ source, text }`,
+/// `remove` `{ path, source, name }` or `rename` `{ path, source, from, to }`.
+/// Returns `{ changes: [{ from, to, insert }], syntaxErrors: string[] }`.
+#[wasm_bindgen]
+pub fn edit(request: &str) -> Result<String, JsError> {
+    let request: editor::EditRequest =
+        serde_json::from_str(request).map_err(|e| JsError::new(&e.to_string()))?;
+    let result = editor::apply_request(request).map_err(|e| JsError::new(&e))?;
+    Ok(to_json(&result))
 }
 
 fn to_json<T: Serialize>(value: &T) -> String {

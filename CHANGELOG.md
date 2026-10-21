@@ -2,7 +2,20 @@
 
 ## Unreleased
 
+### Added (editor services)
+- **`highlight` module** in sysml-core: non-overlapping highlight spans from
+  the grammar's `highlights.scm` (innermost node wins), for editors that
+  colour text themselves.
+- **Diagram graphs are serializable** (`DiagramGraph` and friends derive
+  `Serialize`), so front ends can lay them out and draw them.
+- **sysml-wasm**: `highlight(source)`, `diagram(view, files, scope)` over a
+  whole project (models of all files merged), and `edit(request)` for
+  `insertMember`, `insertTopLevel`, `remove` and `rename`, returning changes
+  in UTF-16 offsets plus any syntax errors the edit would introduce.
+
 ### Changed
+- tree-sitter-sysml submodule bumped to the relicensed grammar with the
+  deterministic `satisfy … by` parse.
 - **Licence is now `Apache-2.0 OR MIT`** (was GPL-3.0-or-later), so the
   engine can be embedded in other tools, including the SysML Web app. The
   embedded OMG standard library remains EPL-2.0.
