@@ -12,4 +12,5 @@ tree-sitter = "0.27"
 uuid = { version = "1", default-features = false, features = ["v5"] }
 
 [dev-dependencies]
+sysml-syntax = { path = "../sysml-syntax" }
 quick-xml = "0.42"
