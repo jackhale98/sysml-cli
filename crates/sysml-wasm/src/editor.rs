@@ -5,6 +5,7 @@
 //! `analyze` stay in UTF-8 bytes, matching the engine.)
 
 use serde::{Deserialize, Serialize};
+use sysml_core::codegen::declaration::{self, DeclarationSet, ElementDetails};
 use sysml_core::codegen::edit::{self, EditPlan, TextEdit};
 use sysml_core::codegen::field_edit;
 use sysml_core::diagnostic::Diagnostic;
@@ -196,6 +197,18 @@ pub enum EditRequest {
         #[serde(default)]
         files: Option<Vec<SourceFile>>,
     },
+    /// Edit the declaration of one element — the inspector's form, or a
+    /// `specializes` edge drawn in a diagram. `element` is its name as
+    /// written (simple or qualified), `line` its 1-based declaration line;
+    /// `set` holds the fields to change (see [`DeclarationSet`]).
+    SetDeclaration {
+        path: String,
+        source: String,
+        element: String,
+        #[serde(default)]
+        line: usize,
+        set: DeclarationSet,
+    },
     /// Set the columns of view `view`: its def's `@TableRendering`
     /// `columns`, or a usage's override (inserted when missing; removed
     /// by an empty list).
@@ -286,6 +299,17 @@ pub fn apply_request(request: EditRequest) -> Result<EditResult, String> {
                 .map_err(|e| e.message)?;
             (path, source, plan)
         }
+        EditRequest::SetDeclaration {
+            path,
+            source,
+            element,
+            line,
+            set,
+        } => {
+            let plan = declaration::set_declaration(&source, &element, line, &set)
+                .map_err(|e| e.message)?;
+            (path, source, plan)
+        }
         EditRequest::SetTableColumns {
             path,
             source,
@@ -320,6 +344,21 @@ pub fn apply_request(request: EditRequest) -> Result<EditResult, String> {
         changes,
         syntax_errors,
     })
+}
+
+/// What the declaration of an element in file `path` says: the first
+/// declaration on `line` (1-based), or the one named `element`.
+pub fn element_details(
+    files: &[SourceFile],
+    path: &str,
+    line: usize,
+    element: Option<&str>,
+) -> Result<ElementDetails, String> {
+    let file = files
+        .iter()
+        .find(|f| f.path == path)
+        .ok_or_else(|| format!("no file {path:?}"))?;
+    declaration::element_details(&file.text, line, element).map_err(|e| e.message)
 }
 
 fn single(edit: TextEdit) -> EditPlan {
@@ -431,6 +470,60 @@ mod tests {
             files: None,
         };
         assert!(apply_request(bad).unwrap_err().contains("unknown field"));
+    }
+
+    #[test]
+    fn set_declaration_edits_the_declaration() {
+        let source = "part def D {\n    part rotors : Rotor[4];\n}\n";
+        let request = |set: serde_json::Value| {
+            serde_json::from_value::<EditRequest>(serde_json::json!({
+                "op": "setDeclaration",
+                "path": "d.sysml",
+                "source": source,
+                "element": "rotors",
+                "line": 2,
+                "set": set,
+            }))
+            .unwrap()
+        };
+        let result = apply_request(request(serde_json::json!({ "multiplicity": "6" }))).unwrap();
+        let four = source.find('4').unwrap() as u32;
+        assert_eq!(
+            result.changes,
+            vec![Change {
+                from: four,
+                to: four + 1,
+                insert: "6".into(),
+            }]
+        );
+        let several = apply_request(request(
+            serde_json::json!({ "shortName": "R", "value": "x" }),
+        ));
+        assert!(several.unwrap().syntax_errors.is_empty());
+        let bad = serde_json::from_value::<EditRequest>(serde_json::json!({
+            "op": "setDeclaration", "path": "d.sysml", "source": source,
+            "element": "D", "set": { "multiplicity": "2" },
+        }))
+        .unwrap();
+        assert!(apply_request(bad).unwrap_err().contains("multiplicity"));
+        let typo = serde_json::from_value::<EditRequest>(serde_json::json!({
+            "op": "setDeclaration", "path": "d.sysml", "source": source,
+            "element": "D", "set": { "multiplicty": "2" },
+        }));
+        assert!(typo.is_err());
+        let files = [SourceFile {
+            path: "d.sysml".into(),
+            text: source.into(),
+        }];
+        let d = element_details(&files, "d.sysml", 2, None).unwrap();
+        assert_eq!(
+            (d.name.as_str(), d.qualified_name.as_str()),
+            ("rotors", "D::rotors")
+        );
+        let named = element_details(&files, "d.sysml", 0, Some("D")).unwrap();
+        assert!(named.is_definition);
+        assert!(element_details(&files, "e.sysml", 1, None).is_err());
+        assert!(element_details(&files, "d.sysml", 3, None).is_err());
     }
 
     #[test]

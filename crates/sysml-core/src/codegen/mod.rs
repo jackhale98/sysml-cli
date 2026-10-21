@@ -2,9 +2,11 @@
 //!
 //! - [`template`] — Generate SysML v2 boilerplate text
 //! - [`edit`] — Byte-position text edits using CST spans
+//! - [`declaration`] — Declaration edits: type, specializations, multiplicity, value, modifiers
 //! - [`field_edit`] — Table-cell edits: set one field of one element
 //! - [`format`] — CST-aware source formatting
 
+pub mod declaration;
 pub mod edit;
 pub mod field_edit;
 pub mod format;

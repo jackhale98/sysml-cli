@@ -199,14 +199,39 @@ pub fn view_libraries() -> String {
 /// `setField` `{ path, source, element, line, field, value, files? }` (a
 /// table cell: `element`/`line` from the row's `sources`, `field` from the
 /// column's `editable`) or `setTableColumns` `{ path, source, view,
-/// columns }`. Returns `{ changes: [{ from, to, insert }], syntaxErrors:
-/// string[] }`.
+/// columns }`, or `setDeclaration` `{ path, source, element, line, set }`
+/// where `set` is any of `type`, `conjugated`, `specializes`, `redefines`,
+/// `multiplicity`, `value`, `valueKind` (`bind`, `default`, `initial`),
+/// `direction`, `abstract`, `readonly`, `derived`, `end`, `shortName` and
+/// `doc` (`null` removes one). Returns `{ changes: [{ from, to, insert }],
+/// syntaxErrors: string[] }`.
 #[wasm_bindgen]
 pub fn edit(request: &str) -> Result<String, JsError> {
     let request: editor::EditRequest =
         serde_json::from_str(request).map_err(|e| JsError::new(&e.to_string()))?;
     let result = editor::apply_request(request).map_err(|e| JsError::new(&e))?;
     Ok(to_json(&result))
+}
+
+/// What an element's declaration says, for an inspector form: `files` is
+/// JSON `[{ path, text }]`, `path` the file, `line` the 1-based line of the
+/// declaration (the outermost one there, or the one named `element`).
+/// Returns `{ name, shortName?, kind, isDefinition, type?, conjugated?,
+/// specializes, redefines?, multiplicity?, value?, valueKind?, direction?,
+/// abstract?, readonly?, derived?, end?, doc?, qualifiedName }`, the fields
+/// `setDeclaration` takes.
+#[wasm_bindgen(js_name = elementDetails)]
+pub fn element_details(
+    files: &str,
+    path: &str,
+    line: usize,
+    element: Option<String>,
+) -> Result<String, JsError> {
+    let files: Vec<editor::SourceFile> =
+        serde_json::from_str(files).map_err(|e| JsError::new(&e.to_string()))?;
+    let details = editor::element_details(&files, path, line, element.as_deref())
+        .map_err(|e| JsError::new(&e))?;
+    Ok(to_json(&details))
 }
 
 fn to_json<T: Serialize>(value: &T) -> String {

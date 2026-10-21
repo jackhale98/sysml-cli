@@ -32,13 +32,13 @@ use crate::view_edit::{
 };
 use crate::view_render::split_path;
 
-fn err(message: impl Into<String>) -> EditError {
+pub(super) fn err(message: impl Into<String>) -> EditError {
     EditError {
         message: message.into(),
     }
 }
 
-fn parse(source: &str) -> Tree {
+pub(super) fn parse(source: &str) -> Tree {
     let mut parser = Parser::new();
     parser
         .set_language(&crate::parser::get_language())
@@ -46,16 +46,16 @@ fn parse(source: &str) -> Tree {
     parser.parse(source, None).expect("parse")
 }
 
-fn text<'s>(node: &Node, src: &'s str) -> &'s str {
+pub(super) fn text<'s>(node: &Node, src: &'s str) -> &'s str {
     &src[node.start_byte()..node.end_byte()]
 }
 
-fn children<'t>(node: &Node<'t>) -> Vec<Node<'t>> {
+pub(super) fn children<'t>(node: &Node<'t>) -> Vec<Node<'t>> {
     let mut cursor = node.walk();
     node.children(&mut cursor).collect()
 }
 
-fn child_of_kind<'t>(node: &Node<'t>, kind: &str) -> Option<Node<'t>> {
+pub(super) fn child_of_kind<'t>(node: &Node<'t>, kind: &str) -> Option<Node<'t>> {
     children(node).into_iter().find(|c| c.kind() == kind)
 }
 
@@ -77,12 +77,14 @@ const NOT_DECLARATIONS: [&str; 6] = [
 ];
 
 /// Name and short name (unquoted) of a declaration node.
-fn declared_names(node: &Node, src: &str) -> Option<(Option<String>, Option<String>)> {
+pub(super) fn declared_names(node: &Node, src: &str) -> Option<(Option<String>, Option<String>)> {
     if NOT_DECLARATIONS.contains(&node.kind()) {
         return None;
     }
+    // `end e : E;` names its end `end_name`.
     let name = node
         .child_by_field_name("name")
+        .or_else(|| node.child_by_field_name("end_name"))
         .map(|n| unquote_name(text(&n, src)).to_string());
     let short = child_of_kind(node, "short_name")
         .and_then(|s| child_of_kind(&s, "quoted_name").or(s.named_child(0)))
@@ -129,7 +131,7 @@ fn collect_candidates<'t>(
 
 /// The declaration of `element` (a simple or qualified name, as in a
 /// table's `sources`), preferring the one on `line` (1-based; 0 for any).
-fn locate<'t>(
+pub(super) fn locate<'t>(
     tree: &'t Tree,
     src: &str,
     element: &str,
@@ -177,7 +179,7 @@ pub fn element_type(source: &str, element: &str, line: usize) -> Result<Option<S
     Ok(ty)
 }
 
-fn body_of<'t>(node: &Node<'t>) -> Option<Node<'t>> {
+pub(super) fn body_of<'t>(node: &Node<'t>) -> Option<Node<'t>> {
     children(node)
         .into_iter()
         .find(|c| c.kind().ends_with("_body") && c.kind() != "constraint_body")
@@ -315,7 +317,7 @@ fn add_member(
 
 /// Remove a node: its whole line(s) when it stands alone, else the node
 /// and the blank before it.
-fn removal(src: &str, start: usize, end: usize) -> TextEdit {
+pub(super) fn removal(src: &str, start: usize, end: usize) -> TextEdit {
     let ls = line_start(src, start);
     let le = line_end(src, end);
     if src[ls..start].trim().is_empty() && src[end..le].trim().is_empty() {
@@ -635,7 +637,11 @@ fn collect_prose(node: Node, out: &mut Vec<(usize, usize)>) {
     }
 }
 
-fn set_short_name(source: &str, node: &Node, value: &str) -> Result<Vec<TextEdit>, EditError> {
+pub(super) fn set_short_name(
+    source: &str,
+    node: &Node,
+    value: &str,
+) -> Result<Vec<TextEdit>, EditError> {
     let v = value.trim();
     let existing = child_of_kind(node, "short_name");
     Ok(match (existing, v.is_empty()) {
@@ -783,7 +789,7 @@ fn column(src: &str, pos: usize) -> usize {
     src[line_start(src, pos)..pos].chars().count()
 }
 
-fn set_doc(source: &str, node: &Node, value: &str) -> Result<Vec<TextEdit>, EditError> {
+pub(super) fn set_doc(source: &str, node: &Node, value: &str) -> Result<Vec<TextEdit>, EditError> {
     let doc = body_of(node).and_then(|b| child_of_kind(&b, "doc_comment"));
     let blank = value.trim().is_empty();
     Ok(match (doc, blank) {
