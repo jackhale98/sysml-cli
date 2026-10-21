@@ -23,6 +23,23 @@ package Reporting {
      *
      * Lists are `;`-separated so column expressions may contain commas.
      *
+     * A `view` usage typed by such a def renders the same table: it
+     * inherits the def's @TableRendering (an annotation on the usage
+     * overrides single fields, e.g. adds a `where`), and its clauses
+     * narrow the rows:
+     *
+     *   view batteryFmea : FmeaWorksheet { expose Power::**; }
+     *
+     *   expose P        the element P itself
+     *   expose P::*     the members of P
+     *   expose P::**    everything nested in P
+     *   filter @SysML::PartUsage   rows whose element is of that metaclass
+     *   filter @Fmea               rows whose element carries @Fmea
+     *
+     * A row is exposed when its element, or the namespace it is written
+     * in, matches (a satisfy row also through its requirement). Without
+     * `expose` a view shows the whole model.
+     *
      * Row providers (the `rows` value):
      *   "@Fmea"                 rows are annotations of a metadata type;
      *                           fields = element, file, line + the
@@ -32,13 +49,49 @@ package Reporting {
      *                           element, type, kind, parent, file, line +
      *                           body values (`:>> description = ...`)
      *   "kind:port"             rows are usages of a syntactic kind;
-     *                           fields = element, parent, type, direction
+     *                           fields = element, owner (= parent), type
+     *                           (`~T` when conjugated), direction (declared,
+     *                           or implied by a port def's features and
+     *                           conjugation: in, out, inout), conjugated
+     *                           (1/0), connectedTo (far ends of the
+     *                           connections ending on it), via (those
+     *                           connections), doc, file, line
      *   "relation:allocation"   allocation pairs (source, target)
-     *   "relation:satisfy"      satisfy relationships (requirement, by)
-     *   "relation:verify"       verify relationships (requirement, by)
-     *   "relation:connection"   connections (source, target)
-     *   "trace"                 requirement coverage (requirement, id,
-     *                           satisfied, verified)
+     *   "relation:satisfy"      satisfy relationships (requirement as
+     *                           "ID title", id, title, target as written,
+     *                           by, file, line)
+     *   "relation:verify"       verify relationships (same fields)
+     *   "relation:connection"   connections (connection, type, source,
+     *                           target); `relation:connection:Mate` keeps
+     *                           connections typed by Mate
+     *   "relation:succession"   successions (succession, type, source,
+     *                           target, parent)
+     *   "composition"           the part/item tree from every top-level
+     *   "composition:Root"      element (or from Root, a def or a usage),
+     *                           following usage bodies and types: a bill
+     *                           of materials. Fields = element, type,
+     *                           parent, path (a.b.c), depth, quantity
+     *                           (from multiplicity), extended (quantity
+     *                           multiplied down the tree), doc, file, line
+     *                           + attribute values of the usage and its
+     *                           type (mass, cost, ...)
+     *   "requirements"          one row per requirement usage, and per
+     *                           requirement def that is not just the type
+     *                           of requirement usages; fields = element,
+     *                           qualifiedName, id (short name), title
+     *                           (name), text (doc), type, every attribute
+     *                           value set in the body (kind, priority,
+     *                           verificationMethod, ...; enum values by
+     *                           name, lists comma-separated), status and
+     *                           owner (@StatusInfo), rationale
+     *                           (@Rationale), issues (@Issue), satisfiedBy
+     *                           and verifiedBy (comma lists, from every
+     *                           file), satisfied and verified (1 or 0, so
+     *                           `where = "verified == 0"` selects gaps),
+     *                           file, line
+     *   "trace"                 requirement coverage: the requirements
+     *                           rows with requirement (= title) and
+     *                           satisfied/verified as yes/no
      *   "kindcounts"            model statistics (kind, definitions,
      *                           usages)
      *   "uncertainty"           evaluated uncertainty analyses (case,
@@ -47,10 +100,12 @@ package Reporting {
      *
      * Column syntax: `name` copies a row field; `name = expression`
      * computes a value from the row's numeric fields with the standard
-     * expression language (so derived values like RPN are never stored).
-     * `where` filters rows with a boolean expression; `sortBy` orders by
-     * a column (`-` prefix for descending); `pivot = "rowField; colField"`
-     * renders a count grid instead of columns.
+     * expression language (so derived values like RPN are never stored);
+     * `name = field` renames a field. `where` filters rows with a boolean
+     * expression; `sortBy` orders by a column (`-` prefix for
+     * descending); `pivot = "rowField; colField"` renders a count grid
+     * instead of columns (rows ordered by `sortBy` when it names the row
+     * field, otherwise descending).
      */
 
     private import ScalarValues::*;
@@ -86,8 +141,8 @@ package Reporting {
     view def RequirementsTraceMatrix {
         doc
         /*
-         * One row per requirement definition with satisfy/verify status —
-         * the requirements traceability matrix.
+         * One row per requirement with satisfy/verify status — the
+         * requirements traceability matrix.
          */
         @TableRendering {
             rows = "trace";

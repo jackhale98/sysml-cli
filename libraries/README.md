@@ -16,6 +16,16 @@ analyses, FMEA on the AIAG/VDA 1-10 scales, and RAAML-aligned hazard
 analysis with causal chains. Do not edit these copies directly — change
 them upstream and re-sync.
 
+## Standard views
+
+`ModelViews.sysml` (native to this repository) defines the everyday tables
+of any model as plain view defs over `Reporting`'s `@TableRendering`:
+`RequirementsTable`, `RequirementGaps`, `TraceMatrix`, `VerificationMatrix`,
+`InterfaceTable` and `BillOfMaterials`. Type a `view` usage by one of them
+and add `expose` to table part of a model. The browser engine (sysml-wasm)
+bundles it, together with `Reporting.sysml`, for projects that do not
+include their own copy.
+
 ## Project sketches (legacy)
 
 The remaining `sysml-*.sysml` files are earlier, shallower sketches

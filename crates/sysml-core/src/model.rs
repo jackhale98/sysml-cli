@@ -404,7 +404,8 @@ pub struct Import {
     pub span: Span,
 }
 
-/// A parsed view definition with its expose and filter clauses.
+/// A parsed view — a `view def` or a `view` usage — with its expose and
+/// filter clauses.
 #[derive(Debug, Clone, Serialize)]
 pub struct ViewDef {
     pub name: String,
@@ -415,6 +416,19 @@ pub struct ViewDef {
     /// Render clause value (e.g., "asInterconnectionDiagram", "asTableDiagram").
     pub render_as: Option<String>,
     pub span: Span,
+    /// True for a `view` usage (`view fmea : FmeaWorksheet { ... }`),
+    /// false for a `view def`.
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    pub is_usage: bool,
+    /// The view def a usage is typed by, or the view def a def specializes.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub type_ref: Option<String>,
+    /// Filter conditions as written (`@SysML::PartUsage or @Fmea`).
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub filters: Vec<String>,
+    /// The view's doc comment.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub doc: Option<String>,
 }
 
 /// Complete model extracted from a SysML v2 file.

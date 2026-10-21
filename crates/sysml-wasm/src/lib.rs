@@ -6,6 +6,9 @@
 //! also callable natively, so the protocol is tested with `cargo test`.
 
 mod editor;
+pub mod views;
+
+pub use editor::SourceFile;
 
 use serde::Serialize;
 use sysml_core::checks;
@@ -114,16 +117,53 @@ pub fn highlight(source: &str) -> String {
 
 /// A standard view of the project as a diagram graph (nodes, edges,
 /// subgraphs). `files` is JSON `[{ path, text }]`; `view` is `general`,
-/// `interconnection` (with `scope`), `requirements`, `states`, `packages` or
-/// `trace`.
+/// `interconnection` (with `scope`), `requirements`, `states`, `packages`,
+/// `trace` or `actions` (an action flow; `scope` names the action).
 #[wasm_bindgen]
 pub fn diagram(view: &str, files: &str, scope: Option<String>) -> Result<String, JsError> {
     let files: Vec<editor::SourceFile> =
         serde_json::from_str(files).map_err(|e| JsError::new(&e.to_string()))?;
+    if view == "actions" {
+        let graph =
+            editor::build_action_diagram(&files, scope.as_deref()).map_err(|e| JsError::new(&e))?;
+        return Ok(to_json(&graph));
+    }
     let model = editor::project_model(&files);
     let graph =
         editor::build_diagram(view, &model, scope.as_deref()).map_err(|e| JsError::new(&e))?;
     Ok(to_json(&graph))
+}
+
+/// The project's views — `view def`s and `view` usages, plus the standard
+/// tables of the bundled `ModelViews` library. `files` is JSON
+/// `[{ path, text }]`. Returns `[{ name, qualifiedName?, file, isUsage,
+/// hasTable, definition?, doc?, renderAs?, builtin }]`.
+#[wasm_bindgen(js_name = listViews)]
+pub fn list_views(files: &str) -> Result<String, JsError> {
+    let files: Vec<editor::SourceFile> =
+        serde_json::from_str(files).map_err(|e| JsError::new(&e.to_string()))?;
+    Ok(to_json(&views::list_views(&files)))
+}
+
+/// Render a view with a `@TableRendering` (own or inherited from its view
+/// def) as a table. `files` is JSON `[{ path, text }]`; `name` is the
+/// view's simple or qualified name. Returns `{ view, columns, rows,
+/// warnings, sources }` where `rows` are string cells in column order and
+/// `sources[i]` is `{ element, file, line }` for `rows[i]` (empty for a
+/// pivot). Throws if the view is unknown or has no table.
+#[wasm_bindgen(js_name = renderView)]
+pub fn render_view(files: &str, name: &str) -> Result<String, JsError> {
+    let files: Vec<editor::SourceFile> =
+        serde_json::from_str(files).map_err(|e| JsError::new(&e.to_string()))?;
+    let table = views::render_view(&files, name).map_err(|e| JsError::new(&e))?;
+    Ok(to_json(&table))
+}
+
+/// The SysML libraries bundled for views (`Reporting`, `ModelViews`) as
+/// JSON `[{ path, text }]`.
+#[wasm_bindgen(js_name = viewLibraries)]
+pub fn view_libraries() -> String {
+    to_json(&views::libraries())
 }
 
 /// Compute a source edit. `request` is JSON tagged by `op`: `insertMember`
