@@ -1847,6 +1847,7 @@ fn get_body_braces(node: &Node) -> (Option<usize>, Option<usize>) {
         if child.kind() == "definition_body"
             || child.kind() == "state_body"
             || child.kind() == "enumeration_body"
+            || child.kind() == "package_body"
         {
             let mut body_cursor = child.walk();
             let mut open = None;

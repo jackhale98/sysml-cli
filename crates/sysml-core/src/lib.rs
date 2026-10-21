@@ -20,6 +20,7 @@ pub mod config;
 pub mod diagnostic;
 pub mod diagram;
 pub mod export;
+pub mod highlight;
 pub mod interactive;
 pub mod model;
 pub mod parser;
