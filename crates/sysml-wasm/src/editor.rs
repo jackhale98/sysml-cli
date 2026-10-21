@@ -5,7 +5,6 @@
 //! `analyze` stay in UTF-8 bytes, matching the engine.)
 
 use serde::{Deserialize, Serialize};
-use sysml_core::checks;
 use sysml_core::codegen::edit::{self, EditPlan, TextEdit};
 use sysml_core::codegen::field_edit;
 use sysml_core::diagnostic::Diagnostic;
@@ -37,6 +36,14 @@ impl Utf16Index {
 
     pub fn at(&self, byte: usize) -> u32 {
         self.utf16[byte.min(self.utf16.len() - 1)]
+    }
+
+    /// The byte offset of UTF-16 offset `unit` (clamped to the text; an
+    /// offset inside a surrogate pair maps to the end of its character).
+    pub fn byte(&self, unit: u32) -> usize {
+        self.utf16
+            .partition_point(|&u| u < unit)
+            .min(self.utf16.len() - 1)
     }
 }
 
@@ -99,22 +106,9 @@ pub struct FileAnalysis {
 /// anywhere count as traced.
 pub fn analyze_project(files: &[SourceFile]) -> Vec<FileAnalysis> {
     let models: Vec<Model> = files.iter().map(|f| parse_file(&f.path, &f.text)).collect();
-    let project = sysml_core::resolver::Project::from_models(models.clone());
-    let (satisfied, verified) = project.traced_requirements();
-    let active = checks::all_checks();
-    models
+    sysml_core::lang::analyze_models(models)
         .into_iter()
-        .map(|mut model| {
-            model.resolved_imports = project.resolve_imports(&model);
-            model
-                .resolved_imports
-                .extend(project.resolve_root_refs(&model));
-            model.external_references = project.external_references_for(&model);
-            model.external_satisfied = satisfied.iter().cloned().collect();
-            model.external_verified = verified.iter().cloned().collect();
-            let diagnostics = active.iter().flat_map(|c| c.run(&model)).collect();
-            FileAnalysis { model, diagnostics }
-        })
+        .map(|(model, diagnostics)| FileAnalysis { model, diagnostics })
         .collect()
 }
 
@@ -347,6 +341,12 @@ mod tests {
         assert_eq!(index.at(4), 3); // emoji (4 bytes, 2 units)
         assert_eq!(index.at(8), 5); // 'c'
         assert_eq!(index.at(9), 6);
+        assert_eq!(index.byte(0), 0);
+        assert_eq!(index.byte(2), 3);
+        assert_eq!(index.byte(3), 4);
+        assert_eq!(index.byte(5), 8);
+        assert_eq!(index.byte(6), 9);
+        assert_eq!(index.byte(60), 9);
     }
 
     #[test]

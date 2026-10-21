@@ -1,6 +1,7 @@
 use tower_lsp_server::ls_types::{FormattingOptions, Position, Range, TextEdit};
 
-use sysml_core::codegen::format::{format_source, FormatOptions};
+use sysml_core::codegen::format::FormatOptions;
+use sysml_core::lang::format::format_text;
 
 /// Format a SysML source using editor-provided options.
 /// Returns None if the source is already correctly formatted.
@@ -17,11 +18,7 @@ pub fn format_document(
         FormatOptions::default()
     };
 
-    let formatted = format_source(source, &opts);
-
-    if formatted == source {
-        return None;
-    }
+    let formatted = format_text(source, &opts)?;
 
     let line_count = source.lines().count();
     let last_line = if line_count == 0 { 0 } else { line_count - 1 };
