@@ -1,9 +1,9 @@
 //! State machine simulation engine.
 
 use crate::sim::eval;
-use crate::sim::expr::Env;
+use crate::sim::expr::{Env, Expr};
 use crate::sim::state_machine::*;
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 
 /// Current state of a simulation run.
 #[derive(Debug, Clone, Serialize)]
@@ -17,7 +17,7 @@ pub struct SimulationState {
 }
 
 /// A single step in the simulation trace.
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SimStep {
     pub step: usize,
     pub from_state: String,
@@ -31,7 +31,7 @@ pub struct SimStep {
 }
 
 /// Status of the simulation.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum SimStatus {
     Running,
     Completed,
@@ -97,7 +97,7 @@ pub fn simulate(machine: &StateMachineModel, config: &SimConfig) -> SimulationSt
         machine_name: machine.name.clone(),
         current_state: initial,
         step: 0,
-        env: config.initial_env.clone(),
+        env: seed_env(&machine.variables, &config.initial_env),
         trace: Vec::new(),
         status: SimStatus::Running,
     };
@@ -292,7 +292,94 @@ fn simulate_parallel(machine: &StateMachineModel, config: &SimConfig) -> Simulat
     }
 }
 
+/// The environment a machine starts with: each variable's default value
+/// (evaluated in declaration order, so defaults may refer to earlier
+/// variables), then `overrides` on top. Variables without a default, or
+/// whose default cannot be evaluated, stay unbound.
+pub fn seed_env(variables: &[StateVariable], overrides: &Env) -> Env {
+    let mut env = Env::new();
+    for var in variables {
+        if let Some(value) = overrides.get(&var.name) {
+            env.bind(var.name.clone(), value.clone());
+        } else if let Some(expr) = &var.expr {
+            if let Ok(value) = eval::evaluate(expr, &env) {
+                env.bind(var.name.clone(), value);
+            }
+        }
+    }
+    for (name, value) in overrides.iter() {
+        env.bind(name.clone(), value.clone());
+    }
+    env
+}
+
+/// Whether `event` names this signal: exactly, or by its last segment
+/// (`DroneInterfaces::ArmCommand` matches `ArmCommand`, and vice versa).
+pub fn signal_matches(signal: &str, event: &str) -> bool {
+    let last = |s: &str| s.rsplit("::").next().unwrap_or(s).to_string();
+    signal == event || last(signal) == last(event)
+}
+
+/// Evaluate a change trigger's condition (`accept when <condition>`).
+pub fn change_condition(expr: Option<&Expr>, env: &Env) -> Result<bool, String> {
+    match expr {
+        Some(expr) => eval::evaluate_constraint(expr, env).map_err(|e| e.message),
+        None => Err("condition is not supported by the evaluator".to_string()),
+    }
+}
+
+/// Evaluate a transition's guard: `Ok(true)` when it has none. A guard the
+/// evaluator could not parse is an error, so callers treat it as blocking.
+pub fn evaluate_guard(transition: &Transition, env: &Env) -> Result<bool, String> {
+    evaluate_guard_parts(
+        transition.guard.as_ref(),
+        transition.guard_text.as_deref(),
+        env,
+    )
+}
+
+/// [`evaluate_guard`] for a guard given as expression and source text.
+pub fn evaluate_guard_parts(
+    guard: Option<&Expr>,
+    text: Option<&str>,
+    env: &Env,
+) -> Result<bool, String> {
+    match (guard, text) {
+        (Some(expr), _) => eval::evaluate_constraint(expr, env).map_err(|e| e.message),
+        (None, Some(_)) => Err("guard is not supported by the evaluator".to_string()),
+        (None, None) => Ok(true),
+    }
+}
+
+/// Run an action's assignments against `env`. Other actions (named, send,
+/// inline) have no effect on variables. Returns one message per assignment
+/// that could not be evaluated; those leave their target unchanged.
+pub fn apply_action(action: &ActionRef, env: &mut Env) -> Vec<String> {
+    let mut errors = Vec::new();
+    if let ActionRef::Assign(assignments) = action {
+        for a in assignments {
+            let target = a.target.strip_prefix("self.").unwrap_or(&a.target);
+            match a.expr.as_ref().map(|e| eval::evaluate(e, env)) {
+                Some(Ok(value)) => env.bind(target.to_string(), value),
+                Some(Err(e)) => errors.push(format!("assign {}: {}", a.target, e.message)),
+                None => errors.push(format!(
+                    "assign {}: `{}` is not supported by the evaluator",
+                    a.target, a.value
+                )),
+            }
+        }
+    }
+    errors
+}
+
 /// Advance the simulation by one step.
+///
+/// A transition is enabled when its trigger accepts `event` and its guard
+/// holds. Triggerless transitions accept any event; a change trigger
+/// (`accept when c`) accepts no event or the event `when c`, and only while
+/// `c` holds. Firing applies the source's exit action, the effect and the
+/// target's entry action, in that order; assignments among them update the
+/// environment.
 pub fn step(
     machine: &StateMachineModel,
     state: &SimulationState,
@@ -323,7 +410,12 @@ pub fn step(
         let trigger_ok = match &transition.trigger {
             None => true, // No trigger = always available
             Some(Trigger::Completion) => true,
-            Some(Trigger::Signal(signal)) => event.is_some_and(|e| e == signal),
+            Some(Trigger::Signal(signal)) => event.is_some_and(|e| signal_matches(signal, e)),
+            Some(Trigger::Time(text)) => event == Some(text.as_str()),
+            Some(t @ Trigger::Change { expr, .. }) => {
+                (event.is_none() || event == Some(t.event_name().as_str()))
+                    && change_condition(expr.as_ref(), &state.env).unwrap_or(false)
+            }
         };
 
         if !trigger_ok {
@@ -331,16 +423,10 @@ pub fn step(
         }
 
         // Check guard
-        let guard_result = match &transition.guard {
-            None => true,
-            Some(expr) => eval::evaluate_constraint(expr, &state.env).unwrap_or_else(|e| {
-                eprintln!(
-                    "warning: guard failed to evaluate ({}); treating as false",
-                    e.message
-                );
-                false
-            }),
-        };
+        let guard_result = evaluate_guard(transition, &state.env).unwrap_or_else(|e| {
+            eprintln!("warning: guard failed to evaluate ({e}); treating as false");
+            false
+        });
 
         if !guard_result {
             continue;
@@ -350,39 +436,30 @@ pub fn step(
         let from = state.current_state.clone();
         let to = transition.target.clone();
 
-        // Find exit action of source state
-        let exit_action = machine
-            .states
-            .iter()
-            .find(|s| s.name == from)
-            .and_then(|s| s.exit_action.as_ref())
-            .map(|a| a.to_string());
-
-        // Find entry action of target state
-        let entry_action = machine
-            .states
-            .iter()
-            .find(|s| s.name == to)
-            .and_then(|s| s.entry_action.as_ref())
-            .map(|a| a.to_string());
-
-        let effect = transition.effect.as_ref().map(|a| a.to_string());
-
-        let trigger_desc = transition.trigger.as_ref().map(|t| match t {
-            Trigger::Signal(s) => s.clone(),
-            Trigger::Completion => "completion".to_string(),
-        });
+        let source_state = machine.states.iter().find(|s| s.name == from);
+        let target_state = machine.states.iter().find(|s| s.name == to);
+        let exit = source_state.and_then(|s| s.exit_action.as_ref());
+        let entry = target_state.and_then(|s| s.entry_action.as_ref());
+        for action in [exit, transition.effect.as_ref(), entry]
+            .into_iter()
+            .flatten()
+        {
+            for e in apply_action(action, &mut new_state.env) {
+                eprintln!("warning: {e}");
+            }
+        }
 
         let sim_step = SimStep {
             step: new_state.step,
             from_state: from,
             transition_name: transition.name.clone(),
-            trigger: trigger_desc,
-            guard_result: transition.guard.as_ref().map(|_| guard_result),
-            effect,
+            trigger: transition.trigger.as_ref().map(Trigger::event_name),
+            guard_result: (transition.guard.is_some() || transition.guard_text.is_some())
+                .then_some(guard_result),
+            effect: transition.effect.as_ref().map(|a| a.to_string()),
             to_state: to.clone(),
-            exit_action,
-            entry_action,
+            exit_action: exit.map(|a| a.to_string()),
+            entry_action: entry.map(|a| a.to_string()),
         };
 
         new_state.trace.push(sim_step);
@@ -509,6 +586,7 @@ mod tests {
                     target: "green".to_string(),
                     trigger: Some(Trigger::Signal("next".to_string())),
                     guard: None,
+                    guard_text: None,
                     effect: None,
                     span: dummy_span(),
                 },
@@ -518,6 +596,7 @@ mod tests {
                     target: "yellow".to_string(),
                     trigger: Some(Trigger::Signal("next".to_string())),
                     guard: None,
+                    guard_text: None,
                     effect: None,
                     span: dummy_span(),
                 },
@@ -527,12 +606,14 @@ mod tests {
                     target: "red".to_string(),
                     trigger: Some(Trigger::Signal("next".to_string())),
                     guard: None,
+                    guard_text: None,
                     effect: None,
                     span: dummy_span(),
                 },
             ],
             entry_state: Some("red".to_string()),
             regions: Vec::new(),
+            variables: Vec::new(),
             span: dummy_span(),
         }
     }
@@ -603,6 +684,7 @@ mod tests {
                     target: "b".to_string(),
                     trigger: None,
                     guard: None,
+                    guard_text: None,
                     effect: None,
                     span: dummy_span(),
                 },
@@ -612,12 +694,14 @@ mod tests {
                     target: "done".to_string(),
                     trigger: None,
                     guard: None,
+                    guard_text: None,
                     effect: None,
                     span: dummy_span(),
                 },
             ],
             entry_state: Some("a".to_string()),
             regions: Vec::new(),
+            variables: Vec::new(),
             span: dummy_span(),
         };
         let config = SimConfig::default();
@@ -657,11 +741,13 @@ mod tests {
                     lhs: Box::new(Expr::Var("temperature".to_string())),
                     rhs: Box::new(Expr::Literal(Value::Number(100.0))),
                 }),
+                guard_text: None,
                 effect: None,
                 span: dummy_span(),
             }],
             entry_state: Some("idle".to_string()),
             regions: Vec::new(),
+            variables: Vec::new(),
             span: dummy_span(),
         };
 
@@ -707,11 +793,13 @@ mod tests {
                 target: "a".to_string(),
                 trigger: None,
                 guard: None,
+                guard_text: None,
                 effect: None,
                 span: dummy_span(),
             }],
             entry_state: Some("a".to_string()),
             regions: Vec::new(),
+            variables: Vec::new(),
             span: dummy_span(),
         };
         let config = SimConfig {
@@ -845,5 +933,106 @@ mod tests {
             "shorthand transition extracted: {:?}",
             m.transitions
         );
+    }
+
+    /// The SysML Web drone demo's flight modes.
+    const FLIGHT_CONTROL: &str =
+        include_str!("../../../sysml-wasm/tests/fixtures/drone/behaviour/FlightControl.sysml");
+
+    fn flight_modes() -> StateMachineModel {
+        crate::sim::state_parser::extract_state_machines("FlightControl.sysml", FLIGHT_CONTROL)
+            .into_iter()
+            .find(|m| m.name == "FlightModes")
+            .expect("FlightModes parses")
+    }
+
+    #[test]
+    fn flight_modes_simulate() {
+        let machine = flight_modes();
+        assert_eq!(machine.entry_state.as_deref(), Some("idle"));
+        let mut env = Env::new();
+        env.bind("preflightChecksPassed", Value::Bool(true));
+        env.bind("stateOfCharge", Value::Number(0.15));
+        let result = simulate(
+            &machine,
+            &SimConfig {
+                max_steps: 20,
+                initial_env: env,
+                events: vec!["ArmCommand".into(), "TakeOffCommand".into()],
+            },
+        );
+        let path: Vec<_> = result
+            .trace
+            .iter()
+            .map(|s| {
+                (
+                    s.transition_name.as_deref().unwrap_or(""),
+                    s.to_state.as_str(),
+                )
+            })
+            .collect();
+        assert_eq!(
+            path,
+            vec![
+                ("arm", "armed"),
+                ("takeOff", "flying"),
+                ("lowBattery", "returningHome"),
+            ]
+        );
+        // `returnThreshold = 0.3` came from the model.
+        assert_eq!(result.env.get("returnThreshold"), Some(&Value::Number(0.3)));
+        assert_eq!(result.trace[0].guard_result, Some(true));
+    }
+
+    #[test]
+    fn flight_modes_guard_and_change_trigger_block() {
+        let machine = flight_modes();
+        let mut env = Env::new();
+        env.bind("stateOfCharge", Value::Number(0.9));
+        let start = SimulationState {
+            machine_name: machine.name.clone(),
+            current_state: "idle".into(),
+            step: 0,
+            env: seed_env(&machine.variables, &env),
+            trace: Vec::new(),
+            status: SimStatus::Running,
+        };
+        // preflightChecksPassed is unset: the guard blocks arming.
+        assert_eq!(
+            step(&machine, &start, Some("ArmCommand")).current_state,
+            "idle"
+        );
+        let flying = SimulationState {
+            current_state: "flying".into(),
+            ..start
+        };
+        // Charge is above the threshold: no low-battery return.
+        assert_eq!(step(&machine, &flying, None).current_state, "flying");
+        let linked = step(&machine, &flying, Some("LinkLost"));
+        assert_eq!(linked.current_state, "returningHome");
+    }
+
+    #[test]
+    fn effects_assign_variables() {
+        let source = r#"
+            state def Counter {
+                attribute n : Integer = 0;
+                entry; then a;
+                state a { exit action { assign n := n + 10; } }
+                state b { entry assign n := n * 2; }
+                transition first a accept Go do assign n := n + 1 then b;
+            }
+        "#;
+        let machine = crate::sim::state_parser::extract_state_machines("t.sysml", source).remove(0);
+        let result = simulate(
+            &machine,
+            &SimConfig {
+                events: vec!["Go".into()],
+                ..SimConfig::default()
+            },
+        );
+        assert_eq!(result.current_state, "b");
+        // exit (+10), effect (+1), entry (*2)
+        assert_eq!(result.env.get("n"), Some(&Value::Number(22.0)));
     }
 }

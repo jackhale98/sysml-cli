@@ -2,6 +2,43 @@
 
 ## Unreleased
 
+### Added (standard library browser, state machine emulator)
+- **sysml-wasm `libraryIndex()`, `libraryFile(path)`, `librarySearch(query,
+  limit)` and `libraryLicense()`** over the embedded OMG standard library:
+  files with their package, kind (`kerml`/`sysml`) and size; one file's
+  text on demand; definitions and usages by name (exact, then prefix, then
+  substring; `A::B` queries match qualified names) with kind, path, line
+  and doc; and the library's licence (`LGPL-3.0-only`, with the release's
+  copyright notice). `scripts/build-wasm.sh` ships the library's licence
+  files next to the bundle.
+- **`sim::state_chart`**: a whole state machine as one chart — nested and
+  parallel states with `parent` links and unique paths (`on.motors.idle`),
+  explicit initial (`entry; then x;`) and final (`then done`) states,
+  names resolved through enclosing bodies, attributes as variables (an
+  exhibited state also sees its owner's), docs and lines.
+- **`sim::state_emulator`**: `start`, `fire` and `enabled` for
+  interactive, event-at-a-time runs with UML-style exit/effect/entry order,
+  inner states first, parallel regions stepping together, and every guard
+  and change condition evaluated with a reason when blocked.
+- **sysml-wasm `stateMachines(files)` and `stateStep(files, machine,
+  session, event, variables)`**, tested on the drone demo's `FlightModes`.
+
+### Changed / fixed (state machines)
+- `accept when <condition>` is a change trigger (`Trigger::Change`), not a
+  triggerless transition that always fired; `accept after|at ...` is a
+  `Trigger::Time`. `accept sig : Sig` now triggers on the type `Sig`.
+- Guards keep their source text (`Transition::guard_text`); a guard the
+  evaluator cannot parse now blocks instead of being dropped.
+- `assign` actions (`entry assign x := e;`, `entry action { assign ...; }`,
+  and transition effects `do assign x := e`, which the grammar does not
+  accept yet and the extractor reads from text) update the simulation
+  variables; `simulate` seeds them from the machine's attribute defaults.
+- Target transitions without `first` (`state a; accept Go then b;`,
+  `transition accept Go then b;`) take the preceding state as source; a
+  composite state's `entry; then x;` is no longer reported as an entry
+  action named `x`.
+- README: the embedded standard library is LGPL-3.0, not EPL-2.0.
+
 ### Added (editable tables)
 - **Rendered views say which columns can be edited.** `RenderedTable`
   gains `editable` (per column: `null` or `{ field, kind, options? }`) and

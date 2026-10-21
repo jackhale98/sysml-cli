@@ -456,7 +456,7 @@ fn get_short_name(node: &Node, source: &[u8]) -> Option<String> {
 }
 
 /// Extract the first doc comment from a definition's body.
-fn get_doc_comment(node: &Node, source: &[u8]) -> Option<String> {
+pub(crate) fn get_doc_comment(node: &Node, source: &[u8]) -> Option<String> {
     let mut cursor = node.walk();
     for child in node.children(&mut cursor) {
         if matches!(

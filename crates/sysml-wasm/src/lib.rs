@@ -6,6 +6,8 @@
 //! also callable natively, so the protocol is tested with `cargo test`.
 
 mod editor;
+pub mod library;
+pub mod simulation;
 pub mod views;
 
 pub use editor::SourceFile;
