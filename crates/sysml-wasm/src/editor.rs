@@ -138,6 +138,24 @@ pub fn build_diagram(
     })
 }
 
+/// An action flow view: the action named `scope` (or the first action found)
+/// with its steps, successions, forks, joins, decisions and merges.
+pub fn build_action_diagram(
+    files: &[SourceFile],
+    scope: Option<&str>,
+) -> Result<DiagramGraph, String> {
+    let actions: Vec<_> = files
+        .iter()
+        .flat_map(|f| sysml_core::sim::action_parser::extract_actions(&f.path, &f.text))
+        .collect();
+    let action = match scope {
+        Some(name) => actions.iter().find(|a| a.name == name),
+        None => actions.first(),
+    }
+    .ok_or_else(|| format!("no action {:?} to draw", scope.unwrap_or("")))?;
+    Ok(diagram::build_act_from_action_model(action))
+}
+
 /// A source edit requested by the UI.
 #[derive(Deserialize)]
 #[serde(tag = "op", rename_all = "camelCase")]
@@ -372,5 +390,18 @@ mod tests {
         assert!(labels.iter().any(|l| l.contains("Drone")), "{labels:?}");
         assert!(labels.iter().any(|l| l.contains("Battery")), "{labels:?}");
         assert!(build_diagram("interconnection", &project_model(&files), None).is_err());
+    }
+
+    #[test]
+    fn action_flow_diagram() {
+        let files = vec![SourceFile {
+            path: "a.sysml".into(),
+            text:
+                "action def Deliver { first start; then action fly; then action land; then done; }"
+                    .into(),
+        }];
+        let graph = build_action_diagram(&files, Some("Deliver")).unwrap();
+        assert!(graph.nodes.iter().any(|n| n.label == "fly"));
+        assert!(build_action_diagram(&files, Some("Missing")).is_err());
     }
 }

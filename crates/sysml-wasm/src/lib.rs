@@ -117,12 +117,17 @@ pub fn highlight(source: &str) -> String {
 
 /// A standard view of the project as a diagram graph (nodes, edges,
 /// subgraphs). `files` is JSON `[{ path, text }]`; `view` is `general`,
-/// `interconnection` (with `scope`), `requirements`, `states`, `packages` or
-/// `trace`.
+/// `interconnection` (with `scope`), `requirements`, `states`, `packages`,
+/// `trace` or `actions` (an action flow; `scope` names the action).
 #[wasm_bindgen]
 pub fn diagram(view: &str, files: &str, scope: Option<String>) -> Result<String, JsError> {
     let files: Vec<editor::SourceFile> =
         serde_json::from_str(files).map_err(|e| JsError::new(&e.to_string()))?;
+    if view == "actions" {
+        let graph =
+            editor::build_action_diagram(&files, scope.as_deref()).map_err(|e| JsError::new(&e))?;
+        return Ok(to_json(&graph));
+    }
     let model = editor::project_model(&files);
     let graph =
         editor::build_diagram(view, &model, scope.as_deref()).map_err(|e| JsError::new(&e))?;

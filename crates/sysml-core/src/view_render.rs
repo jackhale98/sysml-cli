@@ -87,6 +87,10 @@ pub struct ViewInfo {
     /// The `render` clause, if any (e.g. `asTreeDiagram`).
     #[serde(skip_serializing_if = "Option::is_none")]
     pub render_as: Option<String>,
+    /// The `expose` targets as written (`P`, `P::*`, `P::**`), so a front
+    /// end can draw a diagram view from the elements it exposes.
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub exposes: Vec<String>,
 }
 
 /// Every view def and view usage across the models.
@@ -109,6 +113,7 @@ pub fn list_views(models: &[Model]) -> Vec<ViewInfo> {
                 },
                 doc: v.doc.as_deref().map(collapse_ws),
                 render_as: v.render_as.clone(),
+                exposes: v.exposes.clone(),
             });
         }
     }
