@@ -2,6 +2,35 @@
 
 ## Unreleased
 
+### Added (editable tables)
+- **Rendered views say which columns can be edited.** `RenderedTable`
+  gains `editable` (per column: `null` or `{ field, kind, options? }`) and
+  `available_fields` (every field the row provider offers). Field specs
+  are `name`, `shortName`, `doc`, `feature:<name>` (a `:>>` body value)
+  and `metadata:<Type>.<field>`; kinds are `text`, `longText`, `enum`,
+  `number` and `enumList`, with the literal names of the `enum def` that
+  types the feature, resolved through the element's type and supertypes
+  (standard `ModelingMetadata` defs such as `StatusInfo` resolve from the
+  embedded library). Covered: `requirements`/`trace` (id, title, text,
+  attribute values, `@StatusInfo` status/owner, rationale), `type:` body
+  values, `@Metadata` annotation fields and `kind:` name/doc. Computed,
+  derived and trace columns stay `null`. New module `view_edit`.
+- **`codegen::field_edit`**: `set_field` turns an edited cell into a
+  minimal patch — replaces a value in place (enum literals keep their
+  qualifier, strings stay quoted, numbers keep their unit), inserts a
+  missing `:>> f = v;`, `@T { f = v; }` or annotation field indented like
+  its siblings (creating the body of a `;`-terminated element), sets or
+  removes `<'ID'>`, rewrites the doc comment in the same comment style
+  (escaping `*/`), renames the element and its references in the file
+  (not in comments or strings), and removes the value when the cell is
+  cleared. `set_table_columns` rewrites a view def's `@TableRendering`
+  `columns` or inserts/replaces/removes a view usage's override.
+- **sysml-wasm**: `renderView` returns `editable` and `availableFields`;
+  `edit` takes `setField` `{ path, source, element, line, field, value,
+  files? }` and `setTableColumns` `{ path, source, view, columns }`, with
+  the same `syntaxErrors` check as the other ops. Tested by editing the
+  drone demo's SYS-001 priority and status and re-rendering.
+
 ### Added (model-defined views)
 - **`view` usages render as tables.** `view fmea : FmeaWorksheet { expose
   Power::**; }` inherits the def's `@TableRendering` (an annotation on the

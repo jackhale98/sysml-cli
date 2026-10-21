@@ -11,6 +11,7 @@
 use serde::Serialize;
 use sysml_core::model::{DefKind, Model};
 use sysml_core::parser::parse_file;
+use sysml_core::view_edit::ColumnEdit;
 use sysml_core::view_render::{self, RowSource, ViewInfo};
 
 use crate::editor::SourceFile;
@@ -84,6 +85,14 @@ pub struct Table {
     pub warnings: Vec<String>,
     /// Parallel to `rows` (empty for a pivot): the element behind each row.
     pub sources: Vec<RowSource>,
+    /// Parallel to `columns`: `null`, or `{ field, kind, options? }` —
+    /// what an edit of the column's cells changes (pass `field` to the
+    /// `setField` edit), as `text`, `longText`, `enum`, `number` or
+    /// `enumList`, with the enum's literal names.
+    pub editable: Vec<Option<ColumnEdit>>,
+    /// Every field the view's row provider offers, for picking columns.
+    #[serde(rename = "availableFields")]
+    pub available_fields: Vec<String>,
 }
 
 /// Render the view `name` (simple or qualified) against the project.
@@ -96,6 +105,8 @@ pub fn render_view(files: &[SourceFile], name: &str) -> Result<Table, String> {
         rows: t.rows,
         warnings: t.warnings,
         sources: t.sources,
+        editable: t.editable,
+        available_fields: t.available_fields,
     })
 }
 

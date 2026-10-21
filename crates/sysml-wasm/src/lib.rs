@@ -148,9 +148,12 @@ pub fn list_views(files: &str) -> Result<String, JsError> {
 /// Render a view with a `@TableRendering` (own or inherited from its view
 /// def) as a table. `files` is JSON `[{ path, text }]`; `name` is the
 /// view's simple or qualified name. Returns `{ view, columns, rows,
-/// warnings, sources }` where `rows` are string cells in column order and
-/// `sources[i]` is `{ element, file, line }` for `rows[i]` (empty for a
-/// pivot). Throws if the view is unknown or has no table.
+/// warnings, sources, editable, availableFields }` where `rows` are string
+/// cells in column order, `sources[i]` is `{ element, file, line }` for
+/// `rows[i]` (empty for a pivot), `editable[j]` is `null` or `{ field,
+/// kind, options? }` for `columns[j]` (see the `setField` edit) and
+/// `availableFields` lists the fields the row provider offers. Throws if
+/// the view is unknown or has no table.
 #[wasm_bindgen(js_name = renderView)]
 pub fn render_view(files: &str, name: &str) -> Result<String, JsError> {
     let files: Vec<editor::SourceFile> =
@@ -168,8 +171,12 @@ pub fn view_libraries() -> String {
 
 /// Compute a source edit. `request` is JSON tagged by `op`: `insertMember`
 /// `{ path, source, parent, text }`, `insertTopLevel` `{ source, text }`,
-/// `remove` `{ path, source, name }` or `rename` `{ path, source, from, to }`.
-/// Returns `{ changes: [{ from, to, insert }], syntaxErrors: string[] }`.
+/// `remove` `{ path, source, name }`, `rename` `{ path, source, from, to }`,
+/// `setField` `{ path, source, element, line, field, value, files? }` (a
+/// table cell: `element`/`line` from the row's `sources`, `field` from the
+/// column's `editable`) or `setTableColumns` `{ path, source, view,
+/// columns }`. Returns `{ changes: [{ from, to, insert }], syntaxErrors:
+/// string[] }`.
 #[wasm_bindgen]
 pub fn edit(request: &str) -> Result<String, JsError> {
     let request: editor::EditRequest =

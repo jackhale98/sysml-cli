@@ -42,9 +42,10 @@
 use std::collections::{BTreeMap, HashMap, HashSet};
 
 use crate::model::{simple_name, unquote_name, DefKind, Model, Usage, ViewDef};
+use crate::view_edit::{self, ColumnEdit, FieldSpec, FieldType, ValueKind};
 
 /// A rendered table, ready for text/json/csv/markdown output.
-#[derive(Debug, Clone, serde::Serialize)]
+#[derive(Debug, Clone, Default, serde::Serialize)]
 pub struct RenderedTable {
     pub view: String,
     pub columns: Vec<String>,
@@ -56,6 +57,13 @@ pub struct RenderedTable {
     /// so a viewer can link a row back to its element.
     #[serde(skip_serializing_if = "Vec::is_empty")]
     pub sources: Vec<RowSource>,
+    /// Per column, how its cells are edited — `None` for computed,
+    /// derived and trace columns (and every pivot column).
+    #[serde(skip)]
+    pub editable: Vec<Option<ColumnEdit>>,
+    /// The fields the row provider offers, for choosing columns.
+    #[serde(skip)]
+    pub available_fields: Vec<String>,
 }
 
 /// The model element behind one table row.
@@ -178,6 +186,7 @@ pub fn render_view(
     let rows_spec = get("rows").ok_or("missing `rows` in @TableRendering")?;
     let mut warnings = Vec::new();
     let rows = provide_rows(&idx, models, targets, &rows_spec, &mut warnings)?;
+    let probe = Probe::new(&rows_spec, &rows);
 
     // Narrow to what the view exposes and keeps.
     let rows = apply_scope(models, view, rows, &rows_spec, &mut warnings);
@@ -199,6 +208,8 @@ pub fn render_view(
         }
         let mut t = pivot_table(&shown_name, &rows, parts[0], parts[1], get("sortBy"));
         t.warnings = warnings;
+        t.editable = vec![None; t.columns.len()];
+        t.available_fields = probe.fields;
         return Ok(t);
     }
 
@@ -252,6 +263,10 @@ pub fn render_view(
         }
     }
 
+    let editable = columns
+        .iter()
+        .map(|(name, expr)| column_edit(models, &rows_spec, &probe, name, expr.as_deref()))
+        .collect();
     let (rows, sources): (Vec<_>, Vec<_>) = table.into_iter().unzip();
     Ok(RenderedTable {
         view: shown_name,
@@ -259,7 +274,184 @@ pub fn render_view(
         rows,
         warnings,
         sources,
+        editable,
+        available_fields: probe.fields,
     })
+}
+
+// --- editing --------------------------------------------------------------------
+
+/// What the provider's rows offer, gathered before `expose` and `where`
+/// narrow them: their field names and the types of their elements.
+struct Probe {
+    fields: Vec<String>,
+    types: Vec<String>,
+}
+
+/// The fields of a `requirements` row, for a project with none yet.
+const REQUIREMENT_FIELDS: [&str; 19] = [
+    "element",
+    "qualifiedName",
+    "id",
+    "title",
+    "text",
+    "type",
+    "status",
+    "owner",
+    "rationale",
+    "issues",
+    "satisfiedBy",
+    "verifiedBy",
+    "satisfied",
+    "verified",
+    "file",
+    "line",
+    "kind",
+    "priority",
+    "verificationMethod",
+];
+
+impl Probe {
+    fn new(spec: &str, rows: &[Row]) -> Self {
+        let mut fields: Vec<String> = Vec::new();
+        let mut types: Vec<String> = Vec::new();
+        if spec == "requirements" || spec == "trace" {
+            if spec == "trace" {
+                fields.push("requirement".into());
+            }
+            fields.extend(REQUIREMENT_FIELDS.iter().map(|f| f.to_string()));
+        }
+        if let Some(t) = spec.strip_prefix("type:") {
+            types.push(t.trim().to_string());
+        }
+        for r in rows {
+            for (k, _) in &r.fields {
+                if !fields.contains(k) {
+                    fields.push(k.clone());
+                }
+            }
+            if let Some(t) = field(r, "type").filter(|t| !t.is_empty()) {
+                if !types.contains(&t) {
+                    types.push(t);
+                }
+            }
+        }
+        Probe { fields, types }
+    }
+
+    fn has(&self, name: &str) -> bool {
+        self.fields.iter().any(|f| f == name)
+    }
+}
+
+/// How cells of the column `name` (`name = expr`) are edited, if they
+/// can be: only columns that copy a field of the row's own element.
+fn column_edit(
+    models: &[Model],
+    spec: &str,
+    probe: &Probe,
+    name: &str,
+    expr: Option<&str>,
+) -> Option<ColumnEdit> {
+    use ValueKind::{LongText, Text};
+    // `description = doc` copies a field under another name.
+    let f = match expr {
+        None => name,
+        Some(e) if view_edit::is_plain_identifier(e.trim()) && probe.has(e.trim()) => e.trim(),
+        Some(_) => return None,
+    };
+    let plain = |s: FieldSpec, k: ValueKind| Some(ColumnEdit::new(&s, &FieldType::default(), k));
+    let feature = |always: bool| feature_edit(models, probe, f, always);
+    match spec {
+        "requirements" | "trace" => match f {
+            "id" => plain(FieldSpec::ShortName, Text),
+            "title" | "element" | "requirement" => plain(FieldSpec::Name, Text),
+            "text" => plain(FieldSpec::Doc, LongText),
+            "status" | "owner" => metadata_edit(models, probe, "StatusInfo", f, true),
+            // A `rationale` attribute when the requirements declare one,
+            // else the standard @Rationale.
+            "rationale" => feature_edit(models, probe, f, false)
+                .filter(|_| declared_anywhere(models, probe, f))
+                .or_else(|| {
+                    metadata_edit(models, probe, "Rationale", "text", true).map(|mut e| {
+                        e.kind = LongText;
+                        e
+                    })
+                }),
+            "qualifiedName" | "type" | "issues" | "satisfiedBy" | "verifiedBy" | "satisfied"
+            | "verified" | "file" | "line" => None,
+            _ => feature(["kind", "priority", "verificationMethod"].contains(&f)),
+        },
+        _ if spec.starts_with('@') => match f {
+            "element" | "file" | "line" => None,
+            _ => metadata_edit(models, probe, spec[1..].trim(), f, false),
+        },
+        _ if spec.starts_with("type:") => match f {
+            "element" => plain(FieldSpec::Name, Text),
+            "type" | "kind" | "parent" | "file" | "line" => None,
+            _ => feature(false),
+        },
+        _ if spec.starts_with("kind:") => match f {
+            "element" => plain(FieldSpec::Name, Text),
+            "doc" => plain(FieldSpec::Doc, LongText),
+            _ => None,
+        },
+        _ => None,
+    }
+}
+
+fn declared_anywhere(models: &[Model], probe: &Probe, feature: &str) -> bool {
+    probe
+        .types
+        .iter()
+        .any(|t| view_edit::declared_feature(models, t, feature).is_some())
+}
+
+/// A body value `feature:<f>`: declared as an attribute by a row's type,
+/// or already set on some row (or `always`, for the standard columns).
+fn feature_edit(models: &[Model], probe: &Probe, f: &str, always: bool) -> Option<ColumnEdit> {
+    let spec = FieldSpec::Feature(f.to_string());
+    for t in &probe.types {
+        if let Some(decl) = view_edit::declared_feature(models, t, f) {
+            if decl.kind != "attribute" {
+                return None;
+            }
+            let ty = view_edit::feature_type(models, t, f).unwrap_or_default();
+            return Some(ColumnEdit::new(&spec, &ty, ValueKind::Text));
+        }
+    }
+    if !always && !probe.has(f) {
+        return None;
+    }
+    let ty = view_edit::feature_type_from_values(models, f).unwrap_or_default();
+    Some(ColumnEdit::new(&spec, &ty, ValueKind::Text))
+}
+
+/// A metadata field `metadata:<meta>.<f>`, declared by the metadata def
+/// or given on some row.
+fn metadata_edit(
+    models: &[Model],
+    probe: &Probe,
+    meta: &str,
+    f: &str,
+    always: bool,
+) -> Option<ColumnEdit> {
+    let spec = FieldSpec::Metadata {
+        ty: meta.to_string(),
+        field: f.to_string(),
+    };
+    if let Some(decl) = view_edit::declared_feature(models, meta, f) {
+        if decl.kind != "attribute" {
+            return None;
+        }
+        let ty = view_edit::metadata_field_type(models, meta, f).unwrap_or_default();
+        return Some(ColumnEdit::new(&spec, &ty, ValueKind::Text));
+    }
+    if !always && !probe.has(f) {
+        return None;
+    }
+    let ty = view_edit::metadata_type_from_values(models, meta, f).unwrap_or_default();
+    Some(ColumnEdit::new(&spec, &ty, ValueKind::Text))
 }
 
 /// Numbers compare numerically, everything else as text.
@@ -692,7 +884,7 @@ impl Index {
 }
 
 /// `A::B.c` -> ["A", "B", "c"], each segment unquoted.
-fn split_path(reference: &str) -> Vec<String> {
+pub(crate) fn split_path(reference: &str) -> Vec<String> {
     let mut out = Vec::new();
     let mut cur = String::new();
     let mut quoted = false;
@@ -1975,8 +2167,7 @@ fn pivot_table(
         view: view.to_string(),
         columns,
         rows: out_rows,
-        warnings: Vec::new(),
-        sources: Vec::new(),
+        ..Default::default()
     }
 }
 
@@ -2215,6 +2406,68 @@ mod tests {
 
     fn models() -> Vec<Model> {
         vec![parse_file("t.sysml", FMEA_MODEL)]
+    }
+
+    #[test]
+    fn columns_say_how_they_are_edited() {
+        let src = r#"
+            package P {
+                metadata def Fmea {
+                    attribute failureMode : String;
+                    attribute severity : Integer;
+                    ref target : Part[0..1];
+                }
+                metadata def TableRendering;
+                occurrence def Hazard { attribute description : String[0..1]; }
+                occurrence fire : Hazard { :>> description = "Fire"; }
+                view def Log {
+                    @TableRendering {
+                        rows = "type:Hazard";
+                        columns = "element; description; type; line";
+                    }
+                }
+                view def Sheet {
+                    @TableRendering {
+                        rows = "@Fmea";
+                        columns = "element; failureMode; severity; target; rpn = severity * 2";
+                    }
+                }
+                part p { @Fmea { failureMode = "x"; severity = 3; } }
+            }
+        "#;
+        let hazards = vec![parse_file("t.sysml", src)];
+        let fields = |t: &RenderedTable| -> Vec<Option<String>> {
+            t.editable
+                .iter()
+                .map(|e| e.as_ref().map(|e| e.field.clone()))
+                .collect()
+        };
+        let log = render_view(&hazards, &[], "Log").unwrap();
+        assert_eq!(
+            fields(&log),
+            [
+                Some("name".to_string()),
+                Some("feature:description".to_string()),
+                None,
+                None
+            ]
+        );
+        assert!(log.available_fields.contains(&"parent".to_string()));
+        let sheet = render_view(&hazards, &[], "Sheet").unwrap();
+        assert_eq!(
+            fields(&sheet),
+            [
+                None,
+                Some("metadata:Fmea.failureMode".to_string()),
+                Some("metadata:Fmea.severity".to_string()),
+                None,
+                None
+            ]
+        );
+        assert_eq!(sheet.editable[2].as_ref().unwrap().kind, ValueKind::Number);
+        let matrix = render_view(&models(), &[], "Matrix").unwrap();
+        assert!(matrix.editable.iter().all(Option::is_none));
+        assert_eq!(matrix.editable.len(), matrix.columns.len());
     }
 
     #[test]
