@@ -1174,6 +1174,7 @@ dependencies = [
  "sysml-interchange",
  "sysml-semantic",
  "wasm-bindgen",
+ "zip",
 ]
 
 [[package]]
