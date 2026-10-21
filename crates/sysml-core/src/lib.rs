@@ -34,3 +34,6 @@ pub mod sim;
 pub mod stdlib;
 pub mod view_edit;
 pub mod view_render;
+
+/// The semantic model (element graph, name resolution); see `sysml_semantic`.
+pub use sysml_semantic as semantic;

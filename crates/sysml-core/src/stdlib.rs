@@ -9,18 +9,16 @@ use std::sync::OnceLock;
 use crate::model::{Definition, Model};
 use crate::parser;
 
-include!(concat!(env!("OUT_DIR"), "/stdlib_files.rs"));
-
 /// Returns all embedded standard library files as (path, content) pairs.
 pub fn stdlib_files() -> &'static [(&'static str, &'static str)] {
-    STDLIB_FILES
+    sysml_syntax::stdlib_files()
 }
 
 /// Parse all embedded standard library files into Models (cached).
 pub fn parse_stdlib() -> &'static [Model] {
     static MODELS: OnceLock<Vec<Model>> = OnceLock::new();
     MODELS.get_or_init(|| {
-        STDLIB_FILES
+        stdlib_files()
             .iter()
             .map(|(path, source)| parser::parse_file(path, source))
             .collect()

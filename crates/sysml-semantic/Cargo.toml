@@ -7,6 +7,8 @@ repository.workspace = true
 description = "SysML v2 / KerML semantic model: element graph, identity and name resolution"
 
 [dependencies]
+sysml-syntax = { path = "../sysml-syntax" }
+tree-sitter = "0.27"
 uuid = { version = "1", default-features = false, features = ["v5"] }
 
 [dev-dependencies]

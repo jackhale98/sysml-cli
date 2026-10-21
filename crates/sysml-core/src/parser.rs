@@ -4,12 +4,9 @@ use tree_sitter::{Language, Node, Parser};
 
 use crate::model::*;
 
-extern "C" {
-    fn tree_sitter_sysml() -> Language;
-}
-
+/// The tree-sitter language (see [`sysml_syntax::language`]).
 pub fn get_language() -> Language {
-    unsafe { tree_sitter_sysml() }
+    sysml_syntax::language()
 }
 
 /// Dump the CST for debugging.

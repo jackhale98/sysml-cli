@@ -1,14 +1,14 @@
+//! Compiles the tree-sitter-sysml parser and embeds the grammar's highlight
+//! query and the OMG standard library sources.
+
 use std::path::{Path, PathBuf};
 
 fn main() {
-    // Look for tree-sitter-sysml grammar source relative to workspace root.
-    // Build scripts run from the crate directory (crates/sysml-core/),
-    // so we look up two levels to the workspace root.
+    // Build scripts run from the crate directory (crates/sysml-syntax/).
     let candidates = [
         "../../tree-sitter-sysml/src",    // submodule in workspace root
         "../../../tree-sitter-sysml/src", // sibling of workspace root
     ];
-
     let grammar_dir = candidates
         .iter()
         .map(Path::new)
@@ -18,7 +18,7 @@ fn main() {
                 "tree-sitter-sysml grammar not found. Tried:\n{}",
                 candidates
                     .iter()
-                    .map(|c| format!("  - {}/parser.c", c))
+                    .map(|c| format!("  - {c}/parser.c"))
                     .collect::<Vec<_>>()
                     .join("\n")
             )
@@ -35,54 +35,43 @@ fn main() {
         build.include(headers);
     }
     build.compile("tree-sitter-sysml");
-
-    // Embed the grammar's highlight query for `highlight::highlight`.
-    let out_dir = std::env::var("OUT_DIR").unwrap();
-    let highlights = grammar_dir.join("../queries/highlights.scm");
-    let query = std::fs::read_to_string(&highlights).unwrap_or_default();
-    std::fs::write(Path::new(&out_dir).join("highlights.scm"), query).unwrap();
-    println!("cargo:rerun-if-changed={}", highlights.display());
-
     println!(
         "cargo:rerun-if-changed={}",
         grammar_dir.join("parser.c").display()
     );
 
-    // Embed the SysML v2 standard library files.
+    let out_dir = std::env::var("OUT_DIR").unwrap();
+
+    // The grammar's highlight query.
+    let highlights = grammar_dir.join("../queries/highlights.scm");
+    let query = std::fs::read_to_string(&highlights).unwrap_or_default();
+    std::fs::write(Path::new(&out_dir).join("highlights.scm"), query).unwrap();
+    println!("cargo:rerun-if-changed={}", highlights.display());
+
+    // The SysML v2 standard library sources.
     let manifest_dir = std::env::var("CARGO_MANIFEST_DIR").unwrap();
     let stdlib_dir = Path::new(&manifest_dir)
         .join("../../sysml-v2-release/sysml.library")
         .canonicalize();
-
+    let dest = Path::new(&out_dir).join("stdlib_files.rs");
     if let Ok(stdlib_dir) = stdlib_dir {
         let mut files: Vec<PathBuf> = Vec::new();
         collect_library_files(&stdlib_dir, &mut files);
         files.sort();
-
-        let mut code = String::new();
-        code.push_str("pub static STDLIB_FILES: &[(&str, &str)] = &[\n");
+        let mut code = String::from("static STDLIB_FILES: &[(&str, &str)] = &[\n");
         for file in &files {
             let relative = file.strip_prefix(&stdlib_dir).unwrap();
             let rel_str = relative.to_string_lossy().replace('\\', "/");
             let abs_path = file.to_string_lossy().replace('\\', "/");
-            code.push_str(&format!(
-                "    (\"{}\", include_str!(\"{}\")),\n",
-                rel_str, abs_path
-            ));
+            code.push_str(&format!("    ({rel_str:?}, include_str!({abs_path:?})),\n"));
         }
         code.push_str("];\n");
-
-        let out_dir = std::env::var("OUT_DIR").unwrap();
-        let dest = Path::new(&out_dir).join("stdlib_files.rs");
         std::fs::write(&dest, code).unwrap();
-
         println!("cargo:rerun-if-changed={}", stdlib_dir.display());
     } else {
-        // No stdlib directory found — generate an empty array so the build
-        // still succeeds (e.g. on CI without the submodule).
-        let out_dir = std::env::var("OUT_DIR").unwrap();
-        let dest = Path::new(&out_dir).join("stdlib_files.rs");
-        std::fs::write(&dest, "pub static STDLIB_FILES: &[(&str, &str)] = &[];\n").unwrap();
+        // No stdlib directory (submodule not initialised): an empty library
+        // keeps the build working.
+        std::fs::write(&dest, "static STDLIB_FILES: &[(&str, &str)] = &[];\n").unwrap();
     }
 }
 

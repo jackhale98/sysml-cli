@@ -1123,11 +1123,11 @@ dependencies = [
 name = "sysml-core"
 version = "0.9.3"
 dependencies = [
- "cc",
  "serde",
  "serde_json",
+ "sysml-semantic",
+ "sysml-syntax",
  "tree-sitter",
- "tree-sitter-language",
 ]
 
 [[package]]
@@ -1161,7 +1161,18 @@ name = "sysml-semantic"
 version = "0.9.3"
 dependencies = [
  "quick-xml",
+ "sysml-syntax",
+ "tree-sitter",
  "uuid",
+]
+
+[[package]]
+name = "sysml-syntax"
+version = "0.9.3"
+dependencies = [
+ "cc",
+ "tree-sitter",
+ "tree-sitter-language",
 ]
 
 [[package]]

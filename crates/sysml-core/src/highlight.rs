@@ -10,7 +10,7 @@ use tree_sitter::{Parser, Query, QueryCursor, StreamingIterator};
 
 use crate::parser::get_language;
 
-const HIGHLIGHTS_SCM: &str = include_str!(concat!(env!("OUT_DIR"), "/highlights.scm"));
+const HIGHLIGHTS_SCM: &str = sysml_syntax::HIGHLIGHTS_QUERY;
 
 /// A highlighted byte range of the source.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

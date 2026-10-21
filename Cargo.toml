@@ -5,6 +5,7 @@ members = [
     "crates/sysml-cli",
     "crates/sysml-lsp",
     "crates/sysml-semantic",
+    "crates/sysml-syntax",
     "crates/sysml-interchange",
     "crates/sysml-wasm",
 ]

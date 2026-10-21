@@ -1,0 +1,15 @@
+[package]
+name = "sysml-syntax"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "SysML v2 / KerML concrete syntax: the tree-sitter grammar binding and the embedded standard library sources"
+
+[dependencies]
+tree-sitter = "0.27"
+# Direct dependency so its wasm libc headers reach build.rs (DEP_* metadata).
+tree-sitter-language = "0.1.9"
+
+[build-dependencies]
+cc = "1"
