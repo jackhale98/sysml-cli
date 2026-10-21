@@ -1,80 +1,13 @@
-use sysml_core::model::{DefKind, Model};
-use sysml_core::stdlib;
-use tower_lsp_server::ls_types::{CompletionItem, CompletionItemKind};
+//! Completion: context detection and items come from
+//! `sysml_core::lang::completion`; this module maps them to LSP items.
 
-use std::collections::HashSet;
+use sysml_core::lang::completion::{self as lang, ItemOrigin};
+use sysml_core::model::{DefKind, Model};
+use tower_lsp_server::ls_types::{CompletionItem, CompletionItemKind, Documentation};
+
+pub use sysml_core::lang::completion::{detect_context, CompletionFilter};
 
 use crate::state::DefLocation;
-
-/// What kind of completion context we're in.
-#[derive(Debug, PartialEq)]
-pub enum CompletionFilter {
-    /// No special context — show everything.
-    All,
-    /// After `:` in a type position — show only definitions (type names).
-    TypePosition,
-    /// After `:>` in a specialization — show only definitions of matching kind.
-    Specialization,
-    /// After `.` — show members of the preceding element.
-    MemberAccess(String),
-    /// After `Pkg::` — show members of that (stdlib or workspace) package.
-    QualifiedAccess(String),
-}
-
-/// Determine completion context from the text before the cursor.
-pub fn detect_context(source: &str, offset: usize) -> CompletionFilter {
-    let before = &source[..offset.min(source.len())];
-    let trimmed = before.trim_end();
-
-    // Check for qualified access: "Pkg::" — scoped package members
-    if let Some(prefix) = trimmed.strip_suffix("::") {
-        let name: String = prefix
-            .chars()
-            .rev()
-            .take_while(|c| c.is_alphanumeric() || *c == '_')
-            .collect::<String>()
-            .chars()
-            .rev()
-            .collect();
-        if !name.is_empty() {
-            return CompletionFilter::QualifiedAccess(name);
-        }
-    }
-
-    // Check for member access: "something."
-    if let Some(prefix) = trimmed.strip_suffix('.') {
-        // Extract the name before the dot
-        let name: String = prefix
-            .chars()
-            .rev()
-            .take_while(|c| c.is_alphanumeric() || *c == '_')
-            .collect::<String>()
-            .chars()
-            .rev()
-            .collect();
-        if !name.is_empty() {
-            return CompletionFilter::MemberAccess(name);
-        }
-    }
-
-    // Check for specialization: ":>" with optional whitespace
-    if trimmed.ends_with(":>") || trimmed.ends_with(":> ") {
-        return CompletionFilter::Specialization;
-    }
-
-    // Check for type position: ":" followed by optional whitespace
-    // But not "::" (qualified name) or ":>" or ":=" (assignment)
-    let last_non_ws = trimmed.as_bytes().last().copied();
-    if last_non_ws == Some(b':') {
-        let before_colon = &trimmed[..trimmed.len() - 1];
-        let prev = before_colon.as_bytes().last().copied();
-        if prev != Some(b':') && prev != Some(b'>') {
-            return CompletionFilter::TypePosition;
-        }
-    }
-
-    CompletionFilter::All
-}
 
 fn def_kind_to_completion_kind(kind: DefKind) -> CompletionItemKind {
     match kind {
@@ -96,239 +29,43 @@ fn def_kind_to_completion_kind(kind: DefKind) -> CompletionItemKind {
     }
 }
 
-/// Generate completion items from the current file, workspace defs, and stdlib.
+fn usage_kind_to_completion_kind(kind: &str) -> CompletionItemKind {
+    match kind {
+        "part" | "item" => CompletionItemKind::FIELD,
+        "port" => CompletionItemKind::INTERFACE,
+        "attribute" | "feature" => CompletionItemKind::PROPERTY,
+        "action" | "calc" => CompletionItemKind::FUNCTION,
+        _ => CompletionItemKind::VARIABLE,
+    }
+}
+
+fn to_lsp(item: lang::CompletionItem) -> CompletionItem {
+    CompletionItem {
+        kind: Some(match &item.origin {
+            ItemOrigin::Def(kind) => def_kind_to_completion_kind(*kind),
+            ItemOrigin::Member(kind) => usage_kind_to_completion_kind(kind),
+            ItemOrigin::Inherited => CompletionItemKind::PROPERTY,
+            ItemOrigin::Other => CompletionItemKind::VALUE,
+        }),
+        label: item.label,
+        detail: item.detail,
+        documentation: item.documentation.map(Documentation::String),
+        sort_text: item.sort_text,
+        ..Default::default()
+    }
+}
+
+/// Completion items from the current file, workspace defs, and stdlib.
 /// `filter` restricts which items are returned based on cursor context.
 pub fn completions(
     model: &Model,
     workspace_defs: &[DefLocation],
     filter: &CompletionFilter,
 ) -> Vec<CompletionItem> {
-    // For member access, return members of the named element
-    if let CompletionFilter::MemberAccess(ref parent) = filter {
-        return member_completions(model, parent);
-    }
-    // For qualified access, return the package's members (stdlib first,
-    // then workspace definitions inside a matching package).
-    if let CompletionFilter::QualifiedAccess(ref pkg) = filter {
-        return qualified_completions(model, workspace_defs, pkg);
-    }
-    let is_type_position = matches!(
-        filter,
-        CompletionFilter::TypePosition | CompletionFilter::Specialization
-    );
-    let mut seen = HashSet::new();
-    let mut items = Vec::new();
-
-    // Current file definitions (in type position, skip packages)
-    for def in &model.definitions {
-        if is_type_position && def.kind == DefKind::Package {
-            continue;
-        }
-        if seen.insert(def.name.clone()) {
-            items.push(CompletionItem {
-                label: def.name.clone(),
-                kind: Some(def_kind_to_completion_kind(def.kind)),
-                detail: Some(def.kind.label().to_string()),
-                documentation: def
-                    .doc
-                    .as_ref()
-                    .map(|d| tower_lsp_server::ls_types::Documentation::String(d.clone())),
-                ..Default::default()
-            });
-        }
-    }
-
-    // Workspace definitions (cross-file) — skip packages in type position
-    for loc in workspace_defs {
-        if is_type_position && loc.kind == DefKind::Package {
-            continue;
-        }
-        if seen.insert(loc.name.clone()) {
-            items.push(CompletionItem {
-                label: loc.name.clone(),
-                kind: Some(def_kind_to_completion_kind(loc.kind)),
-                detail: Some(loc.kind.label().to_string()),
-                documentation: loc
-                    .doc
-                    .as_ref()
-                    .map(|d| tower_lsp_server::ls_types::Documentation::String(d.clone())),
-                ..Default::default()
-            });
-        }
-    }
-
-    // Standard library definitions — always available, ranked below
-    // workspace items via sort_text so `attribute mass : ` offers Real,
-    // MassValue, ISQ quantities, ... without drowning local types.
-    for stdlib_model in stdlib::parse_stdlib() {
-        for def in &stdlib_model.definitions {
-            if is_type_position && def.kind == DefKind::Package {
-                continue;
-            }
-            if seen.insert(def.name.clone()) {
-                items.push(CompletionItem {
-                    label: def.name.clone(),
-                    kind: Some(def_kind_to_completion_kind(def.kind)),
-                    detail: Some(format!("{} (stdlib)", def.kind.label())),
-                    sort_text: Some(format!("1{}", def.name)),
-                    documentation: def
-                        .doc
-                        .as_ref()
-                        .map(|d| tower_lsp_server::ls_types::Documentation::String(d.clone())),
-                    ..Default::default()
-                });
-            }
-        }
-    }
-
-    // Package members that are usages in the stdlib source (KerML
-    // `datatype Real`, `attribute mass`, ...) — exposed via the enriched
-    // package index.
-    for defs in stdlib::stdlib_package_defs().values() {
-        for def in defs {
-            if is_type_position && def.kind == DefKind::Package {
-                continue;
-            }
-            if seen.insert(def.name.clone()) {
-                items.push(CompletionItem {
-                    label: def.name.clone(),
-                    kind: Some(def_kind_to_completion_kind(def.kind)),
-                    detail: Some(format!("{} (stdlib)", def.kind.label())),
-                    sort_text: Some(format!("1{}", def.name)),
-                    documentation: def
-                        .doc
-                        .as_ref()
-                        .map(|d| tower_lsp_server::ls_types::Documentation::String(d.clone())),
-                    ..Default::default()
-                });
-            }
-        }
-    }
-
-    // Rank workspace/file items above stdlib
-    for item in &mut items {
-        if item.sort_text.is_none() {
-            item.sort_text = Some(format!("0{}", item.label));
-        }
-    }
-
-    items
-}
-
-/// Members of `Pkg::` — stdlib package members plus workspace definitions
-/// whose enclosing package matches.
-fn qualified_completions(
-    model: &Model,
-    workspace_defs: &[DefLocation],
-    pkg: &str,
-) -> Vec<CompletionItem> {
-    let mut seen = HashSet::new();
-    let mut items = Vec::new();
-
-    if let Some(defs) = stdlib::stdlib_package_defs().get(pkg) {
-        for def in defs {
-            if seen.insert(def.name.clone()) {
-                items.push(CompletionItem {
-                    label: def.name.clone(),
-                    kind: Some(def_kind_to_completion_kind(def.kind)),
-                    detail: Some(format!("{} ({})", def.kind.label(), pkg)),
-                    documentation: def
-                        .doc
-                        .as_ref()
-                        .map(|d| tower_lsp_server::ls_types::Documentation::String(d.clone())),
-                    ..Default::default()
-                });
-            }
-        }
-    }
-
-    // Definitions in the current file under a package with this name
-    for def in &model.definitions {
-        if def
-            .parent_def
-            .as_deref()
-            .map(sysml_core::model::unquote_name)
-            == Some(pkg)
-            && seen.insert(def.name.clone())
-        {
-            items.push(CompletionItem {
-                label: def.name.clone(),
-                kind: Some(def_kind_to_completion_kind(def.kind)),
-                detail: Some(format!("{} ({})", def.kind.label(), pkg)),
-                ..Default::default()
-            });
-        }
-    }
-
-    // Workspace definitions whose qualified name lives under the package
-    for loc in workspace_defs {
-        if let Some(ref qn) = loc.qualified_name {
-            let in_pkg = qn
-                .rsplit_once("::")
-                .map(|(prefix, _)| prefix == pkg || prefix.ends_with(&format!("::{}", pkg)))
-                .unwrap_or(false);
-            if in_pkg && seen.insert(loc.name.clone()) {
-                items.push(CompletionItem {
-                    label: loc.name.clone(),
-                    kind: Some(def_kind_to_completion_kind(loc.kind)),
-                    detail: Some(format!("{} ({})", loc.kind.label(), pkg)),
-                    ..Default::default()
-                });
-            }
-        }
-    }
-
-    items
-}
-
-/// Generate completions for members of a named element.
-fn member_completions(model: &Model, parent_name: &str) -> Vec<CompletionItem> {
-    let mut items = Vec::new();
-    // `drone.` where drone is a usage: enumerate the members of its TYPE
-    // (feature chains are written through usage names in practice).
-    let resolved: &str = model
-        .usages
-        .iter()
-        .find(|u| u.name == parent_name)
-        .and_then(|u| u.type_ref.as_deref())
-        .map(sysml_core::model::simple_name)
-        .unwrap_or(parent_name);
-    let parent_name = resolved;
-    // Find usages with this parent
-    for usage in model.usages_in_def(parent_name) {
-        items.push(CompletionItem {
-            label: usage.name.clone(),
-            kind: Some(match usage.kind.as_str() {
-                "part" | "item" => CompletionItemKind::FIELD,
-                "port" => CompletionItemKind::INTERFACE,
-                "attribute" | "feature" => CompletionItemKind::PROPERTY,
-                "action" | "calc" => CompletionItemKind::FUNCTION,
-                _ => CompletionItemKind::VARIABLE,
-            }),
-            detail: usage.type_ref.clone(),
-            ..Default::default()
-        });
-    }
-    // Also check type_ref to show inherited members
-    if let Some(def) = model.find_def(parent_name) {
-        if let Some(ref st) = def.super_type {
-            let st_name = sysml_core::model::simple_name(st);
-            for usage in model.usages_in_def(st_name) {
-                if !items.iter().any(|i| i.label == usage.name) {
-                    items.push(CompletionItem {
-                        label: usage.name.clone(),
-                        kind: Some(CompletionItemKind::PROPERTY),
-                        detail: Some(format!(
-                            "{} (inherited)",
-                            usage.type_ref.as_deref().unwrap_or("")
-                        )),
-                        ..Default::default()
-                    });
-                }
-            }
-        }
-    }
-    items
+    lang::completions(model, workspace_defs, filter)
+        .into_iter()
+        .map(to_lsp)
+        .collect()
 }
 
 #[cfg(test)]

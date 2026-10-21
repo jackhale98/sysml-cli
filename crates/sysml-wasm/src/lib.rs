@@ -7,6 +7,7 @@
 
 pub mod archive;
 mod editor;
+pub mod language;
 pub mod library;
 pub mod simulation;
 pub mod views;

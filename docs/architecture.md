@@ -63,6 +63,17 @@ src/
   export/                 Modelica stub and SSP export (FMI interface extraction)
   view_render.rs          Model-defined view engine (@TableRendering: row providers, computed columns)
   stdlib.rs               Embedded SysML v2 standard library (member-checked references)
+  lang/                   Editor language features on byte offsets (LSP and browser)
+    lex.rs                Tokens with exact spans; comments and strings kept aside
+    index.rs              Workspace index + name resolution (scopes, imports, inheritance, stdlib)
+    completion.rs         Context-aware completion; the LSP's per-file completion
+    hover.rs              Hover markdown
+    definition.rs         Go to definition (project files and the library)
+    references.rs         Scope-aware references
+    rename.rs             Scope-aware rename (quotes names as needed)
+    symbols.rs            Outline / document symbols
+    format.rs             Formatting as minimal edits
+    actions.rs            Quick fixes for W001/W004/W005
   query.rs                Model querying (list, show, trace, deps, diff, allocation, coverage, gates)
 ```
 
@@ -94,6 +105,8 @@ src/
   code_lens.rs          Satisfy / verify / usage counts above definitions
   document_link.rs      Clickable imports and supertypes
 ```
+
+The feature logic (completion, hover, definition, references, rename, symbols, formatting, code-action helpers) lives in `sysml_core::lang`; these modules convert to LSP types. The browser engine (`sysml-wasm`, `language.rs`) uses the same module through JSON with UTF-16 offsets.
 
 State is managed with `DashMap` for concurrent access — tower-lsp dispatches requests concurrently. Full text sync (`TextDocumentSyncKind::FULL`) with full reparse on every change; tree-sitter is fast and SysML files are small. On `initialize`, the server scans the workspace for `.sysml`/`.kerml` files to build the cross-file definition index.
 

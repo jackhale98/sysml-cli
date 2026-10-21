@@ -1,62 +1,10 @@
 use sysml_core::model::{simple_name, Model, Span};
 
+pub use sysml_core::lang::definition::find_identifier_at_offset;
+#[cfg(test)]
+use sysml_core::lang::definition::goto_definition_in_file;
+
 use crate::state::WorldState;
-
-/// Find the identifier name at a given byte offset in the source.
-/// Checks type_references, usage type_refs, and definition super_types.
-pub fn find_identifier_at_offset(model: &Model, source: &str, offset: usize) -> Option<String> {
-    // Check type_references first (most common case)
-    for tr in &model.type_references {
-        if tr.span.start_byte <= offset && offset < tr.span.end_byte {
-            return Some(tr.name.clone());
-        }
-    }
-
-    // Check usage type_refs
-    for usage in &model.usages {
-        if let Some(ref type_ref) = usage.type_ref {
-            // The type_ref text is at the end of the usage span; approximate by
-            // checking if offset falls in the usage span and the text at offset
-            // matches the type_ref name
-            if usage.span.start_byte <= offset && offset < usage.span.end_byte {
-                let usage_text = &source[usage.span.start_byte..usage.span.end_byte];
-                if let Some(pos) = usage_text.rfind(simple_name(type_ref)) {
-                    let abs_start = usage.span.start_byte + pos;
-                    let abs_end = abs_start + simple_name(type_ref).len();
-                    if abs_start <= offset && offset < abs_end {
-                        return Some(simple_name(type_ref).to_string());
-                    }
-                }
-            }
-        }
-    }
-
-    // Check definition super_types
-    for def in &model.definitions {
-        if let Some(ref super_type) = def.super_type {
-            if def.span.start_byte <= offset && offset < def.span.end_byte {
-                let def_text = &source[def.span.start_byte..def.span.end_byte];
-                let st_name = simple_name(super_type);
-                if let Some(pos) = def_text.rfind(st_name) {
-                    let abs_start = def.span.start_byte + pos;
-                    let abs_end = abs_start + st_name.len();
-                    if abs_start <= offset && offset < abs_end {
-                        return Some(st_name.to_string());
-                    }
-                }
-            }
-        }
-    }
-
-    None
-}
-
-#[allow(dead_code)] // used in tests
-/// Resolve a name to a definition span within the same file.
-pub fn goto_definition_in_file(model: &Model, name: &str) -> Option<Span> {
-    let simple = simple_name(name);
-    model.find_def(simple).map(|d| d.span.clone())
-}
 
 /// Resolve a name: try in-file first, then workspace defs. Returns (uri, span).
 pub fn goto_definition(
