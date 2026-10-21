@@ -60,7 +60,7 @@ pub fn highlights(source: &str) -> Highlights {
     }
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, Serialize, Debug)]
 pub struct SourceFile {
     pub path: String,
     pub text: String,

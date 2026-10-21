@@ -17,3 +17,6 @@ sysml-semantic = { path = "../sysml-semantic" }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 wasm-bindgen = "=0.2.129"
+
+[dev-dependencies]
+zip = { version = "9", default-features = false, features = ["deflate-flate2"] }

@@ -5,6 +5,7 @@
 //! surface small while the engine API is still settling. Every function is
 //! also callable natively, so the protocol is tested with `cargo test`.
 
+pub mod archive;
 mod editor;
 pub mod library;
 pub mod simulation;
@@ -80,6 +81,26 @@ pub fn read_kpar(bytes: &[u8]) -> Result<String, JsError> {
         files: kpar.files.keys().map(String::as_str).collect(),
         checksum_problems,
     }))
+}
+
+/// Read a project archive — a `.kpar`, or any ZIP of a project such as a
+/// repository download — into `{ info, files: [{path, text}], skipped,
+/// warnings }`. `fallbackName` names a project without `.project.json`.
+#[wasm_bindgen(js_name = readProjectArchive)]
+pub fn read_project_archive(bytes: &[u8], fallback_name: &str) -> Result<String, JsError> {
+    archive::read(bytes, fallback_name)
+        .map(|read| to_json(&read))
+        .map_err(|e| JsError::new(&e))
+}
+
+/// Write a project as a `.kpar` (KerML 10.3): `info` is the
+/// `.project.json` object, `files` JSON `[{path, text}]`, `created` an ISO
+/// 8601 time for `.meta.json`.
+#[wasm_bindgen(js_name = writeKpar)]
+pub fn write_kpar(info: &str, files: &str, created: &str) -> Result<Vec<u8>, JsError> {
+    let info = serde_json::from_str(info).map_err(|e| JsError::new(&e.to_string()))?;
+    let files = serde_json::from_str(files).map_err(|e| JsError::new(&e.to_string()))?;
+    archive::write(info, files, created.to_owned()).map_err(|e| JsError::new(&e))
 }
 
 /// `elementId` of an element in a standard library package, from its

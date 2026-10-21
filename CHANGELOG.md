@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+### Added (project archives)
+- **`Kpar::read_lenient`** reads any ZIP of a project: a `.kpar`, or a
+  plain archive such as a repository download (a shared top folder is
+  stripped; a missing `.project.json` is named after it).
+- **sysml-wasm `readProjectArchive(bytes, fallbackName)`** returns the
+  project's text files, and **`writeKpar(info, files, created)`** writes a
+  `.kpar` with an element index and SHA256 checksums, so the browser app
+  can import and export projects.
+
 ### Added (standard library browser, state machine emulator)
 - **sysml-wasm `libraryIndex()`, `libraryFile(path)`, `librarySearch(query,
   limit)` and `libraryLicense()`** over the embedded OMG standard library:

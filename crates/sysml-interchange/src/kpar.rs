@@ -191,6 +191,55 @@ impl Kpar {
         })
     }
 
+    /// Read any ZIP of a project: a `.kpar`, or a plain archive such as a
+    /// repository download. A missing `.project.json` is named after the
+    /// archive's top folder (or `fallback_name`), a missing `.meta.json` is
+    /// left empty, and one top-level folder shared by every entry (as in
+    /// `repo-main/…`) is stripped from the paths.
+    pub fn read_lenient(bytes: &[u8], fallback_name: &str) -> Result<Self, KparError> {
+        let mut archive = zip::ZipArchive::new(Cursor::new(bytes))?;
+        let mut entries = Vec::new();
+        for i in 0..archive.len() {
+            let mut entry = archive.by_index(i)?;
+            if entry.is_dir() {
+                continue;
+            }
+            let name = entry.name()?.trim_start_matches("./").to_owned();
+            let mut data = Vec::with_capacity(entry.size() as usize);
+            entry.read_to_end(&mut data)?;
+            entries.push((name, data));
+        }
+        let root = common_root(entries.iter().map(|(name, _)| name.as_str()));
+        let mut info = None;
+        let mut meta = None;
+        let mut files = BTreeMap::new();
+        for (name, data) in entries {
+            let name = root
+                .as_deref()
+                .and_then(|r| name.strip_prefix(r))
+                .map(str::to_owned)
+                .unwrap_or(name);
+            match name.as_str() {
+                PROJECT_FILE => info = Some(parse_json(PROJECT_FILE, &data)?),
+                META_FILE => meta = Some(parse_json(META_FILE, &data)?),
+                _ => {
+                    files.insert(name, data);
+                }
+            }
+        }
+        let name = root
+            .as_deref()
+            .map(|r| r.trim_end_matches('/'))
+            .filter(|r| !r.is_empty())
+            .unwrap_or(fallback_name)
+            .to_owned();
+        Ok(Kpar {
+            info: info.unwrap_or_else(|| ProjectInfo::named(name)),
+            meta: meta.unwrap_or_else(|| ProjectMeta::created(String::new())),
+            files,
+        })
+    }
+
     /// Write the archive. Entries are stored uncompressed in path order with
     /// fixed timestamps, so equal projects produce identical bytes.
     pub fn write(&self) -> Result<Vec<u8>, KparError> {
@@ -249,6 +298,46 @@ impl Kpar {
             }
         }
         problems
+    }
+}
+
+/// The single top-level folder (`name/`) every path starts with, if any.
+fn common_root<'a>(mut paths: impl Iterator<Item = &'a str>) -> Option<String> {
+    let first = paths.next()?;
+    let (folder, _) = first.split_once('/')?;
+    let prefix = format!("{folder}/");
+    paths.all(|p| p.starts_with(&prefix)).then_some(prefix)
+}
+
+impl ProjectInfo {
+    /// A minimal project description with just a name.
+    pub fn named(name: String) -> Self {
+        ProjectInfo {
+            name,
+            description: None,
+            version: None,
+            license: None,
+            maintainer: Vec::new(),
+            website: None,
+            topic: Vec::new(),
+            usage: Vec::new(),
+            extra: Map::new(),
+        }
+    }
+}
+
+impl ProjectMeta {
+    /// Empty metadata with a creation time (ISO 8601).
+    pub fn created(created: String) -> Self {
+        ProjectMeta {
+            index: BTreeMap::new(),
+            created,
+            metamodel: None,
+            includes_derived: None,
+            includes_implied: None,
+            checksum: BTreeMap::new(),
+            extra: Map::new(),
+        }
     }
 }
 
