@@ -280,6 +280,23 @@ mod tests {
     }
 
     #[test]
+    fn members_can_be_added_to_packages() {
+        let source = "package P {\n    part def A;\n}\n";
+        let result = apply_request(EditRequest::InsertMember {
+            path: "p.sysml".into(),
+            source: source.into(),
+            parent: "P".into(),
+            text: "part def B {\n}".into(),
+        })
+        .unwrap();
+        assert!(result.syntax_errors.is_empty());
+        let change = &result.changes[0];
+        let mut edited = source.to_owned();
+        edited.replace_range(change.from as usize..change.to as usize, &change.insert);
+        assert_eq!(edited, "package P {\n    part def A;\n    part def B {\n    }\n}\n");
+    }
+
+    #[test]
     fn edits_that_break_syntax_are_reported() {
         let result = apply_request(EditRequest::InsertTopLevel {
             source: "part def A;".into(),
