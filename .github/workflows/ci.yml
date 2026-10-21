@@ -53,3 +53,39 @@ jobs:
 
       - name: Export smoke test
         run: cargo run -p sysml-cli -- export list test/fixtures/fmi-vehicle.sysml
+
+  wasm:
+    name: WebAssembly engine
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-unknown-unknown
+
+      - name: Cache cargo
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: ${{ runner.os }}-wasm-cargo-${{ hashFiles('Cargo.lock') }}
+
+      - name: Install wasm-bindgen
+        uses: taiki-e/install-action@v2
+        with:
+          tool: wasm-bindgen@0.2.129
+
+      - name: Build
+        run: scripts/build-wasm.sh target/sysml-wasm | tee -a "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload package
+        uses: actions/upload-artifact@v4
+        with:
+          name: sysml-wasm
+          path: target/sysml-wasm

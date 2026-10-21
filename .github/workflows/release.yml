@@ -106,8 +106,36 @@ jobs:
             ${{ matrix.artifact }}-lsp.tar.gz
             ${{ matrix.artifact }}-lsp.zip
 
+  wasm:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-unknown-unknown
+
+      - name: Install wasm-bindgen
+        uses: taiki-e/install-action@v2
+        with:
+          tool: wasm-bindgen@0.2.129
+
+      - name: Build and package
+        run: |
+          scripts/build-wasm.sh sysml-wasm
+          tar czf sysml-wasm.tar.gz sysml-wasm
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: sysml-wasm
+          path: sysml-wasm.tar.gz
+
   release:
-    needs: build
+    needs: [build, wasm]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
